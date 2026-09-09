@@ -1397,12 +1397,111 @@ html[data-app-theme="light"] .app-toggle[aria-pressed="false"] > span {
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.24), 0 0 0 1px rgba(100, 116, 139, 0.16) !important;
 }
 
-/* Tela de abertura e validação também acompanha o tema salvo. */
-.app-loading-progress {
-  background: var(--brand-color);
-  box-shadow: 0 0 16px color-mix(in srgb, var(--brand-color) 42%, transparent);
+/* Poste de barbeiro usado no carregamento do app e da página pública.
+   A figura preserva a proporção original de 84 x 306 px e é escalada pelo invólucro. */
+.barber-pole-loader {
+  position: relative;
+  width: 64px;
+  height: 230px;
+  margin-inline: auto;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 18px 24px color-mix(in srgb, var(--brand-color) 22%, transparent));
 }
 
+.barber-pole-loader--compact {
+  width: 32px;
+  height: 112px;
+  filter: drop-shadow(0 10px 14px color-mix(in srgb, var(--brand-color) 18%, transparent));
+}
+
+.barber-pole-loader__figure {
+  --barber-pole-cream: #fefbe3;
+  --barber-pole-stripe-base: color-mix(in srgb, var(--brand-color) 78%, #0e7490);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 84px;
+  height: 306px;
+  transform: translate(-50%, -50%) scale(0.75);
+  transform-origin: center;
+}
+
+.barber-pole-loader--compact .barber-pole-loader__figure {
+  transform: translate(-50%, -50%) scale(0.36);
+}
+
+.barber-pole-loader__ball {
+  width: 22px;
+  height: 22px;
+  margin-inline: 31px;
+  border-radius: 999px;
+  background: var(--barber-pole-cream);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 -3px 6px rgba(15, 23, 42, 0.16), 0 0 16px color-mix(in srgb, var(--brand-color) 18%, transparent);
+}
+
+.barber-pole-loader__end-cap {
+  width: 54px;
+  height: 15px;
+  margin: 5px 15px;
+  border-radius: 999px;
+  background: var(--barber-pole-cream);
+  box-shadow: inset 0 -3px 5px rgba(15, 23, 42, 0.14);
+}
+
+.barber-pole-loader__cap {
+  width: 84px;
+  height: 15px;
+  border-radius: 4px;
+  background: var(--barber-pole-cream);
+  box-shadow: inset 0 -3px 5px rgba(15, 23, 42, 0.15);
+}
+
+.barber-pole-loader__wrap {
+  width: 54px;
+  height: 172px;
+  margin: 5px 15px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--app-bg-color) 82%, #020617);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), inset 0 0 12px rgba(2, 8, 23, 0.35);
+}
+
+.barber-pole-loader__barber {
+  width: 54px;
+  height: 172px;
+  background-color: var(--barber-pole-stripe-base);
+  background-image: linear-gradient(
+    -45deg,
+    transparent 25%,
+    var(--barber-pole-cream) 25%,
+    var(--barber-pole-cream) 50%,
+    transparent 50%,
+    transparent 75%,
+    var(--barber-pole-cream) 75%
+  );
+  background-size: 27px 27px;
+  animation: agendaiBarberPole 1.5s linear infinite;
+  will-change: background-position;
+}
+
+@keyframes agendaiBarberPole {
+  from { background-position: 0 0; }
+  to { background-position: 0 54px; }
+}
+
+html[data-app-theme="light"] .barber-pole-loader {
+  filter: drop-shadow(0 16px 20px color-mix(in srgb, var(--brand-color) 18%, transparent));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barber-pole-loader__barber {
+    animation: none !important;
+    will-change: auto;
+  }
+}
+
+/* Tela de abertura e validação também acompanha o tema salvo. */
 html[data-app-theme="light"] .app-loading-screen {
   color: #172033 !important;
   background: #ffffff !important;
@@ -1428,12 +1527,6 @@ html[data-app-theme="light"] .app-loading-screen :where(.text-slate-400, .text-s
 
 html[data-app-theme="light"] .app-loading-screen [class*="text-cyan-"] {
   color: #08708a !important;
-}
-
-html[data-app-theme="light"] .app-loading-track {
-  background: #dbe3ec !important;
-  border-color: #cbd5e1 !important;
-  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 
 html[data-app-theme="light"] .booking-view .booking-cover-title {

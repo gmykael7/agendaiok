@@ -49,8 +49,9 @@ import {
   logoutBarbershop,
   CloudSyncPayload
 } from './services/cloudSync';
-import { Bell, Calendar, CheckCircle2, Clock, Sparkles, User, X, Smartphone, QrCode, Copy, Check, Share2, ArrowRight, Cloud, RefreshCw, Loader2 } from 'lucide-react';
+import { Bell, Calendar, CheckCircle2, Clock, Sparkles, User, X, Smartphone, QrCode, Copy, Check, Share2, ArrowRight, Cloud, RefreshCw } from 'lucide-react';
 import { BrandLogo } from './components/common/BrandLogo';
+import { BarberPoleLoader } from './components/common/BarberPoleLoader';
 import { OnboardingChecklist } from './components/common/OnboardingChecklist';
 import { AgencyCredit } from './components/common/AgencyCredit';
 import { dedupeClients, upsertClient } from './utils/clients';
@@ -1286,16 +1287,11 @@ export default function App() {
       return (
         <div className="app-loading-screen min-h-screen safe-screen bg-[#070B14] text-slate-100 flex flex-col items-center justify-center p-6 text-center">
           <div className="w-full max-w-md rounded-[28px] brand-panel px-7 py-8 space-y-5">
-            <div className="mx-auto w-20 h-20 rounded-full overflow-hidden bg-white border border-cyan-400/20 flex items-center justify-center shadow-[0_18px_40px_rgba(6,182,212,0.16)] p-3">
-              <BrandLogo variant="mark" className="w-full h-full" />
-            </div>
+            <BarberPoleLoader />
             <div className="space-y-2">
               <p className="text-[11px] uppercase tracking-[0.35em] text-cyan-200 font-semibold">AgendAI</p>
               <h3 className="text-xl font-black text-white">Carregando sua experiência premium</h3>
               <p className="text-xs text-slate-400">Buscando serviços, produtos, equipe e horários em tempo real.</p>
-            </div>
-            <div className="app-loading-track w-full h-2 bg-slate-900/80 rounded-full overflow-hidden border border-slate-800/80">
-              <div className="app-loading-progress h-full w-1/2 rounded-full animate-pulse" />
             </div>
             <AgencyCredit centered compact className="pt-2 border-0" />
           </div>
@@ -1350,17 +1346,12 @@ export default function App() {
     return (
       <div className="app-loading-screen min-h-screen safe-screen bg-[#070B14] text-slate-100 flex items-center justify-center p-6">
         <div className="w-full max-w-md rounded-[28px] brand-panel px-7 py-8 text-center space-y-5">
-          <div className="mx-auto w-20 h-20 rounded-full overflow-hidden bg-white border border-cyan-400/20 flex items-center justify-center shadow-[0_18px_40px_rgba(6,182,212,0.16)] p-3">
-            <BrandLogo variant="mark" className="w-full h-full" />
-          </div>
+          <BarberPoleLoader />
           <div className="space-y-2">
             <h3 className="text-xl font-black text-white">Validando sessão segura</h3>
             <p className="text-xs text-slate-400">Aguarde enquanto autenticamos seu acesso na nuvem.</p>
           </div>
-          <div className="inline-flex items-center gap-2 justify-center text-sm text-slate-300">
-            <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
-            Carregando painel...
-          </div>
+          <p className="text-sm text-slate-300">Carregando painel...</p>
           <AgencyCredit centered compact className="pt-2 border-0" />
         </div>
       </div>
