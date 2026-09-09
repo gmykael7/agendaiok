@@ -105,7 +105,7 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidget
         renderedWidgetId = api.render(containerRef.current, {
           sitekey: TURNSTILE_SITE_KEY,
           action,
-          language: 'pt-BR',
+          language: 'pt-br',
           theme: 'dark',
           size: 'compact',
           appearance: 'interaction-only',
