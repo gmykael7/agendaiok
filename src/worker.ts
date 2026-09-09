@@ -16,7 +16,8 @@ type D1DatabaseLike = {
   batch?: (statements: D1PreparedStatementLike[]) => Promise<unknown[]>;
 };
 
-export interface Env extends Partial<Pick<Cloudflare.Env, 'AI' | 'ASSISTANT_AI_ENABLED' | 'ASSISTANT_LIMITER'>> {
+export interface Env extends Partial<Pick<Cloudflare.Env, 'AI' | 'ASSISTANT_AI_ENABLED' | 'ASSISTANT_LIMITER' | 'TURNSTILE_HOSTNAMES'>> {
+  TURNSTILE_SECRET?: string;
   DB?: D1DatabaseLike;
   // Mantido temporariamente apenas para importar dados antigos. Nenhuma escrita nova e feita no KV.
   AGENDAI_KV?: {
@@ -65,6 +66,51 @@ const jsonResponse = (data: unknown, status = 200) => new Response(JSON.stringif
     'Cache-Control': 'no-store',
   },
 });
+
+type TurnstileVerification = {
+  success?: boolean;
+  action?: string;
+  hostname?: string;
+};
+
+const verifyTurnstile = async (
+  request: Request,
+  env: Env,
+  token: unknown,
+  expectedAction: 'public_booking' | 'product_order',
+): Promise<boolean> => {
+  const secret = String(env.TURNSTILE_SECRET || '').trim();
+  const expectedHostnames = new Set(
+    String(env.TURNSTILE_HOSTNAMES || '')
+      .split(',')
+      .map((hostname) => hostname.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  if (typeof token !== 'string' || token.length === 0 || token.length > 2048 || !secret || expectedHostnames.size === 0) {
+    return false;
+  }
+
+  const body = new URLSearchParams({ secret, response: token });
+  const clientIp = request.headers.get('CF-Connecting-IP');
+  if (clientIp) body.set('remoteip', clientIp);
+
+  try {
+    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) return false;
+    const result = await response.json() as TurnstileVerification;
+    return result.success === true
+      && result.action === expectedAction
+      && typeof result.hostname === 'string'
+      && expectedHostnames.has(result.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+};
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const normalizeSlug = (value: unknown) => String(value || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
@@ -1442,6 +1488,11 @@ export default {
       try {
         const appointment = await request.json() as any;
         if (!appointment || typeof appointment !== 'object' || Array.isArray(appointment)) throw new BookingInputError('Agendamento inválido.');
+        const turnstileToken = appointment['cf-turnstile-response'];
+        delete appointment['cf-turnstile-response'];
+        if (!await verifyTurnstile(request, env, turnstileToken, 'public_booking')) {
+          return jsonResponse({ error: 'Não foi possível validar a verificação de segurança. Atualize a página e tente novamente.' }, 403);
+        }
         const orgSlug = normalizeSlug(appointment.org_slug || appointment.org_id);
         if (!orgSlug) return jsonResponse({ error: 'Slug da barbearia é obrigatório.' }, 400);
         if (!appointment.id || !appointment.date || !appointment.start_time || !appointment.barber_id) {
@@ -1553,6 +1604,11 @@ export default {
       try {
         const body = await request.json() as any;
         if (!body || typeof body !== 'object' || Array.isArray(body)) return jsonResponse({ error: 'Pedido inválido.' }, 400);
+        const turnstileToken = body['cf-turnstile-response'];
+        delete body['cf-turnstile-response'];
+        if (!await verifyTurnstile(request, env, turnstileToken, 'product_order')) {
+          return jsonResponse({ error: 'Não foi possível validar a verificação de segurança. Atualize a página e tente novamente.' }, 403);
+        }
         const orgSlug = normalizeSlug(body.org_slug);
         const customerName = String(body.customer_name || '').trim();
         const customerPhone = String(body.customer_phone || '').trim();

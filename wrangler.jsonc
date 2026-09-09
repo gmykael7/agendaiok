@@ -4,7 +4,8 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-08-17",
   "vars": {
-    "ASSISTANT_AI_ENABLED": "false"
+    "ASSISTANT_AI_ENABLED": "false",
+    "TURNSTILE_HOSTNAMES": "meuagendai.fun"
   },
   "ai": {
     "binding": "AI"

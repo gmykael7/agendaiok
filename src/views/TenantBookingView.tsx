@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { 
   CheckCircle, Clock, Calendar, 
   MapPin, Phone, MessageSquare, ArrowLeft, User, 
@@ -11,6 +11,7 @@ import { BrandLogo } from '../components/common/BrandLogo';
 import { AgencyCredit } from '../components/common/AgencyCredit';
 import { BookingAssistant } from '../components/common/BookingAssistant';
 import { PublicShowcase } from '../components/common/PublicShowcase';
+import { TurnstileWidget, type TurnstileWidgetHandle } from '../components/common/TurnstileWidget';
 import { assistantSlots } from '../services/bookingAssistant';
 import type { AssistantSlot } from '../services/bookingAssistant';
 import { generateBusinessSlots, getBusinessClosureAtTime, getBusinessClosuresForDate, isBookableBusinessDateTime, isBookableBusinessTime, isBusinessClosedAllDay, overlapsBusinessClosure, timeToMinutes } from '../utils/scheduling';
@@ -160,7 +161,21 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
   const [productOrderError, setProductOrderError] = useState('');
   const [productOrderSuccess, setProductOrderSuccess] = useState(false);
   const [isSubmittingProductOrder, setIsSubmittingProductOrder] = useState(false);
+  const [bookingTurnstileToken, setBookingTurnstileToken] = useState('');
+  const [productTurnstileToken, setProductTurnstileToken] = useState('');
   const bookingRootRef = useRef<HTMLDivElement | null>(null);
+  const bookingTurnstileRef = useRef<TurnstileWidgetHandle | null>(null);
+  const productTurnstileRef = useRef<TurnstileWidgetHandle | null>(null);
+
+  const handleBookingTurnstileToken = useCallback((token: string) => {
+    setBookingTurnstileToken(token);
+    if (token) setBookingError((current) => current.includes('verificação de segurança') ? '' : current);
+  }, []);
+
+  const handleProductTurnstileToken = useCallback((token: string) => {
+    setProductTurnstileToken(token);
+    if (token) setProductOrderError((current) => current.includes('verificação de segurança') ? '' : current);
+  }, []);
 
   const chooseAssistantSlot = (slot: AssistantSlot): string | null => {
     const service = services.find(item => item.id === slot.serviceId && item.active !== false);
@@ -368,6 +383,10 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
       setProductOrderError('Adicione pelo menos um produto ao carrinho.');
       return;
     }
+    if (!productTurnstileToken) {
+      setProductOrderError('Aguarde ou conclua a verificação de segurança para enviar o pedido.');
+      return;
+    }
     setIsSubmittingProductOrder(true);
     const waUrl = productWhatsAppUrl();
     const result = await pushProductOrderToCloud({
@@ -375,8 +394,9 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
       customer_name: productCustomerName.trim(),
       customer_phone: productCustomerPhone.trim(),
       items: productCartItems.map(({ product, quantity }) => ({ product_id: product.id, quantity })),
-    });
+    }, productTurnstileToken);
     setIsSubmittingProductOrder(false);
+    productTurnstileRef.current?.reset();
     if (!result.ok) {
       setProductOrderError(result.error || 'Não foi possível concluir o pedido.');
       return;
@@ -471,6 +491,11 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
       return;
     }
 
+    if (!bookingTurnstileToken) {
+      setBookingError('Aguarde ou conclua a verificação de segurança para confirmar o agendamento.');
+      return;
+    }
+
     if (!isBookableBusinessDateTime(selectedTime, totalDuration, selectedDate, org)) {
       const exceptionalClosure = selectedDateClosures.find((period) => {
         if (period.all_day) return true;
@@ -537,8 +562,9 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
     // Confirma primeiro no servidor. Assim o cliente nunca recebe uma confirmação falsa
     // quando outro aparelho acabou de reservar o mesmo horário.
     setIsSubmittingBooking(true);
-    const cloudResult = await pushAppointmentToCloud(fullApp, org.slug);
+    const cloudResult = await pushAppointmentToCloud(fullApp, org.slug, bookingTurnstileToken);
     setIsSubmittingBooking(false);
+    bookingTurnstileRef.current?.reset();
 
     if (!cloudResult.ok) {
       setBookingError(cloudResult.error || 'Não foi possível confirmar o agendamento. Tente novamente.');
@@ -705,6 +731,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                   <div className="border-t border-slate-800 pt-3 flex justify-between items-center"><span className="text-xs text-slate-400">Total</span><strong className="text-xl text-emerald-300 font-black font-mono">R$ {productCartTotal.toFixed(2)}</strong></div>
                   <input required value={productCustomerName} onChange={(e) => setProductCustomerName(e.target.value)} placeholder="Seu nome" className="w-full rounded-xl border border-slate-800 bg-[#0B1120] px-3 py-2.5 text-xs text-white" /><input required type="tel" value={productCustomerPhone} onChange={(e) => setProductCustomerPhone(e.target.value)} placeholder="Seu WhatsApp com DDD" className="w-full rounded-xl border border-slate-800 bg-[#0B1120] px-3 py-2.5 text-xs text-white" />
                   {org.pix_key && <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-[10px] text-slate-300"><strong className="text-emerald-300 block">Pagamento via Pix disponível</strong>{org.pix_key}</div>}
+                  <TurnstileWidget ref={productTurnstileRef} action="product_order" onTokenChange={handleProductTurnstileToken} />
                   <button disabled={!productCartItems.length || isSubmittingProductOrder} type="submit" className="w-full rounded-xl bg-cyan-400 py-3 text-xs font-black text-slate-950 disabled:opacity-40">{isSubmittingProductOrder ? 'Enviando pedido...' : 'Enviar pedido à barbearia'}</button>
                   <p className="text-[9px] text-center text-slate-500">O pedido entra no painel como pendente e os itens ficam reservados no estoque.</p>
                 </form>
@@ -1303,6 +1330,8 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                       className="w-full bg-[#0B1120] border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
                     />
                   </div>
+
+                  <TurnstileWidget ref={bookingTurnstileRef} action="public_booking" onTokenChange={handleBookingTurnstileToken} />
 
                   <button
                     type="submit"

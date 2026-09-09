@@ -260,7 +260,8 @@ export interface AppointmentPushResult {
 
 export const pushAppointmentToCloud = async (
   appointment: Appointment,
-  orgSlug?: string
+  orgSlug: string | undefined,
+  turnstileToken: string,
 ): Promise<AppointmentPushResult> => {
   const targetSlug = (orgSlug || appointment.org_id || '').toLowerCase().trim();
   if (!targetSlug) return { ok: false, status: 400, error: 'Barbearia não identificada.' };
@@ -272,6 +273,7 @@ export const pushAppointmentToCloud = async (
       body: JSON.stringify({
         ...appointment,
         org_slug: targetSlug,
+        'cf-turnstile-response': turnstileToken,
       }),
     });
     const body = await readWriteConfirmation(response);
@@ -317,13 +319,17 @@ export const pushProductOrderToCloud = async (
     customer_name: string;
     customer_phone: string;
     items: Array<{ product_id: string; quantity: number }>;
-  }
+  },
+  turnstileToken: string,
 ): Promise<ProductOrderPushResult> => {
   try {
     const response = await fetch('/api/product-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        'cf-turnstile-response': turnstileToken,
+      }),
     });
     const body = await readWriteConfirmation(response);
     return {

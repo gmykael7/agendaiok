@@ -26,6 +26,18 @@ function setup(t, data = snapshot()) {
   sql.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
   const pending = [];
   t.after(async () => { await Promise.allSettled(pending); sql.close(); });
+  t.mock.method(globalThis, 'fetch', async (_input, init = {}) => {
+    const params = init.body instanceof URLSearchParams ? init.body : new URLSearchParams(String(init.body || ''));
+    const token = params.get('response');
+    const fixtures = {
+      'booking-valid': { success: true, action: 'public_booking', hostname: 'auditoria.invalid' },
+      'product-valid': { success: true, action: 'product_order', hostname: 'auditoria.invalid' },
+      'wrong-action': { success: true, action: 'product_order', hostname: 'auditoria.invalid' },
+      'wrong-host': { success: true, action: 'public_booking', hostname: 'outro.invalid' },
+      'failed-challenge': { success: false, action: 'public_booking', hostname: 'auditoria.invalid' },
+    };
+    return Response.json(fixtures[token] || { success: false });
+  });
   const put = (key, value, plain = false) => sql.prepare('INSERT INTO app_store VALUES (?, ?, NULL, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, plain ? value : JSON.stringify(value), Date.now());
   put(`user:${EMAIL}`, data);
   put('slug:auditoria', EMAIL, true);
@@ -38,13 +50,45 @@ function setup(t, data = snapshot()) {
     const args = () => /\?\d/.test(query) ? [Object.fromEntries(params.map((v, i) => [`?${i + 1}`, v]))] : params;
     return { bind(...values) { params = values; return this; }, async first() { return stmt.get(...args()) || null; }, async all() { return { results: stmt.all(...args()) }; }, async run() { const result = stmt.run(...args()); return { success: true, meta: { changes: Number(result.changes) } }; } };
   } };
-  const call = (path, body, token) => worker.fetch(new Request(`https://auditoria.invalid${path}`, {
+  const call = (path, body, token) => {
+    const protectedBody = body && typeof body === 'object' && !Array.isArray(body)
+      ? {
+          ...body,
+          ...(!Object.hasOwn(body, 'cf-turnstile-response') && path === '/api/appointment' ? { 'cf-turnstile-response': 'booking-valid' } : {}),
+          ...(!Object.hasOwn(body, 'cf-turnstile-response') && path === '/api/product-order' ? { 'cf-turnstile-response': 'product-valid' } : {}),
+        }
+      : body;
+    return worker.fetch(new Request(`https://auditoria.invalid${path}`, {
     method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  }), { DB, ASSETS: { fetch: async () => new Response('<html>app</html>') } }, { waitUntil: promise => pending.push(promise) });
+    ...(protectedBody === undefined ? {} : { body: JSON.stringify(protectedBody) }),
+  }), {
+    DB,
+    ASSETS: { fetch: async () => new Response('<html>app</html>') },
+    TURNSTILE_SECRET: 'test-secret',
+    TURNSTILE_HOSTNAMES: 'auditoria.invalid',
+  }, { waitUntil: promise => pending.push(promise) });
+  };
   const stored = () => JSON.parse(sql.prepare('SELECT value FROM app_store WHERE key = ?').get(`user:${EMAIL}`).value);
   return { sql, put, call, stored };
 }
+
+test('Turnstile bloqueia ausência, falha, ação divergente e hostname não autorizado antes de gravar', async t => {
+  const { call, stored } = setup(t);
+  for (const value of [null, 'failed-challenge', 'wrong-action', 'wrong-host']) {
+    const response = await call('/api/appointment', booking({ 'cf-turnstile-response': value }));
+    assert.equal(response.status, 403);
+  }
+  const productResponse = await call('/api/product-order', {
+    org_slug: 'auditoria',
+    customer_name: 'Teste',
+    customer_phone: '84999999999',
+    items: [{ product_id: 'inexistente', quantity: 1 }],
+    'cf-turnstile-response': null,
+  });
+  assert.equal(productResponse.status, 403);
+  assert.equal(stored().appointments.length, 0);
+  assert.equal(stored().productSales.length, 0);
+});
 
 test('reserva pública usa preço, duração, profissional e status do catálogo; não aceita pagamento forjado', async t => {
   const { call, stored } = setup(t);
@@ -246,10 +290,10 @@ test('salvar e reservar exigem confirmação JSON explícita; HTML 200 não é s
     t.mock.method(console, 'debug', () => {});
     t.mock.method(globalThis, 'fetch', async () => new Response(body, { status: 200 }));
     assert.equal((await helpers.saveBarbershopToCloudDetailed(snapshot())).ok, false);
-    assert.equal((await helpers.pushAppointmentToCloud(booking(), 'auditoria')).ok, false);
+    assert.equal((await helpers.pushAppointmentToCloud(booking(), 'auditoria', 'booking-valid')).ok, false);
     t.mock.restoreAll();
   }
   t.mock.method(globalThis, 'fetch', async () => Response.json({ success: true, updated_at: 'revision' }));
   assert.equal((await helpers.saveBarbershopToCloudDetailed(snapshot())).ok, true);
-  assert.equal((await helpers.pushAppointmentToCloud(booking(), 'auditoria')).ok, true);
+  assert.equal((await helpers.pushAppointmentToCloud(booking(), 'auditoria', 'booking-valid')).ok, true);
 });
