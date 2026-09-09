@@ -1,0 +1,1578 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-color: #18d4c8;
+  --brand-contrast-color: #07111f;
+  --brand-color-strong: #0fb5c8;
+  --brand-accent: #2f7cf6;
+  --brand-accent-soft: #76a9ff;
+  --app-bg-color: #061120;
+  --app-surface-color: #0d1930;
+  --app-surface-dark: #08101f;
+  --app-surface-elevated: #132642;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  background: var(--app-bg-color);
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font-family: 'Montserrat', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+  background: var(--app-bg-color);
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer base {
+  body {
+    @apply text-slate-100 antialiased;
+  }
+}
+
+/* Safe areas para iPhone/Android com notch, barra de status e modo PWA. */
+.safe-header {
+  padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
+}
+
+.safe-bottom-nav {
+  padding-bottom: calc(0.625rem + env(safe-area-inset-bottom, 0px));
+}
+
+.safe-screen {
+  padding-top: max(1rem, env(safe-area-inset-top, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+}
+
+.safe-toast-top {
+  top: calc(1rem + env(safe-area-inset-top, 0px));
+}
+
+
+/*
+ * Shell administrativo: a página inteira NÃO rola.
+ * Somente .admin-scroll-content pode rolar. Assim o cabeçalho permanece
+ * imóvel e o menu inferior participa do layout, sem cobrir o conteúdo.
+ */
+.admin-app-shell {
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overscroll-behavior: none;
+}
+
+.admin-scroll-content {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 1.5rem;
+  scroll-padding-top: 1rem;
+  scroll-padding-bottom: 1.5rem;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@supports not (height: 100dvh) {
+  .admin-app-shell {
+    height: 100vh;
+    max-height: 100vh;
+  }
+}
+
+@media (min-width: 768px) {
+  .admin-scroll-content {
+    padding-bottom: 2rem;
+    scroll-padding-bottom: 2rem;
+  }
+}
+
+/* Paleta dinâmica. As classes existentes continuam funcionando, mas passam a respeitar a cor escolhida. */
+[class~="text-emerald-400"],
+[class~="text-emerald-300"],
+[class~="hover:text-emerald-400"]:hover,
+[class~="group-hover:text-emerald-400"]:hover {
+  color: var(--brand-color) !important;
+}
+
+[class~="bg-emerald-500"],
+[class~="bg-emerald-600"] {
+  background-color: var(--brand-color) !important;
+}
+
+[class~="hover:bg-emerald-400"]:hover,
+[class~="hover:bg-emerald-500"]:hover {
+  background-color: color-mix(in srgb, var(--brand-color) 86%, white) !important;
+}
+
+[class~="bg-emerald-400"] {
+  background-color: color-mix(in srgb, var(--brand-color) 90%, white) !important;
+}
+
+[class~="bg-emerald-500/10"] { background-color: color-mix(in srgb, var(--brand-color) 10%, transparent) !important; }
+[class~="bg-emerald-500/15"] { background-color: color-mix(in srgb, var(--brand-color) 15%, transparent) !important; }
+[class~="bg-emerald-500/20"] { background-color: color-mix(in srgb, var(--brand-color) 20%, transparent) !important; }
+[class~="bg-emerald-500/25"] { background-color: color-mix(in srgb, var(--brand-color) 25%, transparent) !important; }
+[class~="bg-emerald-500/30"] { background-color: color-mix(in srgb, var(--brand-color) 30%, transparent) !important; }
+
+[class~="border-emerald-500"],
+[class~="border-emerald-400"] {
+  border-color: var(--brand-color) !important;
+}
+[class~="border-emerald-500/20"] { border-color: color-mix(in srgb, var(--brand-color) 20%, transparent) !important; }
+[class~="border-emerald-500/30"] { border-color: color-mix(in srgb, var(--brand-color) 30%, transparent) !important; }
+[class~="border-emerald-500/40"] { border-color: color-mix(in srgb, var(--brand-color) 40%, transparent) !important; }
+[class~="focus:border-emerald-500"]:focus { border-color: var(--brand-color) !important; }
+[class~="hover:border-emerald-500"]:hover { border-color: var(--brand-color) !important; }
+
+[class~="shadow-emerald-500/10"],
+[class~="shadow-emerald-500/20"] {
+  --tw-shadow-color: color-mix(in srgb, var(--brand-color) 20%, transparent) !important;
+}
+
+[class~="bg-[#070B14]"] { background-color: var(--app-bg-color) !important; }
+[class~="bg-[#121B2E]"] { background-color: var(--app-surface-color) !important; }
+[class~="bg-[#0B1120]"] { background-color: var(--app-surface-dark) !important; }
+
+::selection {
+  background: var(--brand-color);
+  color: #020617;
+}
+
+
+/* Branding premium */
+.brand-gradient-text {
+  background: linear-gradient(135deg, var(--brand-color) 0%, var(--brand-accent-soft) 45%, var(--brand-accent) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.brand-panel {
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--brand-color) 12%, transparent), transparent 38%),
+    linear-gradient(180deg, color-mix(in srgb, var(--app-surface-color) 96%, black), var(--app-surface-dark));
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 18%, rgba(148,163,184,0.2));
+  box-shadow: 0 18px 40px rgba(2, 8, 23, 0.38), inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+.brand-button-primary {
+  background-color: var(--brand-color);
+  background-image: none;
+  color: var(--brand-contrast-color);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--brand-color) 25%, transparent);
+}
+
+.brand-button-soft {
+  background: color-mix(in srgb, var(--brand-color) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-color) 28%, transparent);
+  color: color-mix(in srgb, var(--brand-color) 88%, white);
+}
+
+.brand-chip {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-color) 16%, transparent), color-mix(in srgb, var(--brand-accent) 16%, transparent));
+  border: 1px solid color-mix(in srgb, var(--brand-color) 22%, transparent);
+}
+
+.brand-credit {
+  border-top: 1px solid rgba(30, 41, 59, 0.65);
+  padding-top: 0.9rem;
+}
+
+[class~="text-emerald-400"],
+[class~="text-emerald-300"],
+[class~="hover:text-emerald-400"]:hover,
+[class~="group-hover:text-emerald-400"]:hover {
+  color: var(--brand-color) !important;
+}
+
+[class~="bg-emerald-500"],
+[class~="bg-emerald-600"] {
+  background-color: var(--brand-color) !important;
+  background-image: none !important;
+  color: var(--brand-contrast-color) !important;
+}
+
+[class~="bg-emerald-500/10"] { background-color: color-mix(in srgb, var(--brand-color) 10%, transparent) !important; }
+[class~="bg-emerald-500/15"] { background-color: color-mix(in srgb, var(--brand-color) 15%, transparent) !important; }
+[class~="bg-emerald-500/20"] { background-color: color-mix(in srgb, var(--brand-color) 20%, transparent) !important; }
+[class~="bg-emerald-500/25"] { background-color: color-mix(in srgb, var(--brand-color) 25%, transparent) !important; }
+[class~="bg-emerald-500/30"] { background-color: color-mix(in srgb, var(--brand-color) 30%, transparent) !important; }
+
+[class~="bg-[#070B14]"] { background-color: var(--app-bg-color) !important; }
+[class~="bg-[#121B2E]"] { background-color: var(--app-surface-color) !important; }
+[class~="bg-[#0B1120]"] { background-color: var(--app-surface-dark) !important; }
+[class~="border-slate-800"], [class~="border-slate-800/80"], [class~="border-slate-800/60"] { border-color: rgba(51, 65, 85, 0.72) !important; }
+
+
+/* v1.15.7 — Sistema universal de modais responsivos */
+.app-mobile-modal {
+  overflow: hidden !important;
+}
+
+.app-mobile-modal > * {
+  max-height: min(90dvh, 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.modal-fixed-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  flex-shrink: 0;
+}
+
+@media (max-width: 767px) {
+  .admin-app-shell:has(.app-mobile-modal) .safe-bottom-nav {
+    display: none !important;
+  }
+
+  .admin-app-shell:has(.app-mobile-modal) .admin-scroll-content {
+    padding-bottom: 0 !important;
+  }
+
+  .app-mobile-modal {
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding-top: max(0.75rem, env(safe-area-inset-top, 0px)) !important;
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px)) !important;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px)) !important;
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px)) !important;
+    overflow: hidden !important;
+  }
+
+  .app-mobile-modal > * {
+    width: 100% !important;
+    max-height: calc(100dvh - max(1.5rem, env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px) + 1rem)) !important;
+    border-radius: 1.5rem !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .modal-sticky-header {
+    top: 0 !important;
+    padding-top: 0.25rem;
+  }
+
+  .modal-fixed-actions {
+    bottom: 0 !important;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+
+/* v1.15.8 — modais realmente acima do header, centralizados e com áreas fixas */
+.admin-scroll-content:has(.app-mobile-modal) {
+  position: relative !important;
+  z-index: 5000 !important;
+  overflow: visible !important;
+}
+
+.app-mobile-modal {
+  position: fixed !important;
+  inset: 0 !important;
+}
+
+.modal-shell-fixed {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.modal-scroll-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-static-header,
+.modal-static-footer {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 40;
+}
+
+@media (max-width: 767px) {
+  .admin-app-shell:has(.app-mobile-modal) main {
+    overflow: visible !important;
+  }
+  .modal-shell-fixed {
+    max-height: calc(100dvh - max(2.5rem, env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px) + 2rem)) !important;
+  }
+}
+
+/* ============================================================
+   Booking UX/UI — animações modernas para a página pública
+   ============================================================ */
+
+/* Respeita usuários que preferem menos movimento */
+@media (prefers-reduced-motion: reduce) {
+  .booking-anim, .booking-anim * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Mantém o contador do sino legível inclusive quando o tema claro sobrescreve .text-white. */
+.app-header .notification-count-badge,
+html[data-app-theme="light"] .app-header .notification-count-badge {
+  color: #ffffff !important;
+  background-color: #e11d48 !important;
+  text-shadow: 0 1px 2px rgba(76, 5, 25, 0.9);
+}
+
+/* Complementa o cancelamento no componente quando o aparelho reduz movimento. */
+@media (prefers-reduced-motion: reduce) {
+  .notification-bell-visual g,
+  .notification-bell-visual .notification-count-badge {
+    transform: none !important;
+  }
+}
+
+/* ============================================================
+   AgendAI TV — atendimento em andamento
+   O estado ativo comunica trabalho em curso sem simular um tempo exato.
+   ============================================================ */
+
+/* Mantém o vídeo dentro da composição do painel em Smart TVs sem precisar
+   recriar o iframe, o que reiniciaria a faixa e a posição da playlist. */
+.tv-youtube-player {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  opacity: 0.9999;
+  will-change: transform;
+}
+
+.tv-service-card.is-active {
+  isolation: isolate;
+}
+
+.tv-service-card.is-active::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 14% 50%, rgba(52, 211, 153, 0.17), transparent 28%),
+    linear-gradient(105deg, transparent 10%, rgba(110, 231, 183, 0.045) 48%, transparent 72%);
+}
+
+.tv-service-card.is-active::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: max(3px, 0.22vw);
+  background: linear-gradient(90deg, transparent, #34d399, #67e8f9, #34d399, transparent);
+  box-shadow: 0 0 16px rgba(52, 211, 153, 0.58);
+  opacity: 0.88;
+}
+
+.tv-service-spinner {
+  background: conic-gradient(from 20deg, transparent 0 18%, rgba(110, 231, 183, 0.22) 28%, #6ee7b7 45%, #67e8f9 55%, transparent 68% 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - max(3px, .18vw)), #000 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - max(3px, .18vw)), #000 0);
+  filter: drop-shadow(0 0 7px rgba(52, 211, 153, 0.42));
+}
+
+.tv-motion-enabled .tv-service-spinner {
+  animation: tvServiceSpin 1.45s linear infinite;
+}
+
+.tv-motion-enabled .tv-service-card.is-active::before {
+  animation: tvServiceGlow 2.4s ease-in-out infinite;
+}
+
+@keyframes tvServiceSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes tvServiceGlow {
+  0%, 100% { opacity: 0.58; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-service-spinner,
+  .tv-service-card.is-active::before {
+    animation: none !important;
+  }
+}
+
+/* Entrada escalonada para listas (serviços, barbeiros, calendário, horários) */
+.stagger-item {
+  animation: riseIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Cartões interativos com leve elevação no hover/press */
+.booking-card {
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+  will-change: transform;
+}
+.booking-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.45);
+}
+.booking-card:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Checkbox de serviço selecionado — "pop" ao marcar */
+.booking-check-pop {
+  animation: checkPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Anel pulsante para chamar atenção (ex: horário livre em destaque) */
+.booking-ring-pulse {
+  position: relative;
+}
+.booking-ring-pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1.5px solid currentColor;
+  animation: ringPulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  pointer-events: none;
+}
+
+/* Efeito Ken Burns sutil na imagem de capa */
+.booking-cover-image {
+  animation: kenBurns 16s ease-in-out infinite alternate;
+}
+
+.booking-cover-shade {
+  background: linear-gradient(
+    to top,
+    rgba(2, 8, 23, 0.98) 0%,
+    rgba(2, 8, 23, 0.86) 24%,
+    rgba(2, 8, 23, 0.48) 52%,
+    rgba(2, 8, 23, 0.08) 78%,
+    transparent 100%
+  );
+}
+
+.booking-cover-title {
+  color: #ffffff !important;
+  text-shadow: 0 2px 8px rgba(2, 8, 23, 0.92), 0 1px 2px rgba(2, 8, 23, 0.95);
+}
+
+.booking-cover-badge {
+  color: #ffffff !important;
+  text-shadow: 0 1px 3px rgba(2, 8, 23, 0.8);
+}
+
+/* Skeleton shimmer (para estados de carregamento futuros) */
+.booking-shimmer {
+  background: linear-gradient(90deg, rgba(148,163,184,0.06) 25%, rgba(148,163,184,0.16) 37%, rgba(148,163,184,0.06) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* Barra de progresso com preenchimento animado */
+.booking-progress-fill {
+  transition: width 0.5s cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* Partículas leves de celebração na tela de confirmação */
+.booking-particle {
+  position: absolute;
+  border-radius: 9999px;
+  animation: floatParticle 1.4s ease-out forwards;
+  pointer-events: none;
+}
+
+/* Slide direcional entre etapas do formulário */
+.step-forward {
+  animation: slideInRight 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.step-backward {
+  animation: slideInLeft 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Scrollbar fina e discreta para grades roláveis (horários/serviços) */
+.booking-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+.booking-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.booking-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--brand-color) 35%, transparent);
+  border-radius: 999px;
+}
+
+/* ============================================================
+   Refinamento global de UX/UI
+   Uma única linguagem visual para painel, autenticação e agendamento.
+   ============================================================ */
+
+:root {
+  --app-bg-color: #050d19;
+  --app-surface-color: #0d1a2d;
+  --app-surface-dark: #081221;
+  --app-surface-elevated: #13233a;
+  --app-border: rgba(105, 130, 164, 0.2);
+  --app-border-strong: rgba(121, 151, 190, 0.3);
+  --app-text-muted: #93a4bc;
+  --app-shadow-sm: 0 8px 24px rgba(1, 7, 18, 0.2);
+  --app-shadow-md: 0 18px 48px rgba(1, 7, 18, 0.3);
+  --app-shadow-lg: 0 28px 80px rgba(1, 7, 18, 0.42);
+  --app-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% -8%, color-mix(in srgb, var(--brand-color) 12%, transparent), transparent 34rem),
+    radial-gradient(circle at 95% 4%, color-mix(in srgb, var(--brand-accent) 12%, transparent), transparent 38rem),
+    var(--app-bg-color);
+  color: #f3f7fb;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+[role="button"],
+a {
+  touch-action: manipulation;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand-color) 82%, white);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--brand-color) 14%, transparent);
+}
+
+:where(input, select, textarea) {
+  accent-color: var(--brand-color);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+:where(input, select, textarea):focus {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-color) 9%, transparent);
+}
+
+:where(input, textarea)::placeholder {
+  color: #667991;
+  opacity: 1;
+}
+
+/* Shell: profundidade sutil sem disputar atenção com o conteúdo. */
+.app-shell {
+  isolation: isolate;
+  background: var(--app-bg-color) !important;
+}
+
+.app-main {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 8% 4%, color-mix(in srgb, var(--brand-color) 7%, transparent), transparent 25rem),
+    radial-gradient(circle at 94% 12%, color-mix(in srgb, var(--brand-accent) 8%, transparent), transparent 34rem),
+    linear-gradient(180deg, #07111f 0%, var(--app-bg-color) 58%, #050b15 100%) !important;
+}
+
+.app-main::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.16;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: linear-gradient(to bottom, black, transparent 68%);
+}
+
+.app-header,
+.app-scroll {
+  position: relative;
+}
+
+.app-header {
+  z-index: 40;
+  background: rgba(7, 17, 31, 0.86) !important;
+  border-color: var(--app-border) !important;
+  box-shadow: 0 12px 38px rgba(1, 7, 18, 0.22) !important;
+  backdrop-filter: blur(22px) saturate(145%);
+}
+
+.app-scroll {
+  z-index: 1;
+}
+
+.app-sidebar {
+  background:
+    radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--brand-color) 9%, transparent), transparent 19rem),
+    linear-gradient(180deg, rgba(8, 18, 33, 0.99), rgba(5, 12, 23, 0.99)) !important;
+  border-color: var(--app-border) !important;
+  box-shadow: 18px 0 52px rgba(1, 7, 18, 0.24);
+}
+
+.app-sidebar-nav {
+  position: relative;
+}
+
+.app-sidebar-item {
+  min-height: 3.25rem;
+  border: 1px solid transparent;
+  transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease, transform 180ms var(--app-ease), box-shadow 180ms ease !important;
+}
+
+.app-sidebar-item:hover {
+  transform: translateX(3px);
+  border-color: rgba(100, 126, 161, 0.16);
+  background: rgba(21, 36, 58, 0.6) !important;
+}
+
+.app-sidebar-item[aria-current="page"] {
+  background-color: color-mix(in srgb, var(--brand-color) 16%, transparent) !important;
+  background-image: none !important;
+  border-color: color-mix(in srgb, var(--brand-color) 31%, transparent) !important;
+  box-shadow: inset 3px 0 0 var(--brand-color), 0 10px 28px color-mix(in srgb, var(--brand-color) 7%, transparent) !important;
+}
+
+.app-bottom-nav {
+  background: rgba(7, 16, 29, 0.9) !important;
+  border-color: var(--app-border) !important;
+  box-shadow: 0 -18px 46px rgba(1, 7, 18, 0.4) !important;
+  backdrop-filter: blur(24px) saturate(150%);
+}
+
+.app-bottom-nav-item {
+  min-height: 3.65rem;
+}
+
+.app-bottom-nav-item::before {
+  content: '';
+  position: absolute;
+  top: -0.5rem;
+  left: 50%;
+  width: 1.8rem;
+  height: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transform: translateX(-50%) scaleX(0.3);
+  transition: background-color 180ms ease, transform 180ms var(--app-ease);
+}
+
+.app-bottom-nav-item[aria-current="page"]::before {
+  background: var(--brand-color);
+  transform: translateX(-50%) scaleX(1);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--brand-color) 55%, transparent);
+}
+
+.app-content {
+  container-type: inline-size;
+}
+
+/* Cartões e painéis: menos blocos chapados, mais hierarquia. */
+.app-view :where([class~="bg-[#121B2E]"], [class~="bg-[#121B2E]/90"]),
+.auth-view :where([class~="bg-[#121B2E]"]),
+.booking-view :where([class~="bg-[#121B2E]"]) {
+  background:
+    linear-gradient(155deg, rgba(20, 38, 62, 0.95), rgba(10, 22, 39, 0.97)) !important;
+  border-color: var(--app-border) !important;
+  box-shadow: var(--app-shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+}
+
+.app-view :where([class~="bg-[#0B1120]"], [class~="bg-[#0B1120]/90"], [class~="bg-[#0B1120]/60"], [class~="bg-[#0A1324]/70"]),
+.auth-view :where([class~="bg-[#0B1120]"]),
+.booking-view :where([class~="bg-[#0B1120]"], [class~="bg-[#0B1120]/60"], [class~="bg-[#0A1324]/70"]) {
+  background: linear-gradient(145deg, rgba(7, 17, 31, 0.94), rgba(10, 23, 40, 0.88)) !important;
+  border-color: rgba(101, 129, 164, 0.2) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.app-view :where([class~="bg-slate-950/45"], [class~="bg-slate-950/40"], [class~="bg-slate-950/60"], [class~="bg-slate-950/70"]),
+.booking-view :where([class~="bg-slate-950/30"], [class~="bg-slate-950/40"], [class~="bg-slate-950/60"]) {
+  background-color: rgba(3, 10, 21, 0.62) !important;
+  border-color: rgba(98, 125, 159, 0.18) !important;
+}
+
+.app-view :where([class~="rounded-3xl"][class~="border"], [class~="rounded-2xl"][class~="border"]),
+.auth-view :where([class~="rounded-3xl"][class~="border"]),
+.booking-view :where([class~="rounded-3xl"][class~="border"]) {
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms var(--app-ease);
+}
+
+@media (hover: hover) {
+  .app-view :where([class~="rounded-3xl"][class~="border"]):not(.modal-shell-fixed):hover {
+    border-color: var(--app-border-strong) !important;
+  }
+
+  .booking-view .booking-card:hover {
+    border-color: color-mix(in srgb, var(--brand-color) 40%, transparent) !important;
+    box-shadow: 0 16px 34px rgba(1, 7, 18, 0.34) !important;
+  }
+}
+
+.app-view h2,
+.app-view h3,
+.auth-view h2,
+.auth-view h3,
+.booking-view h2,
+.booking-view h3 {
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.app-view :where(p, span)[class*="uppercase"][class*="tracking-"] {
+  letter-spacing: 0.115em;
+}
+
+.app-view :where(.text-slate-400),
+.auth-view :where(.text-slate-400),
+.booking-view :where(.text-slate-400) {
+  color: var(--app-text-muted) !important;
+}
+
+.app-view table {
+  width: 100%;
+}
+
+.app-view thead {
+  background: rgba(5, 13, 26, 0.74);
+}
+
+.app-view tbody tr {
+  transition: background-color 160ms ease;
+}
+
+.app-view tbody tr:hover {
+  background-color: rgba(29, 49, 75, 0.32);
+}
+
+.appointment-person-card {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 28px rgba(1, 7, 18, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.025) !important;
+}
+
+.appointment-person-card::before {
+  content: '';
+  position: absolute;
+  inset-block: 1rem;
+  left: 0;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: var(--brand-color);
+  opacity: 0.48;
+}
+
+@media (hover: hover) {
+  .appointment-person-card:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--brand-color) 28%, var(--app-border)) !important;
+    box-shadow: 0 16px 36px rgba(1, 7, 18, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+  }
+}
+
+/* Botões e estados de ação com resposta tátil consistente. */
+.app-view button,
+.app-header button,
+.app-sidebar button,
+.app-bottom-nav button,
+.auth-view button,
+.booking-view button {
+  transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+  transition-duration: 160ms;
+  transition-timing-function: var(--app-ease);
+}
+
+/* Switches mantêm a proporção compacta, mesmo com a área de toque mobile. */
+.app-toggle {
+  height: 1.75rem !important;
+  min-height: 1.75rem !important;
+  max-height: 1.75rem;
+}
+
+/* Controles ativos usam o contraste do tema também nos ícones e indicadores. */
+:where(button, [role="button"]):is([class~="bg-emerald-500"], [class~="bg-emerald-600"]) {
+  color: var(--brand-contrast-color) !important;
+}
+
+:where(button, [role="button"]):is([class~="bg-emerald-500"], [class~="bg-emerald-600"]) > :where(svg, span:not([class~="bg-white"])) {
+  color: inherit !important;
+}
+
+:is([class~="bg-emerald-500"], [class~="bg-emerald-600"]):has(> [class~="bg-white"][class~="rounded-full"]) > [class~="bg-white"][class~="rounded-full"] {
+  background-color: var(--brand-contrast-color) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand-contrast-color) 18%, transparent);
+}
+
+/* Fotos de perfil sempre circulares e enquadradas sem distorção. */
+.profile-avatar {
+  aspect-ratio: 1 / 1;
+  border-radius: 9999px !important;
+  object-fit: cover;
+  object-position: center;
+}
+
+.app-view button:active:not(:disabled),
+.app-header button:active:not(:disabled),
+.app-sidebar button:active:not(:disabled),
+.app-bottom-nav button:active:not(:disabled),
+.auth-view button:active:not(:disabled),
+.booking-view button:active:not(:disabled) {
+  transform: scale(0.975);
+}
+
+.app-view :where([class~="bg-emerald-500"], [class~="bg-emerald-600"]),
+.auth-view :where([class~="bg-emerald-500"], [class~="bg-emerald-600"]),
+.booking-view :where([class~="bg-emerald-500"], [class~="bg-emerald-600"]) {
+  border: 1px solid color-mix(in srgb, var(--brand-color) 54%, white);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--brand-color) 20%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.22) !important;
+}
+
+.app-view :where([class~="bg-emerald-500"], [class~="bg-emerald-600"]):hover,
+.auth-view :where([class~="bg-emerald-500"], [class~="bg-emerald-600"]):hover,
+.booking-view :where([class~="bg-emerald-500"], [class~="bg-emerald-600"]):hover {
+  filter: brightness(1.07) saturate(1.06);
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--brand-color) 26%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.24) !important;
+}
+
+/* Formulários: agrupamento, legibilidade e foco mais claros em todas as telas. */
+.app-view :where(input, select, textarea),
+.auth-view :where(input, select, textarea),
+.booking-view :where(input, select, textarea),
+.app-header input {
+  background-color: rgba(3, 10, 21, 0.78) !important;
+  border-color: rgba(105, 133, 168, 0.28) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.app-view :where(input, select, textarea):hover,
+.auth-view :where(input, select, textarea):hover,
+.booking-view :where(input, select, textarea):hover,
+.app-header input:hover {
+  border-color: rgba(125, 157, 198, 0.42) !important;
+}
+
+.app-view :where(input, select, textarea):focus,
+.auth-view :where(input, select, textarea):focus,
+.booking-view :where(input, select, textarea):focus,
+.app-header input:focus {
+  border-color: color-mix(in srgb, var(--brand-color) 58%, transparent) !important;
+}
+
+/* Modais com separação mais nítida entre cabeçalho, corpo e ações. */
+.app-mobile-modal {
+  background: rgba(1, 6, 14, 0.78) !important;
+  backdrop-filter: blur(16px) saturate(120%) !important;
+}
+
+.app-mobile-modal > * {
+  border-color: var(--app-border-strong) !important;
+  box-shadow: var(--app-shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+}
+
+.modal-static-header,
+.modal-sticky-header {
+  background: linear-gradient(180deg, rgba(16, 31, 51, 0.99), rgba(12, 25, 43, 0.98));
+  border-bottom-color: var(--app-border) !important;
+}
+
+.modal-static-footer,
+.modal-fixed-actions {
+  background: linear-gradient(0deg, rgba(12, 25, 43, 0.99), rgba(12, 25, 43, 0.96));
+  border-top-color: var(--app-border) !important;
+}
+
+/* Autenticação e agendamento público recebem a mesma atmosfera da marca. */
+.auth-view::before,
+.booking-view::before,
+.superadmin-view::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 16% 8%, color-mix(in srgb, var(--brand-color) 12%, transparent), transparent 29rem),
+    radial-gradient(circle at 88% 90%, color-mix(in srgb, var(--brand-accent) 12%, transparent), transparent 34rem);
+}
+
+.auth-view > [class~="bg-[#121B2E]"] {
+  box-shadow: var(--app-shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.045) !important;
+}
+
+.booking-view > div > [class~="bg-[#121B2E]"] {
+  box-shadow: var(--app-shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.045) !important;
+}
+
+.superadmin-view {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 10% 0%, color-mix(in srgb, var(--brand-color) 9%, transparent), transparent 32rem),
+    radial-gradient(circle at 96% 16%, color-mix(in srgb, var(--brand-accent) 9%, transparent), transparent 38rem),
+    var(--app-bg-color) !important;
+}
+
+.superadmin-view :where([class~="bg-[#0b1628]"]) {
+  background: linear-gradient(155deg, rgba(18, 37, 60, 0.96), rgba(9, 21, 38, 0.98)) !important;
+  border-color: var(--app-border) !important;
+  box-shadow: var(--app-shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.superadmin-view :where(input, select, textarea) {
+  background-color: rgba(3, 10, 21, 0.78) !important;
+  border-color: rgba(105, 133, 168, 0.28) !important;
+}
+
+.superadmin-view :where(input, select, textarea):focus {
+  border-color: color-mix(in srgb, var(--brand-color) 58%, transparent) !important;
+}
+
+.superadmin-view button,
+.superadmin-view a {
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms var(--app-ease);
+}
+
+.superadmin-view button:active:not(:disabled),
+.superadmin-view a:active {
+  transform: scale(0.975);
+}
+
+/* Scrollbars discretas e coerentes no painel. */
+.admin-scroll-content,
+.modal-scroll-body,
+.app-view * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(92, 119, 153, 0.42) transparent;
+}
+
+.admin-scroll-content::-webkit-scrollbar,
+.modal-scroll-body::-webkit-scrollbar,
+.app-view *::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.admin-scroll-content::-webkit-scrollbar-track,
+.modal-scroll-body::-webkit-scrollbar-track,
+.app-view *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-scroll-content::-webkit-scrollbar-thumb,
+.modal-scroll-body::-webkit-scrollbar-thumb,
+.app-view *::-webkit-scrollbar-thumb {
+  background: rgba(92, 119, 153, 0.36);
+  border-radius: 999px;
+}
+
+.admin-scroll-content::-webkit-scrollbar-thumb:hover,
+.modal-scroll-body::-webkit-scrollbar-thumb:hover,
+.app-view *::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--brand-color) 36%, rgba(92, 119, 153, 0.42));
+}
+
+@media (max-width: 767px) {
+  .app-main::before {
+    background-size: 32px 32px;
+    opacity: 0.1;
+  }
+
+  .app-header {
+    padding-inline: 0.75rem !important;
+  }
+
+  .app-content {
+    padding-top: 0.85rem !important;
+  }
+
+  .app-view :where([class~="rounded-3xl"]) {
+    border-radius: 1.25rem;
+  }
+
+  .app-view :where([class~="rounded-2xl"]) {
+    border-radius: 0.95rem;
+  }
+
+  .app-view :where(input, select, textarea),
+  .auth-view :where(input, select, textarea),
+  .booking-view :where(input, select, textarea) {
+    font-size: 16px;
+  }
+
+  .app-view button:not(.app-toggle),
+  .auth-view button,
+  .booking-view button {
+    min-height: 2.5rem;
+  }
+
+  .app-bottom-nav-item {
+    min-width: 3.25rem;
+  }
+}
+
+@media (max-width: 389px) {
+  .app-bottom-nav-item {
+    min-width: 2.9rem;
+    padding-inline: 0.2rem;
+  }
+
+  .app-bottom-nav-item > div {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+}
+
+/* ============================================================
+   Tema claro real
+   Ativado automaticamente quando a cor de fundo escolhida é clara.
+   ============================================================ */
+html[data-app-theme="light"] {
+  color-scheme: light;
+  --app-surface-dark: #ffffff;
+  --app-surface-elevated: #eef2f6;
+  --app-border: rgba(100, 116, 139, 0.2);
+  --app-border-strong: rgba(71, 85, 105, 0.32);
+  --app-text-muted: #64748b;
+  --app-shadow-sm: 0 8px 24px rgba(15, 23, 42, 0.055);
+  --app-shadow-md: 0 18px 48px rgba(15, 23, 42, 0.075);
+  --app-shadow-lg: 0 28px 80px rgba(15, 23, 42, 0.1);
+}
+
+html[data-app-theme="light"] body {
+  color: #172033;
+  background: var(--app-bg-color);
+}
+
+html[data-app-theme="light"] .app-shell,
+html[data-app-theme="light"] .app-main {
+  background: var(--app-bg-color) !important;
+  color: #172033 !important;
+}
+
+html[data-app-theme="light"] .app-main::before {
+  opacity: 0.2;
+  background-image:
+    linear-gradient(rgba(100, 116, 139, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 116, 139, 0.07) 1px, transparent 1px);
+}
+
+html[data-app-theme="light"] .app-header {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.07) !important;
+}
+
+html[data-app-theme="light"] .app-sidebar {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 18px 0 45px rgba(15, 23, 42, 0.06);
+}
+
+html[data-app-theme="light"] .app-bottom-nav {
+  background: rgba(255, 255, 255, 0.94) !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 -14px 38px rgba(15, 23, 42, 0.09) !important;
+}
+
+html[data-app-theme="light"] .app-sidebar-item:hover {
+  background: #eef2f6 !important;
+  border-color: #dbe2ea !important;
+}
+
+html[data-app-theme="light"] .app-sidebar-item[aria-current="page"] {
+  background-color: color-mix(in srgb, var(--brand-color) 15%, white) !important;
+}
+
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view) :where(.text-white, .text-slate-100) {
+  color: #172033 !important;
+}
+
+html[data-app-theme="light"] .booking-showcase-media :where(.text-white) {
+  color: #ffffff !important;
+}
+
+.booking-view button.booking-showcase-dot {
+  min-height: 0.5rem;
+  padding: 0;
+}
+
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view) .text-slate-200 {
+  color: #334155 !important;
+}
+
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view) .text-slate-300 {
+  color: #475569 !important;
+}
+
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view) :where(.text-slate-400, .text-slate-500) {
+  color: #64748b !important;
+}
+
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view) :where([class~="text-cyan-200"], [class~="text-cyan-300"], [class~="text-cyan-400"]) {
+  color: #0e7490 !important;
+}
+
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view) :where([class~="text-emerald-300"], [class~="text-emerald-400"]) {
+  color: color-mix(in srgb, var(--brand-color) 55%, #172033) !important;
+}
+
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view) :where([class~="text-amber-200"], [class~="text-amber-300"], [class~="text-amber-400"]) {
+  color: #a34c0b !important;
+}
+
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view) :where([class~="text-rose-300"], [class~="text-rose-400"]) {
+  color: #be123c !important;
+}
+
+html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view) :where([class~="bg-[#121B2E]"], [class~="bg-[#121B2E]/90"]),
+html[data-app-theme="light"] .app-mobile-modal > :where(div, section, form) {
+  background: var(--app-surface-color) !important;
+  border-color: #dfe5ec !important;
+  box-shadow: var(--app-shadow-sm) !important;
+}
+
+html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view) :where([class~="bg-[#0B1120]"], [class~="bg-[#0B1120]/90"], [class~="bg-[#0B1120]/60"], [class~="bg-[#0A1324]/70"]),
+html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view) :where([class~="bg-slate-950/30"], [class~="bg-slate-950/40"], [class~="bg-slate-950/45"], [class~="bg-slate-950/50"], [class~="bg-slate-950/60"], [class~="bg-slate-950/70"], [class~="bg-slate-950/80"]),
+html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view) :where([class~="bg-slate-900"], [class~="bg-slate-900/70"], [class~="bg-slate-900/80"]),
+html[data-app-theme="light"] .app-header :where([class~="bg-slate-950/70"], [class~="bg-slate-950/80"], [class~="bg-slate-900/85"]),
+html[data-app-theme="light"] .app-sidebar :where([class~="bg-slate-900"], [class~="bg-slate-900/70"]),
+html[data-app-theme="light"] .app-bottom-nav :where([class~="bg-slate-900"], [class~="bg-slate-900/70"]) {
+  background: #ffffff !important;
+  border-color: #dfe5ec !important;
+  box-shadow: none !important;
+}
+
+html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view, .app-header, .app-sidebar, .app-bottom-nav) :where([class*="bg-slate-950"], [class*="bg-slate-900"], [class*="bg-slate-800"], [class~="bg-[#08101f]"], [class~="bg-[#07111f]"], [class~="bg-[#061120]"]) {
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+
+html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view, .app-header, .app-sidebar) :where([class~="border-slate-800"], [class~="border-slate-800/80"], [class~="border-slate-800/70"], [class~="border-slate-800/60"], [class~="border-slate-700"], [class~="border-slate-700/70"]) {
+  border-color: #dfe5ec !important;
+}
+
+html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view, .app-header, .app-sidebar, .app-bottom-nav) :where([class*="border-slate-8"], [class*="border-slate-7"]) {
+  border-color: #dfe5ec !important;
+}
+
+html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view, .app-header) :where(input, select, textarea) {
+  color: #172033 !important;
+  background-color: #ffffff !important;
+  border-color: #cfd8e3 !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.035);
+}
+
+html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view, .app-header) :where(input, textarea)::placeholder {
+  color: #94a3b8 !important;
+}
+
+html[data-app-theme="light"] .app-view thead {
+  background: #eef2f6;
+}
+
+html[data-app-theme="light"] .app-view tbody tr:hover {
+  background-color: #f1f5f9;
+}
+
+html[data-app-theme="light"] .appointment-person-card {
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.055) !important;
+}
+
+html[data-app-theme="light"] .app-mobile-modal {
+  background: rgba(15, 23, 42, 0.28) !important;
+}
+
+html[data-app-theme="light"] :where(.modal-static-header, .modal-sticky-header, .modal-static-footer, .modal-fixed-actions) {
+  background: #ffffff !important;
+  border-color: #dfe5ec !important;
+}
+
+html[data-app-theme="light"] .brand-panel {
+  background: var(--app-surface-color) !important;
+  border-color: #dfe5ec !important;
+  box-shadow: var(--app-shadow-md) !important;
+}
+
+html[data-app-theme="light"] .brand-button-soft {
+  color: color-mix(in srgb, var(--brand-color) 72%, #172033);
+}
+
+html[data-app-theme="light"] :where(.auth-view, .booking-view)::before {
+  opacity: 0.35;
+}
+
+/* Cobertura de componentes fora de .app-view e conteúdos montados por portal. */
+html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal) :where(.text-white, .text-slate-100) {
+  color: #172033 !important;
+}
+
+html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal) .text-slate-200 {
+  color: #334155 !important;
+}
+
+html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal) .text-slate-300 {
+  color: #475569 !important;
+}
+
+html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal) :where([class*="text-slate-4"], [class*="text-slate-5"], [class*="text-slate-6"]) {
+  color: #64748b !important;
+}
+
+html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal, .booking-view, .auth-view) [class*="text-cyan-"] {
+  color: #08708a !important;
+}
+
+html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal, .booking-view, .auth-view) [class*="text-teal-"] {
+  color: #0f766e !important;
+}
+
+html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal, .booking-view, .auth-view) [class*="text-emerald-"] {
+  color: color-mix(in srgb, var(--brand-color) 52%, #172033) !important;
+}
+
+html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal, .booking-view, .auth-view) [class*="text-amber-"] {
+  color: #9a4b0a !important;
+}
+
+html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal, .booking-view, .auth-view) [class*="text-rose-"] {
+  color: #be123c !important;
+}
+
+html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal) :where([class*="bg-slate-950"], [class*="bg-slate-900"], [class*="bg-slate-800"]) {
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+
+html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal) :where([class*="border-slate-8"], [class*="border-slate-7"]) {
+  border-color: #d8e0e8 !important;
+}
+
+/* Cards privados acompanham o tema da barbearia; o Superadmin mantém seu visual. */
+html[data-app-theme="light"] .app-shell .onboarding-checklist {
+  background: linear-gradient(135deg, #ecfeff, var(--app-surface-dark) 55%, var(--app-surface-elevated)) !important;
+  border-color: #a7d8e3 !important;
+  box-shadow: var(--app-shadow-sm);
+}
+
+html[data-app-theme="light"] .app-shell .platform-notice-card {
+  background: #f8fafc !important;
+  color: #172033 !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: var(--app-shadow-sm);
+}
+
+html[data-app-theme="light"] .booking-assistant {
+  background: #f8fafc !important;
+  border-color: #a7d8d2 !important;
+}
+
+html[data-app-theme="light"] .notification-center-panel {
+  background: #f8fafc !important;
+  border-color: #d8e0e8 !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.16) !important;
+}
+
+html[data-app-theme="light"] .notification-center-panel > :first-child,
+html[data-app-theme="light"] .notification-center-panel > :nth-child(2) {
+  background: #ffffff !important;
+  border-color: #d8e0e8 !important;
+}
+
+html[data-app-theme="light"] .notification-center-panel [class*="bg-cyan-400/"] {
+  background-color: #ecfeff !important;
+}
+
+html[data-app-theme="light"] .app-notification-toast {
+  background-color: #ffffff !important;
+  background-image: linear-gradient(135deg, #ffffff 0%, #ecfdf5 100%) !important;
+  border-color: color-mix(in srgb, var(--brand-color) 58%, #cbd5e1) !important;
+  color: #172033 !important;
+  box-shadow: 0 20px 55px rgba(15, 23, 42, 0.16) !important;
+}
+
+html[data-app-theme="light"] .whatsapp-actions-sheet {
+  background: #f8fafc !important;
+  border-color: #d8e0e8 !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.16) !important;
+}
+
+html[data-app-theme="light"] .whatsapp-actions-header {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-color: #d8e0e8 !important;
+}
+
+html[data-app-theme="light"] .whatsapp-actions-item {
+  background: #ffffff !important;
+  border-color: #d8e0e8 !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+html[data-app-theme="light"] .whatsapp-actions-item:hover {
+  background: color-mix(in srgb, var(--brand-color) 6%, white) !important;
+  border-color: color-mix(in srgb, var(--brand-color) 30%, #d8e0e8) !important;
+}
+
+html[data-app-theme="light"] :where(.settings-tv-panel, .settings-links-panel) {
+  background: var(--app-surface-color) !important;
+  background-image: none !important;
+  border-color: #d8e0e8 !important;
+  box-shadow: var(--app-shadow-sm) !important;
+}
+
+html[data-app-theme="light"] .settings-tv-panel > [class*="bg-slate-950"] {
+  background: #ffffff !important;
+  border-color: #d8e0e8 !important;
+}
+
+html[data-app-theme="light"] .brand-credit {
+  border-color: #d8e0e8 !important;
+}
+
+html[data-app-theme="light"] .brand-credit [class*="text-cyan-"] {
+  color: #08708a !important;
+}
+
+html[data-app-theme="light"] .brand-credit [class*="text-teal-"] {
+  color: #0f766e !important;
+}
+
+/* Switch desligado precisa continuar visível sobre superfícies brancas. */
+html[data-app-theme="light"] .app-toggle[aria-pressed="false"] {
+  background: #cbd5e1 !important;
+  border-color: #94a3b8 !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.12) !important;
+}
+
+html[data-app-theme="light"] .app-toggle[aria-pressed="false"] > span {
+  background: #ffffff !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.24), 0 0 0 1px rgba(100, 116, 139, 0.16) !important;
+}
+
+/* Tela de abertura e validação também acompanha o tema salvo. */
+.app-loading-progress {
+  background: var(--brand-color);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--brand-color) 42%, transparent);
+}
+
+html[data-app-theme="light"] .app-loading-screen {
+  color: #172033 !important;
+  background: #ffffff !important;
+}
+
+html[data-app-theme="light"] .app-loading-screen .brand-panel {
+  background: #f4f6f8 !important;
+  border-color: #d8e0e8 !important;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.1) !important;
+}
+
+html[data-app-theme="light"] .app-loading-screen :where(.text-white, .text-slate-100) {
+  color: #172033 !important;
+}
+
+html[data-app-theme="light"] .app-loading-screen .text-slate-300 {
+  color: #475569 !important;
+}
+
+html[data-app-theme="light"] .app-loading-screen :where(.text-slate-400, .text-slate-500) {
+  color: #64748b !important;
+}
+
+html[data-app-theme="light"] .app-loading-screen [class*="text-cyan-"] {
+  color: #08708a !important;
+}
+
+html[data-app-theme="light"] .app-loading-track {
+  background: #dbe3ec !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.1);
+}
+
+html[data-app-theme="light"] .booking-view .booking-cover-title {
+  color: #172033 !important;
+  text-shadow: none;
+}
+
+html[data-app-theme="light"] .booking-view .booking-cover-badge {
+  color: #ffffff !important;
+}
+
+@media (min-width: 640px) {
+  html[data-app-theme="light"] .booking-view .booking-cover-title {
+    color: #ffffff !important;
+    text-shadow: 0 2px 8px rgba(2, 8, 23, 0.92), 0 1px 2px rgba(2, 8, 23, 0.95);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+
+  .app-sidebar-item:hover,
+  .app-view button:active,
+  .auth-view button:active,
+  .booking-view button:active {
+    transform: none !important;
+  }
+}
+
+/* ============================================================
+   Modificadores de Personalidade Visual do Tema
+   Suporte a estilos de superfície (Glass, Glow, Solid) e raios de borda
+   ============================================================ */
+
+/* Estilo Glassmorphism translúcido com desfoque de fundo */
+html[data-surface-style="glass"] :where(.app-view, .auth-view, .booking-view) :where([class~="bg-[#121B2E]"], [class~="bg-[#121B2E]/90"]),
+html[data-surface-style="glass"] .brand-panel {
+  background: color-mix(in srgb, var(--app-surface-color) 82%, transparent) !important;
+  backdrop-filter: blur(24px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(140%) !important;
+  border-color: color-mix(in srgb, var(--brand-accent) 24%, rgba(255, 255, 255, 0.12)) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-surface-style="glass"] :where(.app-view, .auth-view, .booking-view) :where([class~="bg-[#0B1120]"], [class~="bg-[#0B1120]/90"], [class~="bg-[#0B1120]/60"]) {
+  background: color-mix(in srgb, var(--app-surface-dark) 76%, transparent) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+
+/* Estilo Neon Glow iluminado nos acentos e bordas */
+html[data-surface-style="glow"] :where(.app-view, .auth-view, .booking-view) :where([class~="bg-[#121B2E]"], [class~="bg-[#121B2E]/90"]),
+html[data-surface-style="glow"] .brand-panel {
+  border-color: color-mix(in srgb, var(--brand-color) 35%, var(--app-border)) !important;
+  box-shadow: 0 0 28px -6px color-mix(in srgb, var(--brand-color) 22%, transparent), var(--app-shadow-sm) !important;
+}
+
+html[data-surface-style="glow"] .brand-button-primary,
+html[data-surface-style="glow"] :where(button, [role="button"]):is([class~="bg-emerald-500"], [class~="bg-emerald-600"]) {
+  box-shadow: 0 0 25px color-mix(in srgb, var(--brand-color) 50%, transparent), 0 10px 24px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Arredondamento Compacto (Tech / Sharp) */
+html[data-border-radius="compact"] :where(.app-view, .auth-view, .booking-view, .app-main) :where([class~="rounded-3xl"]) {
+  border-radius: 0.875rem !important;
+}
+html[data-border-radius="compact"] :where(.app-view, .auth-view, .booking-view, .app-main) :where([class~="rounded-2xl"]) {
+  border-radius: 0.625rem !important;
+}
+html[data-border-radius="compact"] :where(.app-view, .auth-view, .booking-view, .app-main) :where([class~="rounded-xl"]) {
+  border-radius: 0.5rem !important;
+}
+
+/* Arredondamento Orgânico / Suave (Soft / Pill) */
+html[data-border-radius="soft"] :where(.app-view, .auth-view, .booking-view, .app-main) :where([class~="rounded-3xl"]) {
+  border-radius: 2rem !important;
+}
+html[data-border-radius="soft"] :where(.app-view, .auth-view, .booking-view, .app-main) :where([class~="rounded-2xl"]) {
+  border-radius: 1.5rem !important;
+}
+html[data-border-radius="soft"] :where(.app-view, .auth-view, .booking-view, .app-main) :where([class~="rounded-xl"]) {
+  border-radius: 1rem !important;
+}
+
+/* Revisão de usabilidade: contraste, foco e modais em qualquer tamanho de tela. */
+:is(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--brand-color) !important;
+  outline-offset: 3px;
+}
+body:has([aria-modal="true"]) { overflow: hidden; }
+.app-mobile-modal { overscroll-behavior: contain; }
+.app-mobile-modal > :first-child { min-width: 0; }
+.notification-center-panel > :not(:last-child) { flex-shrink: 0; }
+.app-view :where(input, select, textarea) { min-width: 0; max-width: 100%; }
+
+html[data-app-theme="dark"] :where(.app-shell, .app-mobile-modal, .superadmin-view, .auth-view, .booking-view) :is(.text-slate-500, .text-slate-600) {
+  color: #94a3b8;
+}
+html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal, .booking-view, .auth-view) :is(.text-sky-300, .text-sky-400, .text-blue-300, .text-blue-400) {
+  color: #1d4ed8 !important;
+}
+html[data-app-theme="light"] .sync-warning {
+  background: #fffbeb !important;
+  border-color: #fcd34d !important;
+  color: #92400e !important;
+}
+html[data-app-theme="light"] .app-header [class~="bg-rose-950/40"] {
+  background: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+}
+
+/* Regras gerais do tema claro não podem apagar o texto em botões coloridos. */
+html[data-app-theme] :is(.app-shell, .app-view, .app-mobile-modal, .booking-view, .auth-view) :is(.brand-button-primary, [class~="bg-emerald-500"], [class~="bg-emerald-600"]) {
+  color: var(--brand-contrast-color) !important;
+}
+html[data-app-theme] :is(.app-shell, .app-view, .app-mobile-modal, .booking-view, .auth-view) :is(.brand-button-primary, [class~="bg-emerald-500"], [class~="bg-emerald-600"]) > :is(svg, span:not([class~="bg-white"])) {
+  color: inherit !important;
+}
+html[data-app-theme="light"] :is(.app-view, .booking-view) :is([class~="bg-emerald-950/30"], [class~="bg-emerald-950/40"]) {
+  background-color: color-mix(in srgb, var(--brand-color) 8%, #fff) !important;
+}
+
+/* Estado diário do calendário público: lotado se distingue de fechado sem depender apenas da cor. */
+.booking-date-unavailable {
+  background-color: rgba(76, 5, 25, 0.2);
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(251, 113, 133, 0.2) 0,
+    rgba(251, 113, 133, 0.2) 3px,
+    transparent 3px,
+    transparent 7px
+  );
+}
+@media (max-width: 767px) {
+  .app-header input, .superadmin-view :is(input, select, textarea), .app-mobile-modal :is(input, select, textarea) { font-size: 16px; }
+  .app-mobile-modal :is(button, a), .onboarding-checklist button, .superadmin-view button { min-height: 44px; }
+  .app-mobile-modal { margin: 0 !important; }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "agendai",
+  "private": true,
+  "version": "1.15.13",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "npm run build && wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "test:reliability": "node --test tests/reliability.test.mjs",
+    "test:notices": "node --test tests/platform-notices.test.mjs",
+    "test:bell": "node --test tests/notification-bell.test.mjs",
+    "test:showcase": "node --test tests/public-showcase.test.mjs",
+    "dev:showcase-preview": "vite --config vite.showcase-preview.config.ts",
+    "dev:notices-preview": "vite --config vite.notices-preview.config.ts",
+    "test:assistant": "node --test tests/assistant.test.mjs",
+    "dev:assistant-lab": "vite --config vite.assistant-lab.config.ts",
+    "test:assistant-lab": "node --test tests/assistant-lab.test.mjs",
+    "setup:d1": "wrangler d1 execute agendai-db --remote --file=./schema.sql",
+    "init:d1": "wrangler d1 execute agendai-db --remote --file=./schema.sql"
+  },
+  "dependencies": {
+    "@gsap/react": "^2.1.2",
+    "gsap": "^3.15.0",
+    "lucide-react": "^0.453.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8",
+    "wrangler": "^4.0.0"
+  }
+}
