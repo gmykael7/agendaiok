@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>AgendAI – Vídeo promocional</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- GSAP CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div id="canvas">
+    <!-- ==== CENAS ==== -->
+    <!-- CENA 1 – Controle -->
+    <section class="scene" id="scene-1">
+      <h1 class="headline">Sua agenda, no <span class="gold">controle</span>.</h1>
+      <div class="mock-screen agenda">
+        <!-- Simulação simples de agenda -->
+        <table>
+          <thead><tr><th>Profissional</th><th>Horário</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Barbeiro 1</td><td>09:00 – 10:00</td><td>✅ Livre</td></tr>
+            <tr><td>Barbeiro 2</td><td>10:00 – 11:00</td><td>🕒 Reservado</td></tr>
+            <tr><td>Barbeiro 3</td><td>11:00 – 12:00</td><td>✅ Livre</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- CENA 2 – Cliente agenda online -->
+    <section class="scene" id="scene-2">
+      <h1 class="headline">Seu cliente agenda <span class="gold">online</span>.</h1>
+      <div class="mock-screen online">
+        <div class="service-card">Corte <em>R$ 25</em></div>
+        <div class="service-card">Barba <em>R$ 15</em></div>
+        <div class="picker">Selecione Profissional → <strong>Barbeiro 2</strong></div>
+        <div class="picker">Data → <strong>23/09</strong></div>
+        <div class="picker">Horário → <strong>10:00</strong></div>
+        <button class="btn-confirm">Confirmar</button>
+      </div>
+    </section>
+
+    <!-- CENA 3 – Atendimento organizado -->
+    <section class="scene" id="scene-3">
+      <h1 class="headline">Cada atendimento, <span class="gold">organizado</span>.</h1>
+      <div class="mock-screen board">
+        <div class="card waiting">🕒 Aguarde – João Silva</div>
+        <div class="card active">✂️ Em atendimento – Maria Costa</div>
+        <div class="card done">✅ Concluído – Carlos Lima</div>
+      </div>
+    </section>
+
+    <!-- CENA 4 – Clientes que voltam -->
+    <section class="scene" id="scene-4">
+      <h1 class="headline">Clientes que <span class="gold">voltam</span>.</h1>
+      <div class="mock-screen client">
+        <div class="profile">
+          <img src="https://i.pravatar.cc/80?u=cliente1" alt="Cliente">
+          <div>
+            <strong>Rafael Alves</strong>
+            <p>5 visitas • 2 % de fidelidade</p>
+          </div>
+        </div>
+        <button class="btn-whatsapp">📲 Enviar campanha WhatsApp</button>
+      </div>
+    </section>
+
+    <!-- CENA 5 – Visão geral do negócio -->
+    <section class="scene" id="scene-5">
+      <h1 class="headline">Seu negócio em <span class="gold">uma visão</span>.</h1>
+      <div class="mock-screen dashboard">
+        <div class="stat">💰 Faturamento: <strong>R$ 12 340</strong></div>
+        <div class="stat">📊 Serviços: <strong>320</strong></div>
+        <div class="stat">🛒 Produtos: <strong>85</strong></div>
+        <div class="stat">💼 Comissões: <strong>R$ 1 200</strong></div>
+      </div>
+    </section>
+
+    <!-- CENA 6 – Leque de iPhones 3D -->
+    <section class="scene" id="scene-6">
+      <h1 class="headline">Tudo ao seu alcance.</h1>
+      <div class="phones">
+        <!-- Cada iPhone contém um screenshot das cenas 1‑5 -->
+        <div class="phone" data-scene="1"><div class="screen"></div></div>
+        <div class="phone" data-scene="2"><div class="screen"></div></div>
+        <div class="phone" data-scene="3"><div class="screen"></div></div>
+        <div class="phone" data-scene="4"><div class="screen"></div></div>
+        <div class="phone" data-scene="5"><div class="screen"></div></div>
+      </div>
+    </section>
+
+    <!-- CENA 7 – Encerramento -->
+    <section class="scene" id="scene-7">
+      <div class="logo-wrap">
+        <img src="logo.png" alt="AgendAI logo" class="logo">
+        <h2 class="tagline">Você cuida do estilo.<br><span class="gold">O AgendAI organiza o resto.</span></h2>
+        <p class="url">meuagendai.fun</p>
+      </div>
+    </section>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+/* -------------------------------------------------
+   GLOBALS
+------------------------------------------------- */
+html,body{
+  margin:0; padding:0;
+  width:100%; height:100%;
+  overflow:hidden;
+  background:#050912;
+  font-family:'Segoe UI',Arial,sans-serif;
+  color:#fff;
+}
+#canvas{
+  position:relative;
+  width:1920px; height:1080px;
+  margin:0 auto;
+  perspective:1200px;          /* 3D depth para a cena 6 */
+}
+.scene{
+  position:absolute;
+  inset:0;
+  opacity:0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  pointer-events:none;
+}
+.headline{
+  font-size:64px;
+  line-height:1.2;
+  text-align:center;
+  max-width:1500px;
+}
+.gold{
+  color:#FFC400;
+}
+.mock-screen{
+  margin-top:30px;
+  width:1100px;
+  height:620px;
+  background:#0b1230;
+  border-radius:12px;
+  box-shadow:0 0 30px rgba(255,196,0,.3),0 0 80px rgba(0,255,255,.1);
+  overflow:hidden;
+  position:relative;
+}
+
+/* ---------- ESTILOS SPECÍFICOS ---------- */
+.agenda table{
+  width:100%; border-collapse:collapse;
+  font-size:20px;
+}
+.agenda th, .agenda td{
+  padding:12px 20px;
+  border-bottom:1px solid #1a1f38;
+}
+.online .service-card{
+  background:#0d1845;
+  margin:12px;
+  padding:12px 20px;
+  border-radius:8px;
+  font-size:22px;
+}
+.online .picker{
+  margin:8px 12px;
+  font-size:18px;
+}
+.online .btn-confirm{
+  margin:20px;
+  padding:12px 30px;
+  background:#FFC400;
+  color:#050912;
+  border:none;
+  border-radius:6px;
+  font-weight:bold;
+  cursor:pointer;
+}
+.board .card{
+  background:#0d1845;
+  margin:12px;
+  padding:14px 20px;
+  border-radius:8px;
+  font-size:20px;
+}
+.client .profile{
+  display:flex;
+  align-items:center;
+  margin-bottom:20px;
+}
+.client .profile img{
+  border-radius:50%;
+  margin-right:15px;
+}
+.client .btn-whatsapp{
+  background:#25D366;
+  color:#fff;
+  border:none;
+  padding:12px 30px;
+  border-radius:6px;
+  cursor:pointer;
+}
+.dashboard .stat{
+  background:#0d1845;
+  margin:12px;
+  padding:20px;
+  border-radius:8px;
+  font-size:24px;
+  text-align:center;
+}
+
+/* ---------- CENA 6 – iPhones ---------- */
+#scene-6 .phones{
+  position:relative;
+  width:100%;
+  height:100%;
+}
+.phone{
+  position:absolute;
+  width:260px;
+  height:540px;
+  transform-style:preserve-3d;
+  transform-origin:center bottom;
+  border-radius:30px;
+  box-shadow:0 20px 60px rgba(0,0,0,.6);
+  background:#111c30;
+}
+.phone .screen{
+  position:absolute;
+  inset:12px 12px 30px 12px;
+  background:#0b1230;
+  border-radius:20px;
+  overflow:hidden;
+}
+
+/* ---------- CENA 7 – Encerramento ---------- */
+.logo-wrap{
+  text-align:center;
+}
+.logo{
+  width:300px;
+  filter:drop-shadow(0 0 12px rgba(255,196,0,.8));
+}
+.tagline{
+  margin-top:20px;
+  font-size:38px;
+  line-height:1.3;
+}
+.url{
+  margin-top:10px;
+  font-size:28px;
+  letter-spacing:2px;
+  color:#FFC400;
+}
+
+/* -------------------------------------------------
+   ANIMAÇÕES DE TEXTO (fade‑in / slide‑up)
+------------------------------------------------- */
+.fade-up{
+  opacity:0;
+  transform:translateY(30px);
+}
