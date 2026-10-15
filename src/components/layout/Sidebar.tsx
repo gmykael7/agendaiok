@@ -51,13 +51,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: 'Dashboard', icon: House, permission: 'dashboard' },
     { id: 'atendimentos', label: 'Atender', icon: ClipboardCheck, permission: 'atendimentos' },
     { id: 'agenda', label: 'Agenda', icon: CalendarDays, permission: 'agenda' },
+    { id: 'clientes', label: 'Clientes', icon: ContactRound, permission: 'clientes' },
+    { id: 'produtos', label: 'Produtos', icon: Boxes, permission: 'products' },
+    { id: 'caixa', label: 'Caixa', icon: WalletCards, permission: 'caixa' },
     { id: 'comandas', label: 'Comandas', icon: ReceiptText, permission: 'caixa' },
     { id: 'assinaturas', label: 'Assinaturas', icon: BadgeCheck, permission: 'ajustes' },
     { id: 'campanhas', label: 'Campanhas', icon: Megaphone, permission: 'clientes' },
-    { id: 'caixa', label: 'Caixa', icon: WalletCards, permission: 'caixa' },
-    { id: 'produtos', label: 'Produtos', icon: Boxes, permission: 'products' },
     { id: 'relatorios', label: 'Relatórios', icon: BarChart3, permission: 'relatorios' },
-    { id: 'clientes', label: 'Clientes', icon: ContactRound, permission: 'clientes' },
     { id: 'ajustes', label: 'Ajustes', icon: Settings, permission: 'ajustes' },
   ];
 
