@@ -2719,3 +2719,19 @@ html[data-app-theme="dark"] { --agl-ink: #ffffff; }
 .agl-part { transform-box: fill-box; opacity: 0; animation: aglIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards; animation-delay: var(--d, 0s); }
 .agl-spark { transform-box: fill-box; transform-origin: center; animation: aglSpark 3.6s ease-in-out 1.2s infinite; }
 @media (prefers-reduced-motion: reduce) { .agl-part { opacity: 1; animation: none; } .agl-spark { animation: none; } }
+
+/* Efeito de expansão circular a partir do botão principal da barra inferior */
+@keyframes circularRevealWave {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0.95;
+  }
+  60% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+}
+

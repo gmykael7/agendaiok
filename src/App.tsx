@@ -1871,7 +1871,7 @@ export default function App() {
             </Suspense>
           </div>
 
-          <div className="px-3 sm:px-6 md:px-8 pb-4 max-w-[1600px] w-full mx-auto">
+          <div className="px-3 sm:px-6 md:px-8 pb-24 sm:pb-8 md:pb-6 max-w-[1600px] w-full mx-auto">
             <div className="rounded-2xl bg-slate-950/35 border border-slate-800/70 px-4 py-4">
               <AgencyCredit />
             </div>
