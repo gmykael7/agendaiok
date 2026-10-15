@@ -1,12 +1,13 @@
 import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  House,
-  ClipboardCheck,
-  CalendarDays,
-  WalletCards,
-  Settings,
-} from 'lucide-react';
+  IconlyHome,
+  IconlyClipboard,
+  IconlyCalendar,
+  IconlyWallet,
+  IconlySetting,
+  IconlyProps,
+} from '../common/IconlyIcons';
 import { StaffPermissions, TabType } from '../../types';
 import { motionAllowed } from '../../utils/motion';
 
@@ -73,7 +74,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   const renderSideTab = (
     id: TabType,
     label: string,
-    Icon: React.FC<{ className?: string }>,
+    Icon: React.FC<IconlyProps>,
     badge?: number
   ) => {
     const isActive = currentTab === id;
@@ -89,9 +90,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       >
         <div className="relative flex h-7 w-7 items-center justify-center">
           <Icon
-            className={`h-[22px] w-[22px] transition-transform duration-200 ${
-              isActive ? 'stroke-[2.4] scale-105' : 'stroke-[1.8]'
-            }`}
+            active={isActive}
+            className="h-[23px] w-[23px] transition-transform duration-200"
           />
           {badge !== undefined && badge > 0 && (
             <span className="app-bottom-nav-badge absolute -top-1.5 -right-2.5 min-w-[17px] h-[17px] px-1 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center font-mono shadow-sm">
@@ -142,10 +142,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       >
         <div className="app-bottom-nav-pill pointer-events-auto relative flex w-full items-center justify-between rounded-full px-4 py-2">
           {permissions?.dashboard !== false &&
-            renderSideTab('dashboard', 'Início', House)}
+            renderSideTab('dashboard', 'Início', IconlyHome)}
 
           {permissions?.atendimentos !== false &&
-            renderSideTab('atendimentos', 'Atender', ClipboardCheck, pendingCount)}
+            renderSideTab('atendimentos', 'Atender', IconlyClipboard, pendingCount)}
 
           {permissions?.agenda !== false && (
             <div className="relative flex items-center justify-center px-2 shrink-0">
@@ -157,16 +157,20 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 aria-current={currentTab === 'agenda' ? 'page' : undefined}
                 className="app-bottom-nav-hero group relative flex h-14 w-14 items-center justify-center rounded-full transition-transform duration-200 active:scale-90 hover:scale-105"
               >
-                <CalendarDays className="h-6 w-6 stroke-[2.2] transition-transform group-hover:scale-105" />
+                <IconlyCalendar
+                  variant="hero"
+                  active={currentTab === 'agenda'}
+                  className="h-6 w-6 transition-transform group-hover:scale-105"
+                />
               </button>
             </div>
           )}
 
           {permissions?.caixa !== false &&
-            renderSideTab('caixa', 'Caixa', WalletCards)}
+            renderSideTab('caixa', 'Caixa', IconlyWallet)}
 
           {permissions?.ajustes !== false &&
-            renderSideTab('ajustes', 'Ajustes', Settings)}
+            renderSideTab('ajustes', 'Ajustes', IconlySetting)}
         </div>
       </nav>
     </>

@@ -2,22 +2,25 @@ import { appConfirm } from '../common/ConfirmDialog';
 import React from 'react';
 import {
   Building2,
-  CalendarDays,
   Smartphone,
   ArrowUpRight,
-  ContactRound,
-  WalletCards,
-  ClipboardCheck,
-  House,
   X,
-  Settings,
   LogOut,
-  BarChart3,
-  Boxes,
-  ReceiptText,
-  BadgeCheck,
-  Megaphone,
 } from 'lucide-react';
+import {
+  IconlyHome,
+  IconlyClipboard,
+  IconlyCalendar,
+  IconlyUsers,
+  IconlyBag,
+  IconlyWallet,
+  IconlyReceipt,
+  IconlyBadge,
+  IconlyMegaphone,
+  IconlyChart,
+  IconlySetting,
+  IconlyProps,
+} from '../common/IconlyIcons';
 import { Organization, StaffPermissions, TabType } from '../../types';
 import { BrandLogo } from '../common/BrandLogo';
 import { AgencyCredit } from '../common/AgencyCredit';
@@ -47,18 +50,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const publicPageUrl = org ? getClientBookingUrl(org.slug) : '';
   const publicPageLabel = publicPageUrl.replace(/^https?:\/\//, '');
 
-  const menuItems: { id: TabType; label: string; icon: React.FC<{ className?: string }>; permission: keyof StaffPermissions }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: House, permission: 'dashboard' },
-    { id: 'atendimentos', label: 'Atender', icon: ClipboardCheck, permission: 'atendimentos' },
-    { id: 'agenda', label: 'Agenda', icon: CalendarDays, permission: 'agenda' },
-    { id: 'clientes', label: 'Clientes', icon: ContactRound, permission: 'clientes' },
-    { id: 'produtos', label: 'Produtos', icon: Boxes, permission: 'products' },
-    { id: 'caixa', label: 'Caixa', icon: WalletCards, permission: 'caixa' },
-    { id: 'comandas', label: 'Comandas', icon: ReceiptText, permission: 'caixa' },
-    { id: 'assinaturas', label: 'Assinaturas', icon: BadgeCheck, permission: 'ajustes' },
-    { id: 'campanhas', label: 'Campanhas', icon: Megaphone, permission: 'clientes' },
-    { id: 'relatorios', label: 'Relatórios', icon: BarChart3, permission: 'relatorios' },
-    { id: 'ajustes', label: 'Ajustes', icon: Settings, permission: 'ajustes' },
+  const menuItems: { id: TabType; label: string; icon: React.FC<IconlyProps>; permission: keyof StaffPermissions }[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: IconlyHome, permission: 'dashboard' },
+    { id: 'atendimentos', label: 'Atender', icon: IconlyClipboard, permission: 'atendimentos' },
+    { id: 'agenda', label: 'Agenda', icon: IconlyCalendar, permission: 'agenda' },
+    { id: 'clientes', label: 'Clientes', icon: IconlyUsers, permission: 'clientes' },
+    { id: 'produtos', label: 'Produtos', icon: IconlyBag, permission: 'products' },
+    { id: 'caixa', label: 'Caixa', icon: IconlyWallet, permission: 'caixa' },
+    { id: 'comandas', label: 'Comandas', icon: IconlyReceipt, permission: 'caixa' },
+    { id: 'assinaturas', label: 'Assinaturas', icon: IconlyBadge, permission: 'ajustes' },
+    { id: 'campanhas', label: 'Campanhas', icon: IconlyMegaphone, permission: 'clientes' },
+    { id: 'relatorios', label: 'Relatórios', icon: IconlyChart, permission: 'relatorios' },
+    { id: 'ajustes', label: 'Ajustes', icon: IconlySetting, permission: 'ajustes' },
   ];
 
   return (
@@ -134,7 +137,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }`}
                 >
                   <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${isActive ? 'bg-cyan-400/10 border border-cyan-400/20' : 'bg-slate-900/70 border border-slate-800/70'}`}>
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
+                    <Icon active={isActive} className={`w-[18px] h-[18px] ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
                   </span>
                   {item.label}
                 </button>
