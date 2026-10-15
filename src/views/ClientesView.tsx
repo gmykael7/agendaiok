@@ -1,5 +1,7 @@
 import { Modal } from "../components/common/Modal";
-import React, { useMemo, useState } from 'react';
+import { localDateKey } from '../utils/localDate';
+import { consumeClientSearchFocus } from '../utils/searchFocus';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Users,
   Plus,
@@ -23,12 +25,24 @@ import {
   AlertTriangle,
   UserX,
   Sparkles,
+  Award,
+  Gift,
+  FileSpreadsheet,
+  ShieldCheck,
+  CheckCircle2,
+  Download,
 } from 'lucide-react';
+import { ActionButton } from '../components/common/ActionButton';
 import { Client, Appointment, Organization } from '../types';
 import { clientIdentityKey, dedupeClients, normalizeClientPhone, upsertClient } from '../utils/clients';
 import { buildClientWhatsAppUrl, WhatsAppAction } from '../utils/whatsapp';
-import { getClientCrmStats } from '../utils/clientCrm';
+import {
+  getClientCrmStats,
+  createClientAppointmentsIndex,
+  getClientAppointmentsFromIndex,
+} from '../utils/clientCrm';
 import { WhatsAppActionsModal } from '../components/common/WhatsAppActionsModal';
+import type { SpreadsheetValidationResult } from '../utils/clientImport';
 
 interface ClientesViewProps {
   clients: Client[];
@@ -71,8 +85,12 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   const [showNameEditor, setShowNameEditor] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [filter, setFilter] = useState<ClientFilter>('all');
+  const [pendingSearchFocusId, setPendingSearchFocusId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [importResult, setImportResult] = useState<(SpreadsheetValidationResult & { added: number; updated: number }) | null>(null);
+  const [importError, setImportError] = useState<string>('');
+  const importInputRef = useRef<HTMLInputElement>(null);
   const inactiveDays: 30 | 45 | 60 = [30, 45, 60].includes(Number(org.crm_inactive_days))
     ? (Number(org.crm_inactive_days) as 30 | 45 | 60)
     : 45;
@@ -112,10 +130,18 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   }, [clients, appointments]);
 
-  const clientsWithStats = useMemo(() => allClients.map((client) => ({
-    client,
-    stats: getClientCrmStats(client, appointments),
-  })), [allClients, appointments]);
+  const appointmentsIndex = useMemo(() => createClientAppointmentsIndex(appointments), [appointments]);
+
+  const clientsWithStats = useMemo(() => {
+    const now = new Date();
+    return allClients.map((client) => {
+      const clientApps = getClientAppointmentsFromIndex(client, appointmentsIndex);
+      return {
+        client,
+        stats: getClientCrmStats(client, clientApps, now, true),
+      };
+    });
+  }, [allClients, appointmentsIndex]);
 
   const inactiveClients = useMemo(() => clientsWithStats.filter(({ stats }) =>
     !stats.upcomingAppointment && stats.daysSinceLastVisit !== null && stats.daysSinceLastVisit >= inactiveDays,
@@ -142,6 +168,39 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     });
   }, [clientsWithStats, search, filter, inactiveDays]);
 
+  const [visibleCount, setVisibleCount] = useState(36);
+
+  useEffect(() => {
+    setVisibleCount(36);
+  }, [search, filter]);
+
+  const paginatedClients = useMemo(
+    () => filtered.slice(0, visibleCount),
+    [filtered, visibleCount]
+  );
+
+  useEffect(() => {
+    const id = consumeClientSearchFocus();
+    if (!id) return;
+    const target = allClients.find((client) => client.id === id);
+    if (!target) return;
+    setFilter('all');
+    setSearch(target.name);
+    setVisibleCount(Math.max(36, allClients.length));
+    setPendingSearchFocusId(id);
+  }, [allClients]);
+
+  useEffect(() => {
+    if (!pendingSearchFocusId) return;
+    const element = document.querySelector<HTMLElement>(`[data-client-id="${pendingSearchFocusId}"]`);
+    if (!element) return;
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    element.classList.add('agenda-focus-flash');
+    setPendingSearchFocusId(null);
+    const timer = window.setTimeout(() => element.classList.remove('agenda-focus-flash'), 1800);
+    return () => window.clearTimeout(timer);
+  }, [paginatedClients, pendingSearchFocusId]);
+
   const handleAddClient = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -158,7 +217,65 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     setShowModal(false);
   };
 
-  const latestAppointmentForClient = (client: Client) => getClientCrmStats(client, appointments).appointments[0];
+  // Exporta a base consolidada (clientes + clientes vindos só de atendimentos) em .xlsx.
+  // Os cabeçalhos são os que a própria importação reconhece, então a planilha volta sem ajustes.
+  const handleExportClients = async () => {
+    try {
+      const XLSX = await import('xlsx');
+      const rows = allClients.map((client) => ({
+        Nome: client.name,
+        Celular: client.phone && client.phone !== 'Não informado' ? client.phone : '',
+        Email: client.email || '',
+        Visitas: client.total_visits || 0,
+        'Total gasto': Number(client.total_spent || 0),
+        'Última visita': client.last_visit || '',
+        Pontos: Number(client.loyalty_points || 0),
+        Observações: client.notes || '',
+      }));
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, sheet, 'Clientes');
+      const date = localDateKey();
+      XLSX.writeFile(book, `clientes-agendai-${date}.xlsx`);
+    } catch (error) {
+      console.error('Falha ao exportar clientes:', error);
+      setImportError('Não foi possível exportar a planilha agora. Tente novamente.');
+    }
+  };
+
+  const handleImportClients = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setImportError('');
+    try {
+      const [XLSX, { parseAndValidateClientWorkbook, applyClientsToCrm }] = await Promise.all([
+        import('xlsx'),
+        import('../utils/clientImport'),
+      ]);
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array', cellDates: false });
+      const validation = parseAndValidateClientWorkbook(workbook);
+
+      const applied = applyClientsToCrm(clients, validation.importedClients, org.id);
+      setClients(applied.nextClients);
+
+      setImportResult({
+        ...validation,
+        added: applied.added,
+        updated: applied.updated,
+      });
+    } catch (error) {
+      setImportResult(null);
+      setImportError(error instanceof Error ? error.message : 'Não foi possível ler este arquivo.');
+    }
+  };
+
+  const latestAppointmentForClient = (client: Client) => {
+    const clientApps = getClientAppointmentsFromIndex(client, appointmentsIndex);
+    return getClientCrmStats(client, clientApps, undefined, true).appointments[0];
+  };
 
   const getClientWhatsApp = (client: Client, action: WhatsAppAction) =>
     buildClientWhatsAppUrl(org, client, action, latestAppointmentForClient(client));
@@ -198,11 +315,19 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     setSelectedClient((current) => current ? { ...current, notes: cleanNotes } : current);
   };
 
+  const [nameSaveStatus, setNameSaveStatus] = useState<'idle' | 'loading' | 'success'>('idle');
+
   const saveClientName = () => {
-    if (!selectedClient) return;
+    if (!selectedClient || nameSaveStatus !== 'idle') return;
     const cleanName = editingName.trim();
     const cleanPhone = editingPhone.trim() || 'Não informado';
     if (!cleanName) return;
+    setNameSaveStatus('success');
+    // Fecha o editor só depois do feedback, senão o botão some antes do check aparecer.
+    window.setTimeout(() => {
+      setNameSaveStatus('idle');
+      setShowNameEditor(false);
+    }, 900);
 
     const oldName = selectedClient.name;
     const oldPhone = normalizeClientPhone(selectedClient.phone);
@@ -225,7 +350,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     }));
 
     setSelectedClient((current) => current ? { ...current, name: cleanName, phone: cleanPhone } : current);
-    setShowNameEditor(false);
   };
 
   const deleteClient = () => {
@@ -261,7 +385,49 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     setOrg((current) => ({ ...current, crm_inactive_days: nextValue }));
   };
 
-  const selectedStats = selectedClient ? getClientCrmStats(selectedClient, appointments) : null;
+  const adjustLoyaltyPoints = (delta: number) => {
+    if (!selectedClient) return;
+    const selectedPhone = normalizeClientPhone(selectedClient.phone);
+    const selectedName = selectedClient.name.trim().toLocaleLowerCase('pt-BR');
+    const updateClient = (client: Client) => ({ ...client, loyalty_points: Math.max(0, Number(client.loyalty_points || 0) + delta) });
+    setClients((prev) => prev.map((client) => {
+      const sameClient = selectedPhone
+        ? normalizeClientPhone(client.phone) === selectedPhone
+        : client.name.trim().toLocaleLowerCase('pt-BR') === selectedName;
+      return sameClient ? updateClient(client) : client;
+    }));
+    setSelectedClient((current) => current ? updateClient(current) : current);
+  };
+
+  const assignSubscription = (planId: string) => {
+    if (!selectedClient) return;
+    const selectedPhone = normalizeClientPhone(selectedClient.phone);
+    const update = (client: Client) => ({ ...client, subscription_plan_id: planId || undefined, subscription_started_at: planId ? (client.subscription_plan_id === planId ? client.subscription_started_at : new Date().toISOString()) : undefined, subscription_cycle_start: planId ? (client.subscription_plan_id === planId ? client.subscription_cycle_start : new Date().toISOString()) : undefined, subscription_services_used: planId ? (client.subscription_plan_id === planId ? client.subscription_services_used : 0) : undefined });
+    setClients(current => current.map(client => selectedPhone ? normalizeClientPhone(client.phone) === selectedPhone ? update(client) : client : client.id === selectedClient.id ? update(client) : client));
+    setSelectedClient(current => current ? update(current) : current);
+  };
+
+  const registerSubscriptionUse = () => {
+    if (!selectedClient?.subscription_plan_id) return;
+    const plan = (org.subscription_plans || []).find(item => item.id === selectedClient.subscription_plan_id);
+    if (!plan) return;
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const cycleMonth = String(selectedClient.subscription_cycle_start || '').slice(0, 7);
+    const used = cycleMonth === currentMonth ? Number(selectedClient.subscription_services_used || 0) : 0;
+    if (used >= plan.included_services) return;
+    const phone = normalizeClientPhone(selectedClient.phone);
+    const update = (client: Client) => ({ ...client, subscription_cycle_start: cycleMonth === currentMonth ? client.subscription_cycle_start : new Date().toISOString(), subscription_services_used: used + 1 });
+    setClients(current => current.map(client => phone ? normalizeClientPhone(client.phone) === phone ? update(client) : client : client.id === selectedClient.id ? update(client) : client));
+    setSelectedClient(current => current ? update(current) : current);
+  };
+
+  const selectedStats = useMemo(() => {
+    if (!selectedClient) return null;
+    const found = clientsWithStats.find((item) => item.client.id === selectedClient.id);
+    if (found) return found.stats;
+    const clientApps = getClientAppointmentsFromIndex(selectedClient, appointmentsIndex);
+    return getClientCrmStats(selectedClient, clientApps, undefined, true);
+  }, [selectedClient, clientsWithStats, appointmentsIndex]);
   const selectedInactive = Boolean(
     selectedStats &&
     !selectedStats.upcomingAppointment &&
@@ -282,14 +448,85 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={() => setShowModal(true)}
-          className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-emerald-500/10 shrink-0 active:scale-95"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Novo cliente</span>
-        </button>
+        <div className="flex flex-col min-[420px]:flex-row gap-2 shrink-0">
+          <input ref={importInputRef} type="file" accept=".xlsx,.xls" onChange={handleImportClients} className="sr-only" aria-label="Importar clientes de uma planilha Excel" />
+          <button
+            type="button"
+            onClick={() => void handleExportClients()}
+            disabled={allClients.length === 0}
+            className="px-4 py-2.5 bg-slate-800/60 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
+          >
+            <Download className="w-4 h-4" />
+            <span>Exportar</span>
+          </button>
+          <button type="button" onClick={() => importInputRef.current?.click()} className="px-4 py-2.5 bg-cyan-400/10 hover:bg-cyan-400/15 text-cyan-200 border border-cyan-400/25 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95">
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Importar Excel</span>
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-emerald-500/10 active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Novo cliente</span>
+          </button>
+        </div>
       </div>
+
+      {importError && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs font-semibold text-rose-200">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{importError}</span>
+          </div>
+          <button type="button" onClick={() => setImportError('')} className="p-1 rounded-lg text-rose-300 hover:text-white hover:bg-rose-500/20 min-w-[44px] min-h-[44px] inline-flex items-center justify-center">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {importResult && (
+        <section className="rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/[0.08] to-cyan-500/[0.05] p-4 sm:p-5 shadow-lg space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/30 bg-emerald-400/15 text-emerald-300">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm sm:text-base font-bold text-white">{importResult.summaryMessage}</h3>
+                  {importResult.isAppBarberLayout && (
+                    <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-cyan-200">
+                      Layout AppBarber (24 colunas)
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  Importação concluída: <strong className="text-emerald-300">{importResult.added} novo{importResult.added === 1 ? '' : 's'}</strong> cadastrado{importResult.added === 1 ? '' : 's'} e <strong className="text-cyan-300">{importResult.updated} atualizado{importResult.updated === 1 ? '' : 's'}</strong> no CRM.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setImportResult(null)}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
+              aria-label="Fechar resumo da importação"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+            <div className="flex items-center gap-2 text-emerald-300 font-semibold">
+              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{importResult.securityNotice}</span>
+            </div>
+            <span className="text-[11px] text-slate-400">
+              Campos seguros importados: Nome, Celular, E-mail, Pontos e Observações.
+            </span>
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <div className="stagger-item booking-card rounded-2xl border border-slate-800 bg-[#121B2E] p-4 sm:p-5 shadow-md">
@@ -397,22 +634,27 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
         </div>
       </div>
 
-      <div className="bg-[#121B2E] border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+      <div className={filtered.length === 0 ? 'bg-[#121B2E] border border-slate-800 rounded-3xl overflow-hidden shadow-xl' : 'grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3.5 sm:gap-4'}>
         {filtered.length === 0 ? (
           <div className="p-12 text-center max-w-sm mx-auto space-y-3">
             <div className="w-12 h-12 rounded-2xl bg-slate-800/80 text-slate-400 flex items-center justify-center mx-auto border border-slate-700/60">
               <Users className="w-6 h-6" />
             </div>
-            <h4 className="font-bold text-white text-base">Nenhum cliente encontrado</h4>
-            <p className="text-xs text-slate-400">Ajuste a busca ou o filtro selecionado.</p>
+            <h4 className="font-bold text-white text-base">{allClients.length === 0 ? 'Sua base de clientes começa aqui' : 'Nenhum cliente encontrado'}</h4>
+            <p className="text-xs text-slate-400">{allClients.length === 0 ? 'Clientes entram sozinhos a cada agendamento. Para começar com a sua base, importe uma planilha.' : 'Ajuste a busca ou o filtro selecionado.'}</p>
+            {allClients.length === 0 && (
+              <button type="button" onClick={() => importInputRef.current?.click()} className="mt-2 px-4 py-2.5 bg-cyan-400/10 hover:bg-cyan-400/15 text-cyan-200 border border-cyan-400/25 font-bold rounded-xl text-xs inline-flex items-center gap-2 active:scale-95 transition-all">
+                <FileSpreadsheet className="w-4 h-4" /> Importar planilha
+              </button>
+            )}
           </div>
         ) : (
-          <div className="divide-y divide-slate-800/60">
-            {filtered.map(({ client, stats }, index) => {
+          <div className="contents">
+            {paginatedClients.map(({ client, stats }, index) => {
               const isInactive = !stats.upcomingAppointment && stats.daysSinceLastVisit !== null && stats.daysSinceLastVisit >= inactiveDays;
               return (
-                <div key={client.id} style={{ animationDelay: `${Math.min(index, 12) * 25}ms` }} className="stagger-item p-4 sm:p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 hover:bg-slate-800/25 transition-colors">
-                  <button type="button" onClick={() => openProfile(client)} className="flex items-center gap-4 min-w-0 text-left group">
+                <article key={client.id} data-client-id={client.id} style={{ animationDelay: `${Math.min(index, 12) * 25}ms` }} className="stagger-item booking-card scroll-mt-28 rounded-3xl border border-slate-800 bg-[#121B2E] p-4 sm:p-5 shadow-md transition hover:border-emerald-500/35 hover:bg-slate-800/25">
+                  <button type="button" onClick={() => openProfile(client)} className="flex w-full items-center gap-4 min-w-0 text-left group">
                     <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-black text-base shadow-sm shrink-0 group-hover:scale-105 transition-transform">
                       {client.name.charAt(0).toUpperCase()}
                     </div>
@@ -429,23 +671,24 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                         <Phone className="w-3 h-3 text-slate-500" /> {client.phone || 'Sem telefone'}
                       </p>
                       <p className="text-[11px] text-cyan-300/80 mt-1 truncate">Preferência: {stats.favoriteService}</p>
+                      <p className="text-[10px] text-amber-200 mt-1 flex items-center gap-1 font-bold"><Award className="w-3 h-3" /> {Number(client.loyalty_points || 0)} pontos</p>
                     </div>
                   </button>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 xl:flex xl:items-center gap-3 xl:gap-7 border-t xl:border-t-0 border-slate-800/60 pt-3 xl:pt-0">
-                    <div>
+                  <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-800/60 pt-3.5">
+                    <div className="min-w-0">
                       <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Atendimentos</p>
                       <p className="text-sm font-black text-white font-mono mt-0.5">{stats.totalVisits}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Total gasto</p>
                       <p className="text-sm font-black text-emerald-400 font-mono mt-0.5">{formatMoney(stats.totalSpent)}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Última visita</p>
                       <p className="text-xs font-bold text-slate-200 mt-0.5">{stats.lastVisitLabel}</p>
                     </div>
-                    <div className="flex items-center justify-end gap-2 col-span-2 sm:col-span-1">
+                    <div className="flex items-center justify-end gap-2 col-span-2">
                       <button
                         type="button"
                         onClick={() => openProfile(client)}
@@ -457,7 +700,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                         <button
                           type="button"
                           onClick={() => setWhatsAppClient(client)}
-                          className="p-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 rounded-xl transition-colors active:scale-95"
+                          className="p-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 rounded-xl transition-colors active:scale-95 min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
                           title="Ações pelo WhatsApp"
                         >
                           <MessageSquare className="w-4 h-4" />
@@ -465,12 +708,27 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                       )}
                     </div>
                   </div>
-                </div>
+                </article>
               );
             })}
           </div>
         )}
       </div>
+
+      {filtered.length > visibleCount && (
+        <div className="flex justify-center pt-2 pb-2">
+          <button
+            type="button"
+            onClick={() => setVisibleCount((prev) => prev + 36)}
+            className="px-6 py-3 rounded-2xl border border-slate-700/80 bg-slate-900/90 hover:bg-slate-800 text-xs font-bold text-cyan-300 hover:text-white transition-all shadow-md active:scale-95 flex items-center gap-2"
+          >
+            <span>Carregar mais clientes</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
+              {filtered.length - visibleCount} restantes
+            </span>
+          </button>
+        </div>
+      )}
 
       <WhatsAppActionsModal
         open={Boolean(whatsAppClient)}
@@ -492,7 +750,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                 <h3 className="text-lg font-black text-white flex items-center gap-2"><Pencil className="w-4 h-4 text-emerald-400" /> Editar cliente</h3>
                 <p className="text-xs text-slate-400 mt-1">Edite nome e telefone sem perder histórico, atendimentos ou valores.</p>
               </div>
-              <button aria-label="Fechar janela" type="button" onClick={() => setShowNameEditor(false)} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"><X className="w-4 h-4" /></button>
+              <button aria-label="Fechar janela" type="button" onClick={() => setShowNameEditor(false)} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 min-w-[44px] min-h-[44px] inline-flex items-center justify-center"><X className="w-4 h-4" /></button>
             </div>
             <div className="modal-scroll-body p-4 sm:p-5 space-y-3.5">
               <div>
@@ -513,7 +771,17 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
             </div>
             <div className="modal-static-footer flex justify-end gap-2 border-t border-slate-800 bg-[#0b1426] p-4 sm:p-5">
               <button type="button" onClick={() => setShowNameEditor(false)} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-medium hover:bg-slate-700">Cancelar</button>
-              <button type="button" onClick={saveClientName} disabled={!editingName.trim()} className="px-5 py-2 bg-emerald-500 text-slate-950 text-xs font-black disabled:opacity-40 flex items-center gap-2 hover:bg-emerald-400 rounded-xl shadow-sm active:scale-95"><Save className="w-3.5 h-3.5" /> Salvar cliente</button>
+              <ActionButton
+              type="button"
+              onClick={saveClientName}
+              status={nameSaveStatus}
+              disabled={!editingName.trim()}
+              loadingLabel="Salvando..."
+              successLabel="Salvo"
+              className="px-5 py-2 bg-emerald-500 text-slate-950 text-xs font-black disabled:opacity-40 flex items-center gap-2 hover:bg-emerald-400 rounded-xl shadow-sm active:scale-95"
+            >
+              Salvar cliente
+            </ActionButton>
             </div>
           </div>
         </Modal>
@@ -566,7 +834,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                 <button
                   type="button"
                   onClick={() => { setEditingName(selectedClient.name); setEditingPhone(selectedClient.phone || ''); setShowNameEditor(true); }}
-                  className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-700/60 transition-colors"
+                  className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-700/60 transition-colors min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
                   title="Editar cliente"
                   aria-label="Editar cliente"
                 >
@@ -575,13 +843,13 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="p-2 rounded-xl text-rose-300 hover:text-white hover:bg-rose-950/30 border border-rose-800/40 transition-colors"
+                  className="p-2 rounded-xl text-rose-300 hover:text-white hover:bg-rose-950/30 border border-rose-800/40 transition-colors min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
                   title="Excluir cliente"
                   aria-label="Excluir cliente"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
-                <button aria-label="Fechar janela" onClick={() => setSelectedClient(null)} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"><X className="w-5 h-5" /></button>
+                <button aria-label="Fechar janela" onClick={() => setSelectedClient(null)} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 min-w-[44px] min-h-[44px] inline-flex items-center justify-center"><X className="w-5 h-5" /></button>
               </div>
             </div>
 
@@ -624,6 +892,45 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                   <div className="min-w-0"><p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Profissional mais procurado</p><p className="text-sm font-bold text-white mt-1">{selectedStats.favoriteBarber}</p></div>
                 </div>
               </div>
+
+              <section className="rounded-2xl border border-amber-300/20 bg-gradient-to-r from-amber-300/[0.09] to-transparent p-4 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-amber-300/25 bg-amber-300/10 text-amber-200"><Award className="w-5 h-5" /></div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200">Fidelidade inteligente</p>
+                      <h4 className="mt-1 text-base font-black text-white">{Number(selectedClient.loyalty_points || 0)} pontos disponíveis</h4>
+                      <p className="mt-1 text-[11px] leading-relaxed text-slate-400">Retornos concluídos ganham 10 pontos automaticamente. Some indicações, compras e eventos aqui; prefira recompensas de experiência em vez de desconto.</p>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-semibold text-amber-200/80">Troca: 100 pts = experiência premium</span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {[
+                    { label: 'Indicação', points: 20 },
+                    { label: 'Compra', points: 10 },
+                    { label: 'Evento', points: 15 },
+                    { label: 'Ajuste', points: 5 },
+                  ].map(({ label, points }) => <button key={label} type="button" onClick={() => adjustLoyaltyPoints(points)} className="rounded-xl border border-amber-300/15 bg-slate-950/35 px-2 py-2 text-left transition hover:bg-amber-300/10 active:scale-95"><span className="block text-[10px] font-bold text-slate-300">+{points} {label}</span><span className="mt-0.5 block text-[9px] text-slate-500">Adicionar pontos</span></button>)}
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {[
+                    { label: 'Café premium', points: 25 },
+                    { label: 'Upgrade de barba', points: 60 },
+                    { label: 'Limpeza de pele', points: 100 },
+                  ].map(({ label, points }) => {
+                    const canRedeem = Number(selectedClient.loyalty_points || 0) >= points;
+                    return <button key={label} type="button" disabled={!canRedeem} onClick={() => adjustLoyaltyPoints(-points)} className="flex items-center justify-between rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] px-3 py-2.5 text-left disabled:cursor-not-allowed disabled:opacity-40 hover:bg-emerald-400/10 active:scale-95"><span className="flex items-center gap-2 text-[10px] font-bold text-emerald-100"><Gift className="w-3.5 h-3.5 text-emerald-300" />{label}</span><span className="text-[10px] font-black text-emerald-300">{points} pts</span></button>;
+                  })}
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-violet-400/20 bg-violet-400/[0.05] p-4 sm:p-5">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-violet-200">Clube de Assinaturas</p>
+                <div className="mt-3 flex flex-col sm:flex-row gap-2 sm:items-center"><select value={selectedClient.subscription_plan_id || ''} onChange={event => assignSubscription(event.target.value)} className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-xs text-white"><option value="">Cliente sem assinatura</option>{(org.subscription_plans || []).filter(plan => plan.active !== false).map(plan => <option key={plan.id} value={plan.id}>{plan.name} · R$ {plan.monthly_price.toFixed(2).replace('.', ',')}/mês</option>)}</select>{selectedClient.subscription_plan_id && <span className="text-[10px] text-violet-200">Ativo desde {new Date(selectedClient.subscription_started_at || Date.now()).toLocaleDateString('pt-BR')}</span>}</div>
+                {selectedClient.subscription_plan_id && (() => { const plan = (org.subscription_plans || []).find(item => item.id === selectedClient.subscription_plan_id); if (!plan) return null; const currentMonth = new Date().toISOString().slice(0, 7); const used = String(selectedClient.subscription_cycle_start || '').slice(0, 7) === currentMonth ? Number(selectedClient.subscription_services_used || 0) : 0; const remaining = Math.max(0, plan.included_services - used); return <div className="mt-3 rounded-xl bg-slate-950/60 border border-violet-400/15 p-3 flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-slate-300"><strong className="text-violet-200">Ciclo atual:</strong> {used}/{plan.included_services} usado(s) · {remaining} restante(s)</p><button type="button" disabled={remaining <= 0} onClick={registerSubscriptionUse} className="rounded-lg bg-violet-400 px-3 py-2 text-[10px] font-black text-slate-950 disabled:opacity-40">Registrar uso</button></div>; })()}
+                {!org.subscription_plans?.length && <p className="mt-2 text-[10px] text-slate-500">Crie planos na aba Assinaturas para vinculá-los aos clientes.</p>}
+              </section>
 
               {selectedStats.upcomingAppointment && (
                 <div className="rounded-2xl border border-cyan-400/25 bg-cyan-400/5 p-4 sm:p-5 shadow-sm">

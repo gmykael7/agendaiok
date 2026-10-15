@@ -55,10 +55,12 @@ export const dedupeClients = (clients: Client[]): Client[] => {
       // A primeira ocorrência mantém a identidade visual; só preenche lacunas.
       name: existing.name || client.name,
       phone: existing.phone && existing.phone !== 'Não informado' ? existing.phone : client.phone,
+      email: existing.email || client.email,
       total_visits: Math.max(0, Number(existing.total_visits || 0)) + Math.max(0, Number(client.total_visits || 0)),
       total_spent: Math.max(0, Number(existing.total_spent || 0)) + Math.max(0, Number(client.total_spent || 0)),
       last_visit: existing.last_visit || client.last_visit,
       notes: existing.notes || client.notes,
+      loyalty_points: Math.max(Number(existing.loyalty_points || 0), Number(client.loyalty_points || 0)),
       archived: existing.archived === true,
       archived_at: existing.archived_at || client.archived_at,
     });
@@ -70,6 +72,7 @@ export const dedupeClients = (clients: Client[]): Client[] => {
 type UpsertClientInput = {
   name: string;
   phone?: string;
+  email?: string;
   org_id?: string;
   visitDelta?: number;
   spentDelta?: number;
@@ -103,6 +106,7 @@ export const upsertClient = (clients: Client[], input: UpsertClientInput): Clien
       // e passa a usar o nome informado mais recentemente.
       name: cleanName || existing.name,
       phone: phoneKey ? displayPhone : existing.phone,
+      email: input.email?.trim() || existing.email,
       org_id: existing.org_id || input.org_id,
       total_visits: Math.max(0, Number(existing.total_visits || 0)) + visitDelta,
       total_spent: Math.max(0, Number(existing.total_spent || 0)) + spentDelta,
@@ -118,6 +122,7 @@ export const upsertClient = (clients: Client[], input: UpsertClientInput): Clien
     org_id: input.org_id,
     name: cleanName,
     phone: displayPhone,
+    email: input.email?.trim() || undefined,
     total_visits: visitDelta,
     total_spent: spentDelta,
     last_visit: input.lastVisit || 'Novo cliente',

@@ -47,18 +47,65 @@ const formatDate = (date?: string): string => {
   return parsed.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
+/**
+ * Cria um índice O(A) para busca instantânea de agendamentos por cliente.
+ * Evita filtros quadráticos O(C * A) no navegador.
+ */
+export const createClientAppointmentsIndex = (
+  appointments: Appointment[]
+): Map<string, Appointment[]> => {
+  const index = new Map<string, Appointment[]>();
+  for (const appointment of appointments) {
+    const phone = normalizeClientPhone(appointment.client_phone);
+    const name = String(appointment.client_name || '').trim().toLowerCase();
+
+    if (phone) {
+      const key = `phone:${phone}`;
+      const list = index.get(key) || [];
+      list.push(appointment);
+      index.set(key, list);
+    }
+    if (name) {
+      const key = `name:${name}`;
+      const list = index.get(key) || [];
+      list.push(appointment);
+      index.set(key, list);
+    }
+  }
+  return index;
+};
+
+/**
+ * Recupera os agendamentos associados a um cliente utilizando o índice em tempo O(1).
+ */
+export const getClientAppointmentsFromIndex = (
+  client: Client,
+  index: Map<string, Appointment[]>
+): Appointment[] => {
+  const phone = normalizeClientPhone(client.phone);
+  if (phone) {
+    const found = index.get(`phone:${phone}`);
+    if (found) return found;
+  }
+  const name = client.name.trim().toLowerCase();
+  return index.get(`name:${name}`) || [];
+};
+
 export const getClientCrmStats = (
   client: Client,
   appointments: Appointment[],
   now = new Date(),
+  isPreFiltered = false,
 ): ClientCrmStats => {
-  const clientAppointments = appointments
-    .filter((appointment) => matchesClient(client, appointment))
-    .sort((a, b) => {
-      const aDate = appointmentDateTime(a)?.getTime() || 0;
-      const bDate = appointmentDateTime(b)?.getTime() || 0;
-      return bDate - aDate;
-    });
+  const rawList = isPreFiltered
+    ? appointments
+    : appointments.filter((appointment) => matchesClient(client, appointment));
+
+  const clientAppointments = [...rawList].sort((a, b) => {
+    const aDate = appointmentDateTime(a)?.getTime() || 0;
+    const bDate = appointmentDateTime(b)?.getTime() || 0;
+    return bDate - aDate;
+  });
 
   const completedAppointments = clientAppointments.filter((appointment) => appointment.status === 'completed');
   const totalSpent = completedAppointments.reduce((sum, appointment) => sum + Math.max(0, Number(appointment.price || 0)), 0);

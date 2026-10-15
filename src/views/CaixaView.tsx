@@ -1,26 +1,6 @@
 import { Modal } from "../components/common/Modal";
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Wallet,
-  DollarSign,
-  ArrowUpRight,
-  CreditCard,
-  QrCode,
-  Banknote,
-  Users,
-  Percent,
-  History,
-  Clock3,
-  CalendarDays,
-  BarChart3,
-  ArrowRight,
-  Boxes,
-  PlusCircle,
-  MinusCircle,
-  X,
-  Save,
-  Sparkles,
-} from 'lucide-react';
+import { Wallet, DollarSign, ArrowUpRight, CreditCard, QrCode, Banknote, Users, Percent, History, Clock3, CalendarDays, BarChart3, ArrowRight, Boxes, PlusCircle, MinusCircle, X, Save, Sparkles, ChevronDown } from 'lucide-react';
 import { Appointment, Barber, ProductSale, Organization, CashMovement } from '../types';
 import { BarberAvatar } from '../components/common/BarberAvatar';
 
@@ -41,6 +21,13 @@ const localDateKey = (date = new Date()): string => {
   return `${year}-${month}-${day}`;
 };
 
+const monthKeyOf = (dateKey: string): string => dateKey.slice(0, 7);
+
+const monthLabelOf = (monthKey: string): string => {
+  const [year, month] = monthKey.split('-').map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+};
+
 const formatDate = (dateKey: string): string => {
   const [year, month, day] = dateKey.split('-').map(Number);
   return new Date(year, month - 1, day).toLocaleDateString('pt-BR', {
@@ -55,6 +42,7 @@ const getCommissionTotal = (appointments: Appointment[], barbers: Barber[]): num
     const gross = appointments
       .filter(item => item.barber_id === barber.id)
       .reduce((sum, item) => sum + Number(item.price || 0), 0);
+    if (barber.solo_owner) return acc;
     return acc + (gross * Number(barber.commission_rate || 0)) / 100;
   }, 0);
 
@@ -63,6 +51,8 @@ export const CaixaView: React.FC<CaixaViewProps> = ({ appointments, barbers, pro
   const [movementModal, setMovementModal] = useState<'entry' | 'withdrawal' | null>(null);
   const [movementAmount, setMovementAmount] = useState('');
   const [movementDescription, setMovementDescription] = useState('');
+  const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
+  const [openDay, setOpenDay] = useState<string | null>(null);
 
   // Mantém o caixa sincronizado com a virada do dia mesmo se o sistema ficar aberto.
   useEffect(() => {
@@ -156,7 +146,7 @@ export const CaixaView: React.FC<CaixaViewProps> = ({ appointments, barbers, pro
 
   return (
     <div className="app-view space-y-6 animate-fadeIn">
-      <div className="bg-[#121B2E] p-5 sm:p-6 rounded-3xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
+      <div className="bg-[#121B2E] p-4 sm:p-6 rounded-3xl border border-slate-800 flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-4 shadow-xl">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
             <Wallet className="w-6 h-6 text-emerald-400" />
@@ -166,22 +156,22 @@ export const CaixaView: React.FC<CaixaViewProps> = ({ appointments, barbers, pro
             Movimentação de {formatDate(todayKey)}. O fechamento diário é automático às 23h59 e o novo dia inicia zerado.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <div className="inline-flex items-center gap-2 rounded-2xl bg-cyan-400/10 border border-cyan-400/20 px-3 py-2 text-xs text-cyan-200">
+        <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 2xl:flex 2xl:w-auto 2xl:flex-wrap 2xl:justify-end shrink-0">
+          <div className="col-span-2 inline-flex min-w-0 items-center justify-center gap-2 rounded-2xl bg-cyan-400/10 border border-cyan-400/20 px-3 py-2 text-xs text-cyan-200 sm:col-span-1">
             <Clock3 className="w-4 h-4" />
             Fechamento automático • 23h59
           </div>
           <button
             type="button"
             onClick={() => setMovementModal('entry')}
-            className="inline-flex items-center gap-2 rounded-2xl bg-emerald-400/10 hover:bg-emerald-400/15 border border-emerald-400/25 px-3.5 py-2 text-xs font-black text-emerald-300 transition-all active:scale-95 shadow-sm"
+            className="inline-flex min-w-0 items-center justify-center gap-2 rounded-2xl bg-emerald-400/10 hover:bg-emerald-400/15 border border-emerald-400/25 px-3.5 py-2 text-xs font-black text-emerald-300 transition-all active:scale-95 shadow-sm"
           >
             <PlusCircle className="w-4 h-4" /> Adicionar
           </button>
           <button
             type="button"
             onClick={() => setMovementModal('withdrawal')}
-            className="inline-flex items-center gap-2 rounded-2xl bg-rose-400/10 hover:bg-rose-400/15 border border-rose-400/25 px-3.5 py-2 text-xs font-black text-rose-300 transition-all active:scale-95 shadow-sm"
+            className="inline-flex min-w-0 items-center justify-center gap-2 rounded-2xl bg-rose-400/10 hover:bg-rose-400/15 border border-rose-400/25 px-3.5 py-2 text-xs font-black text-rose-300 transition-all active:scale-95 shadow-sm"
           >
             <MinusCircle className="w-4 h-4" /> Retirar
           </button>
@@ -189,7 +179,7 @@ export const CaixaView: React.FC<CaixaViewProps> = ({ appointments, barbers, pro
             <button
               type="button"
               onClick={onNavigateToProducts}
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950/70 hover:bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-bold text-white transition-all active:scale-95"
+              className="inline-flex min-w-0 items-center justify-center gap-2 rounded-2xl bg-slate-950/70 hover:bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-bold text-white transition-all active:scale-95"
             >
               <Boxes className="w-4 h-4 text-cyan-300" /> Produtos <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
             </button>
@@ -198,7 +188,7 @@ export const CaixaView: React.FC<CaixaViewProps> = ({ appointments, barbers, pro
             <button
               type="button"
               onClick={onNavigateToReports}
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950/70 hover:bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-bold text-white transition-all active:scale-95"
+              className="inline-flex min-w-0 items-center justify-center gap-2 rounded-2xl bg-slate-950/70 hover:bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-bold text-white transition-all active:scale-95"
             >
               <BarChart3 className="w-4 h-4 text-cyan-300" /> Relatórios <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
             </button>
@@ -206,45 +196,45 @@ export const CaixaView: React.FC<CaixaViewProps> = ({ appointments, barbers, pro
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-        <div className="stagger-item booking-card bg-[#121B2E] border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-md">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="stagger-item booking-card min-w-0 bg-[#121B2E] border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-md">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.14em]">Faturamento Bruto</p>
             <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center">
               <ArrowUpRight className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl sm:text-4xl xl:text-5xl font-black text-emerald-400 font-mono mt-3 tracking-[-0.04em]">R$ {totalFaturado.toFixed(2)}</p>
+          <p className="truncate text-2xl sm:text-4xl xl:text-5xl font-black text-emerald-400 font-mono mt-3 tracking-[-0.04em]">R$ {totalFaturado.toFixed(2)}</p>
           <p className="text-[11px] text-slate-400 mt-1">{todayCompleted.length} serviços + {todayProductSales.length} vendas de produtos</p>
         </div>
 
-        <div className="stagger-item booking-card bg-[#121B2E] border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-md" style={{ animationDelay: '40ms' }}>
+        <div className="stagger-item booking-card min-w-0 bg-[#121B2E] border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-md" style={{ animationDelay: '40ms' }}>
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.14em]">Comissões a Pagar</p>
             <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center">
               <Percent className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl sm:text-4xl xl:text-5xl font-black text-amber-400 font-mono mt-3 tracking-[-0.04em]">R$ {totalComissoes.toFixed(2)}</p>
+          <p className="truncate text-2xl sm:text-4xl xl:text-5xl font-black text-amber-400 font-mono mt-3 tracking-[-0.04em]">R$ {totalComissoes.toFixed(2)}</p>
           <p className="text-[11px] text-slate-400 mt-1">Comissões referentes apenas ao dia atual</p>
         </div>
 
-        <div className="stagger-item booking-card col-span-2 sm:col-span-1 bg-[#121B2E] border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-md" style={{ animationDelay: '80ms' }}>
+        <div className="stagger-item booking-card min-w-0 min-[420px]:col-span-2 lg:col-span-1 bg-[#121B2E] border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-md" style={{ animationDelay: '80ms' }}>
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.14em]">Lucro Líquido</p>
             <div className="w-8 h-8 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center">
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl sm:text-4xl xl:text-5xl font-black text-white font-mono mt-3 tracking-[-0.04em]">R$ {lucroLiquido.toFixed(2)}</p>
+          <p className="truncate text-2xl sm:text-4xl xl:text-5xl font-black text-white font-mono mt-3 tracking-[-0.04em]">R$ {lucroLiquido.toFixed(2)}</p>
           <p className="text-[11px] text-emerald-400 mt-1 font-semibold">Saldo líquido do salão hoje</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-4">
-        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-3.5 sm:p-4 shadow-sm"><p className="text-[9px] sm:text-[10px] uppercase tracking-wide text-emerald-300 font-black">Entradas</p><p className="text-base sm:text-2xl font-black text-white mt-1 font-mono">R$ {manualEntries.toFixed(2)}</p></div>
-        <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 p-3.5 sm:p-4 shadow-sm"><p className="text-[9px] sm:text-[10px] uppercase tracking-wide text-rose-300 font-black">Retiradas</p><p className="text-base sm:text-2xl font-black text-white mt-1 font-mono">R$ {manualWithdrawals.toFixed(2)}</p></div>
-        <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-3.5 sm:p-4 shadow-sm"><p className="text-[9px] sm:text-[10px] uppercase tracking-wide text-cyan-300 font-black">Saldo caixa</p><p className="text-base sm:text-2xl font-black text-white mt-1 font-mono">R$ {saldoCaixa.toFixed(2)}</p></div>
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-2 sm:gap-4">
+        <div className="min-w-0 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-3.5 sm:p-4 shadow-sm"><p className="text-[9px] sm:text-[10px] uppercase tracking-wide text-emerald-300 font-black">Entradas</p><p className="truncate text-base sm:text-2xl font-black text-white mt-1 font-mono">R$ {manualEntries.toFixed(2)}</p></div>
+        <div className="min-w-0 rounded-2xl border border-rose-400/20 bg-rose-400/5 p-3.5 sm:p-4 shadow-sm"><p className="text-[9px] sm:text-[10px] uppercase tracking-wide text-rose-300 font-black">Retiradas</p><p className="truncate text-base sm:text-2xl font-black text-white mt-1 font-mono">R$ {manualWithdrawals.toFixed(2)}</p></div>
+        <div className="min-w-0 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-3.5 sm:p-4 shadow-sm"><p className="text-[9px] sm:text-[10px] uppercase tracking-wide text-cyan-300 font-black">Saldo caixa</p><p className="truncate text-base sm:text-2xl font-black text-white mt-1 font-mono">R$ {saldoCaixa.toFixed(2)}</p></div>
       </div>
 
       <div className="bg-[#121B2E] border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-lg space-y-4">
@@ -285,7 +275,7 @@ export const CaixaView: React.FC<CaixaViewProps> = ({ appointments, barbers, pro
                     <p className="text-xs text-slate-400 mt-0.5">{barberAppointments.length} atendimentos • <strong className="text-amber-400">{barber.commission_rate}%</strong></p>
                   </div>
                 </div>
-                <div className="flex items-center gap-6">
+                <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center sm:gap-6">
                   <div className="text-right"><p className="text-[11px] text-slate-400">Produção</p><p className="text-sm font-black text-white font-mono">R$ {gross.toFixed(2)}</p></div>
                   <div className="text-right"><p className="text-[11px] text-emerald-400 font-semibold">Comissão</p><p className="text-sm font-black text-emerald-400 font-mono">R$ {commission.toFixed(2)}</p></div>
                 </div>
@@ -309,29 +299,75 @@ export const CaixaView: React.FC<CaixaViewProps> = ({ appointments, barbers, pro
           </div>
         ) : (
           <div className="space-y-3">
-            {closures.map(closure => (
-              <div key={closure.date} className="booking-card rounded-2xl bg-[#0B1120] border border-slate-800 p-4 transition-all hover:border-slate-700 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center text-emerald-400 shrink-0"><CalendarDays className="w-5 h-5" /></div>
-                    <div><p className="text-sm font-bold text-white">Fechamento • {formatDate(closure.date)}</p><p className="text-[11px] text-slate-400 mt-0.5">{closure.serviceItems.length} serviços • {closure.productItems.length} vendas de produtos</p></div>
-                  </div>
-                  <div className="grid grid-cols-3 sm:flex sm:items-center gap-3 sm:gap-6 text-right">
-                    <div><p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Bruto</p><p className="text-xs font-black text-white font-mono">R$ {closure.gross.toFixed(2)}</p></div>
-                    <div><p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Comissões</p><p className="text-xs font-black text-amber-400 font-mono">R$ {closure.commissions.toFixed(2)}</p></div>
-                    <div><p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Líquido</p><p className="text-xs font-black text-emerald-400 font-mono">R$ {closure.net.toFixed(2)}</p></div>
-                  </div>
+            {Array.from(
+              closures.reduce((groups, closure) => {
+                const key = monthKeyOf(closure.date);
+                groups.set(key, [...(groups.get(key) || []), closure]);
+                return groups;
+              }, new Map<string, typeof closures>()),
+            ).map(([month, items]) => {
+              const isOpen = openMonths[month] ?? month === monthKeyOf(todayKey);
+              const monthNet = items.reduce((sum, item) => sum + item.net, 0);
+              return (
+                <div key={month} className="rounded-2xl border border-slate-800 bg-[#0B1120] overflow-hidden">
+                  <button
+                    type="button"
+                    aria-expanded={isOpen}
+                    onClick={() => setOpenMonths(prev => ({ ...prev, [month]: !isOpen }))}
+                    className="w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-slate-800/30 transition-colors"
+                  >
+                    <div>
+                      <p className="text-sm font-bold text-white capitalize">{monthLabelOf(month)}</p>
+                      <p className="text-[11px] text-slate-400">{items.length} {items.length === 1 ? 'dia fechado' : 'dias fechados'}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Líquido</p>
+                        <p className="text-xs font-black text-emerald-400 font-mono">R$ {monthNet.toFixed(2)}</p>
+                      </div>
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <div className="divide-y divide-slate-800/70 border-t border-slate-800">
+                      {items.map(closure => {
+                        const expanded = openDay === closure.date;
+                        return (
+                          <div key={closure.date}>
+                            <button
+                              type="button"
+                              aria-expanded={expanded}
+                              onClick={() => setOpenDay(expanded ? null : closure.date)}
+                              className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-800/30 transition-colors"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-white">{formatDate(closure.date)}</p>
+                                <p className="text-[10px] text-slate-500">{closure.serviceItems.length} serviços • {closure.productItems.length} produtos</p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <p className="text-xs font-black text-emerald-400 font-mono">R$ {closure.net.toFixed(2)}</p>
+                                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                              </div>
+                            </button>
+                            {expanded && (
+                              <div className="px-4 pb-4 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 text-[11px] text-slate-400">
+                                <div><p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Bruto</p><p className="font-black text-white font-mono">R$ {closure.gross.toFixed(2)}</p></div>
+                                <div><p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Comissões</p><p className="font-black text-amber-400 font-mono">R$ {closure.commissions.toFixed(2)}</p></div>
+                                <div><p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Pix</p><p className="font-black text-white font-mono">R$ {closure.pix.toFixed(2)}</p></div>
+                                <div><p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Cartão</p><p className="font-black text-white font-mono">R$ {closure.card.toFixed(2)}</p></div>
+                                <div><p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Dinheiro</p><p className="font-black text-white font-mono">R$ {closure.cash.toFixed(2)}</p></div>
+                                <div><p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Mov. caixa</p><p className="font-black text-white font-mono">+ R$ {closure.entries.toFixed(2)} / - R$ {closure.withdrawals.toFixed(2)}</p></div>
+                                <div><p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Saldo caixa</p><p className="font-black text-cyan-200 font-mono">R$ {closure.cashBalance.toFixed(2)}</p></div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div className="mt-3 pt-3 border-t border-slate-800/70 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-400">
-                  <span>Pix: <strong className="text-white font-mono">R$ {closure.pix.toFixed(2)}</strong></span>
-                  <span>Cartão: <strong className="text-white font-mono">R$ {closure.card.toFixed(2)}</strong></span>
-                  <span>Dinheiro: <strong className="text-white font-mono">R$ {closure.cash.toFixed(2)}</strong></span>
-                  {(closure.entries > 0 || closure.withdrawals > 0) && <span>Mov. caixa: <strong className="text-white font-mono">+ R$ {closure.entries.toFixed(2)} / - R$ {closure.withdrawals.toFixed(2)}</strong></span>}
-                  <span>Saldo caixa: <strong className="text-cyan-200 font-mono">R$ {closure.cashBalance.toFixed(2)}</strong></span>
-                  <span className="text-cyan-300">Fechado automaticamente às 23h59</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -341,7 +377,7 @@ export const CaixaView: React.FC<CaixaViewProps> = ({ appointments, barbers, pro
           <div className="modal-shell-fixed w-full sm:max-w-md max-h-[100dvh] sm:max-h-[88dvh] rounded-t-3xl sm:rounded-3xl border border-slate-700 bg-[#0b1426] shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="modal-static-header sticky top-0 z-10 bg-[#0b1426]/98 backdrop-blur border-b border-slate-800 p-4 sm:p-5 flex items-center justify-between">
               <div><h3 className="text-lg font-black text-white flex items-center gap-2">{movementModal === 'entry' ? <PlusCircle className="w-5 h-5 text-emerald-300" /> : <MinusCircle className="w-5 h-5 text-rose-300" />}{movementModal === 'entry' ? 'Adicionar ao caixa' : 'Retirar do caixa'}</h3><p className="text-xs text-slate-500 mt-1">Movimentação manual do caixa de hoje.</p></div>
-              <button aria-label="Fechar janela" type="button" onClick={() => setMovementModal(null)} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"><X className="w-4 h-4" /></button>
+              <button aria-label="Fechar janela" type="button" onClick={() => setMovementModal(null)} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 min-w-[44px] min-h-[44px] inline-flex items-center justify-center"><X className="w-4 h-4" /></button>
             </div>
             <div className="modal-scroll-body p-4 sm:p-5 space-y-4">
               <div><label htmlFor="caixa-field-1" className="block text-xs font-bold text-slate-300 mb-1.5">Valor (R$)</label><input id="caixa-field-1" inputMode="decimal" value={movementAmount} onChange={e => setMovementAmount(e.target.value)} placeholder="0,00" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-lg font-black text-white focus:outline-none focus:border-cyan-400/40 font-mono" /></div>
