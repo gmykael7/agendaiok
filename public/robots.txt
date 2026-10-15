@@ -1,5 +1,8 @@
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /superadmin
+Disallow: /superadmin/
 Disallow: /tv/
+Disallow: /?tab=
+
+Sitemap: https://meuagendai.fun/sitemap.xml

@@ -1,0 +1,25 @@
+# AgendAI
+
+> Plataforma brasileira de gestão e agendamento online para barbearias.
+
+## Páginas principais
+
+- [Apresentação do AgendAI](https://meuagendai.fun/): recursos para agenda, clientes, comandas, caixa, equipe e painel de TV.
+- [Diretório de barbearias](https://meuagendai.fun/barbearias): encontre barbearias e acesse suas páginas de agendamento.
+- [Política de Privacidade](https://meuagendai.fun/privacidade): tratamento de dados pessoais e direitos previstos na LGPD.
+- [Termos de Serviço](https://meuagendai.fun/termos): condições de uso da plataforma.
+- [Sitemap](https://meuagendai.fun/sitemap.xml): relação das páginas públicas indexáveis.
+
+## Funcionalidades
+
+- Agendamento online por estabelecimento
+- Gestão de agenda, clientes, serviços e profissionais
+- Comandas, produtos, estoque, caixa e relatórios
+- Assinaturas, fidelidade e campanhas
+- Painel de TV para a recepção
+
+## Observações para agentes
+
+- Páginas em `/agendar/{slug}` pertencem a estabelecimentos que usam o AgendAI.
+- Rotas `/api/`, `/tv/` e `/superadmin/` não são conteúdo editorial indexável.
+- O idioma principal é português do Brasil.

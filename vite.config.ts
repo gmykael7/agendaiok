@@ -340,6 +340,62 @@ const cloudApiPlugin = (): Plugin => ({
           sendJson(res, { success: true }, 201);
           return;
         }
+
+        if (url.pathname === '/api/waitlist' && req.method === 'POST') {
+          const entry = await readBody(req);
+          const slug = normalizeSlug(entry.org_slug || entry.org_id);
+          const db = getDb();
+          const current = db[`slug:${slug}`];
+          if (!current) { sendJson(res, { error: 'Barbearia não encontrada.' }, 404); return; }
+
+          const clientName = String(entry.client_name || '').trim();
+          const clientPhone = String(entry.client_phone || '').trim();
+          if (!clientName || !clientPhone) {
+            sendJson(res, { error: 'Nome e WhatsApp são obrigatórios.' }, 400);
+            return;
+          }
+
+          const newEntry = {
+            id: 'wait-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+            org_id: current.org?.id || '',
+            client_name: clientName,
+            client_phone: clientPhone,
+            preferred_date: String(entry.preferred_date || '').trim(),
+            preferred_period: entry.preferred_period || 'any',
+            service_id: entry.service_id,
+            service_name: entry.service_name,
+            barber_id: entry.barber_id,
+            barber_name: entry.barber_name,
+            status: 'waiting',
+            created_at: new Date().toISOString(),
+          };
+
+          const existingWaitlist = Array.isArray(current.waitlist) ? current.waitlist : [];
+          current.waitlist = [newEntry, ...existingWaitlist];
+
+          const existingNotifications = Array.isArray(current.notifications) ? current.notifications : [];
+          current.notifications = [
+            {
+              id: 'notif-wait-' + Date.now(),
+              org_id: current.org?.id,
+              type: 'waitlist_entry',
+              title: '⚡ Novo cliente na Fila de Espera',
+              message: `${clientName} quer vaga para ${(newEntry.preferred_date || '').split('-').reverse().join('/')}.`,
+              created_at: new Date().toISOString(),
+              client_name: clientName,
+              target_tab: 'agenda',
+            },
+            ...existingNotifications,
+          ].slice(0, 100);
+
+          current.updated_at = new Date().toISOString();
+          db[`slug:${slug}`] = current;
+          const email = normalizeEmail(current.org?.email);
+          if (email) db[`user:${email}`] = current;
+          saveDb(db);
+          sendJson(res, { success: true, entry: newEntry }, 201);
+          return;
+        }
       } catch (error: any) {
         sendJson(res, { error: error?.message || 'Erro interno.' }, 500);
         return;

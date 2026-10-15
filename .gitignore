@@ -22,9 +22,13 @@ dist-ssr
 
 # Test/build output
 coverage
+output/
+tests/artifacts/
 
 # Database exports can contain customer data
 backups/cloudflare/*.sql
+.agendai_cloud_db.json
+clientes_*.xlsx
 
 # Editor directories and files
 .vscode/*

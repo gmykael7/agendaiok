@@ -1,50 +1,57 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "agendai",
-  "main": "src/worker.ts",
-  "compatibility_date": "2026-08-17",
-  "vars": {
-    "ASSISTANT_AI_ENABLED": "false",
-    "TURNSTILE_HOSTNAMES": "meuagendai.fun"
-  },
-  "ai": {
-    "binding": "AI"
-  },
-  "ratelimits": [
-    {
-      "name": "ASSISTANT_LIMITER",
-      "namespace_id": "9801",
-      "simple": { "limit": 20, "period": 60 }
-    }
-  ],
-  "observability": {
-    "enabled": true
-  },
-  "routes": [
-    {
-      "pattern": "meuagendai.fun",
-      "custom_domain": true
-    }
-  ],
-  "assets": {
-    "directory": "./dist",
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": [
-      "/api/*"
-    ]
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "agendai-db",
-      "database_id": "4a7408ec-c6a6-4162-a7d8-07dab38d2373"
-    }
-  ],
-  "kv_namespaces": [
-    {
-      "binding": "AGENDAI_KV",
-      "id": "a359bec302a748a5a1598e5a9486d188"
-    }
-  ]
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "agendai",
+	"main": "src/worker.ts",
+	"compatibility_date": "2026-08-17",
+	"vars": {
+		"ASSISTANT_AI_ENABLED": "false",
+		"TURNSTILE_HOSTNAMES": "meuagendai.fun"
+	},
+	"ai": {
+		"binding": "AI"
+	},
+	"ratelimits": [
+		{
+			"name": "ASSISTANT_LIMITER",
+			"namespace_id": "9801",
+			"simple": {
+				"limit": 20,
+				"period": 60
+			}
+		}
+	],
+	"observability": {
+		"enabled": true,
+		"redact_query_string": false
+	},
+	"routes": [
+		{
+			"pattern": "meuagendai.fun",
+			"zone_name": "meuagendai.fun",
+			"custom_domain": true,
+			"enabled": true,
+			"previews_enabled": false
+		}
+	],
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/api/*",
+			"/sitemap.xml"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_id": "4a7408ec-c6a6-4162-a7d8-07dab38d2373"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "AGENDAI_KV",
+			"id": "a359bec302a748a5a1598e5a9486d188"
+		}
+	]
 }
