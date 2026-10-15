@@ -1,9 +1,17 @@
 // Cloudflare Worker Backend for AgendAI
 // Static Assets + D1 como banco principal + KV legado somente para leitura/migracao + Web Push.
 import { handleAssistantRequest } from './services/assistantApi';
+import { handleOwnerAssistant } from './services/ownerAssistantApi';
+import { encryptWebPushPayload } from './integrations/webpush/encrypt';
+import { handleDirectory, handleSitemap } from './services/directoryApi';
 import { handlePlatformNotices } from './services/platformNoticesApi';
 import { sanitizePublicGallery, sanitizeSocialLinks } from './utils/publicShowcase';
 import { BookingInputError, normalizePublicAppointment } from './utils/publicAppointment';
+import { verifyWhatsAppWebhook, handleWhatsAppWebhook } from './integrations/whatsapp/webhook';
+import { processWhatsAppEvent } from './integrations/whatsapp/processor';
+import { handleAvailabilityRequest, handleWhatsAppFlowRequest } from './integrations/whatsapp/flow';
+import { connectTenantWhatsApp, disconnectTenantWhatsApp, getTenantWhatsAppConnection } from './integrations/whatsapp/tenant';
+import type { WhatsAppEvent } from './integrations/whatsapp/types';
 type D1PreparedStatementLike = {
   bind: (...values: any[]) => D1PreparedStatementLike;
   first: <T = any>() => Promise<T | null>;
@@ -33,10 +41,22 @@ export interface Env extends Partial<Pick<Cloudflare.Env, 'AI' | 'ASSISTANT_AI_E
   ASSETS?: {
     fetch: (request: Request) => Promise<Response>;
   };
+  // --- Integração WhatsApp (Fase 1 — CODEX_WHATSAPP_INTEGRATION.md) ---
+  WHATSAPP_ACCESS_TOKEN?: string;
+  WHATSAPP_VERIFY_TOKEN?: string;
+  WHATSAPP_APP_SECRET?: string;
+  WHATSAPP_PHONE_NUMBER_ID?: string;
+  WHATSAPP_BUSINESS_ACCOUNT_ID?: string;
+  // Fallback temporário enquanto o mapeamento phone_number_id -> tenant (Fase 7) não existe.
+  WHATSAPP_DEFAULT_TENANT_SLUG?: string;
+  // Fase 2: fila para desacoplar o envio de resposta (chamada HTTP à Cloud API) do
+  // webhook, que precisa responder rápido à Meta. Ausente em dev local; nesse caso o
+  // webhook processa de forma síncrona (ver integrations/whatsapp/webhook.ts).
+  WHATSAPP_QUEUE?: Queue<WhatsAppEvent>;
 }
 
 type ExecutionContextLike = { waitUntil?: (promise: Promise<unknown>) => void };
-type StoredPayload = Record<string, any>;
+export type StoredPayload = Record<string, any>;
 type CredentialRecord = { salt: string; hash: string; iterations: number };
 type SessionRecord = { email: string; login_email?: string; role?: 'owner' | 'admin' | 'barber'; barber_id?: string; permissions?: Record<string, boolean>; name?: string; expires_at: number };
 type SessionContext = { owner_email: string; login_email: string; role: 'owner' | 'admin' | 'barber'; barber_id?: string; permissions: Record<string, boolean>; name: string };
@@ -58,7 +78,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-const jsonResponse = (data: unknown, status = 200) => new Response(JSON.stringify(data), {
+export const jsonResponse = (data: unknown, status = 200) => new Response(JSON.stringify(data), {
   status,
   headers: {
     ...corsHeaders,
@@ -201,7 +221,9 @@ const legacyKvGet = async (env: Env, key: string): Promise<string | null> => {
   }
 };
 
-const dbGet = async (env: Env, key: string): Promise<string | null> => {
+// Exportadas para reuso pelo módulo de integração WhatsApp (idempotência de eventos,
+// sessão de conversa). Nenhuma mudança de comportamento — apenas visibilidade.
+export const dbGet = async (env: Env, key: string): Promise<string | null> => {
   if (env.DB) {
     const fromD1 = await d1Get(env, key);
     if (fromD1 !== undefined) return fromD1;
@@ -224,12 +246,12 @@ const dbGet = async (env: Env, key: string): Promise<string | null> => {
   return legacy ?? null;
 };
 
-const dbPut = async (env: Env, key: string, value: string, expirationTtl?: number): Promise<void> => {
+export const dbPut = async (env: Env, key: string, value: string, expirationTtl?: number): Promise<void> => {
   // IMPORTANTE: todas as novas escritas vao somente para o D1.
   await d1Put(env, key, value, expirationTtl);
 };
 
-const dbDelete = async (env: Env, key: string): Promise<void> => {
+export const dbDelete = async (env: Env, key: string): Promise<void> => {
   // Tombstone impede que uma chave apagada no D1 seja "ressuscitada" pelo KV legado.
   await d1Put(env, key, D1_DELETED);
 };
@@ -400,6 +422,21 @@ const sanitizePrivatePayload = (input: StoredPayload): StoredPayload => {
   const currentOrgId = String(org?.id || '').trim();
   const products = sanitizeProducts(safeInput.products, currentOrgId, false);
   const productSales = sanitizeProductSales(safeInput.productSales, currentOrgId);
+  const commands = (Array.isArray(safeInput.commands) ? safeInput.commands : [])
+    .filter((command: any) => command && String(command.id || '').trim() && String(command.client_name || '').trim())
+    .map((command: any) => ({
+      id: String(command.id).slice(0, 160), org_id: currentOrgId || undefined,
+      status: ['open', 'closed', 'canceled'].includes(String(command.status)) ? command.status : 'open',
+      client_name: String(command.client_name).trim().slice(0, 140), client_phone: command.client_phone ? String(command.client_phone).trim().slice(0, 40) : undefined,
+      barber_id: command.barber_id ? String(command.barber_id).slice(0, 160) : undefined, barber_name: command.barber_name ? String(command.barber_name).slice(0, 140) : undefined,
+      service_items: (Array.isArray(command.service_items) ? command.service_items : []).map((item: any) => ({ service_id: String(item?.service_id || '').slice(0, 160), name: String(item?.name || '').trim().slice(0, 140), price: Math.max(0, Number(item?.price || 0)), duration_minutes: Math.max(0, Number(item?.duration_minutes || 0)) })).filter((item: any) => item.service_id && item.name),
+      product_items: sanitizeProductSales([{ id: 'items', items: command.product_items, created_at: command.opened_at }], currentOrgId)[0]?.items || [],
+      payment_method: ['pix', 'credit', 'debit', 'cash'].includes(String(command.payment_method || '')) ? command.payment_method : undefined,
+      notes: command.notes ? String(command.notes).trim().slice(0, 500) : undefined, linked_appointment_id: command.linked_appointment_id ? String(command.linked_appointment_id).slice(0, 160) : undefined,
+      opened_at: String(command.opened_at || new Date().toISOString()), closed_at: command.closed_at ? String(command.closed_at) : undefined, canceled_at: command.canceled_at ? String(command.canceled_at) : undefined,
+    }))
+    .sort((a: any, b: any) => String(b.opened_at).localeCompare(String(a.opened_at)))
+    .slice(0, 1000);
   const notifications = (Array.isArray(safeInput.notifications) ? safeInput.notifications : [])
     .filter((notification: any) => {
       if (!notification || !String(notification.id || '').trim()) return false;
@@ -423,7 +460,7 @@ const sanitizePrivatePayload = (input: StoredPayload): StoredPayload => {
     }))
     .sort((a: any, b: any) => String(b.created_at).localeCompare(String(a.created_at)))
     .slice(0, 100);
-  return { ...safeInput, org, savedOrgs, clients, products, productSales, notifications };
+  return { ...safeInput, org, savedOrgs, clients, products, productSales, commands, notifications };
 };
 
 const sanitizePublicPayload = (input: StoredPayload): StoredPayload => {
@@ -446,6 +483,7 @@ const sanitizePublicPayload = (input: StoredPayload): StoredPayload => {
     services: Array.isArray(input.services) ? input.services : [],
     products: sanitizeProducts(input.products, String(org?.id || ''), true),
     productSales: [],
+    commands: [],
     barbers,
     appointments,
     clients: [],
@@ -487,12 +525,6 @@ const sanitizeTvPayload = (input: StoredPayload, requestedDate?: string): Stored
         name: publicOrg.name || 'AgendAI',
         slug: publicOrg.slug || '',
         primary_color: publicOrg.primary_color || '#18d4c8',
-        background_color: publicOrg.background_color || '#061120',
-        surface_color: publicOrg.surface_color || '#0d1930',
-        accent_color: publicOrg.accent_color,
-        theme_preset: publicOrg.theme_preset,
-        ui_border_radius: publicOrg.ui_border_radius,
-        ui_surface_style: publicOrg.ui_surface_style,
       },
       appointments: [],
       barbers: [],
@@ -536,12 +568,6 @@ const sanitizeTvPayload = (input: StoredPayload, requestedDate?: string): Stored
       phone: publicOrg.phone,
       address: publicOrg.address,
       primary_color: publicOrg.primary_color,
-      background_color: publicOrg.background_color,
-      surface_color: publicOrg.surface_color,
-      accent_color: publicOrg.accent_color,
-      theme_preset: publicOrg.theme_preset,
-      ui_border_radius: publicOrg.ui_border_radius,
-      ui_surface_style: publicOrg.ui_surface_style,
       open_hour: publicOrg.open_hour,
       close_hour: publicOrg.close_hour,
       cover_image_url: publicOrg.cover_image_url && /^https?:\/\//i.test(String(publicOrg.cover_image_url)) ? String(publicOrg.cover_image_url).slice(0, 1000) : undefined,
@@ -674,6 +700,7 @@ const privatePayloadForSession = (payload: StoredPayload, session: SessionContex
     }
   } else if (!session.permissions.caixa && !session.permissions.relatorios) {
     safe.appointments = (Array.isArray(safe.appointments) ? safe.appointments : []).map((a: any) => ({ ...a, payment_method: undefined }));
+    safe.commands = [];
   }
   if (!session.permissions.products) {
     safe.products = [];
@@ -683,9 +710,9 @@ const privatePayloadForSession = (payload: StoredPayload, session: SessionContex
   return safe;
 };
 
-class SnapshotConflictError extends Error {}
+export class SnapshotConflictError extends Error {}
 
-const storePayload = async (env: Env, payload: StoredPayload, previousSlug?: string, expectedRevision?: string): Promise<StoredPayload> => {
+export const storePayload = async (env: Env, payload: StoredPayload, previousSlug?: string, expectedRevision?: string): Promise<StoredPayload> => {
   const previousTime = Date.parse(String(payload.updated_at || ''));
   const nextTime = Math.max(Date.now(), Number.isFinite(previousTime) ? previousTime + 1 : 0);
   const cleanPayload = sanitizePrivatePayload({ ...payload, updated_at: new Date(nextTime).toISOString() });
@@ -721,7 +748,10 @@ const storePayload = async (env: Env, payload: StoredPayload, previousSlug?: str
   return cleanPayload;
 };
 
-const loadPayloadBySlug = async (env: Env, slugValue: unknown): Promise<StoredPayload | null> => {
+// Exportada para reuso pela integração WhatsApp (Fase 3 — consulta de disponibilidade,
+// somente leitura). Não expõe storePayload/SnapshotConflictError: escrita de agendamento
+// via WhatsApp é decidida na Fase 4, reaproveitando a mesma validação do fluxo público.
+export const loadPayloadBySlug = async (env: Env, slugValue: unknown): Promise<StoredPayload | null> => {
   const slug = normalizeSlug(slugValue);
   if (!slug) return null;
   const rawMapping = await dbGet(env, `slug:${slug}`);
@@ -763,7 +793,8 @@ const payloadDataCount = (payload: StoredPayload): number =>
   (Array.isArray(payload.appointments) ? payload.appointments.length : 0) +
   (Array.isArray(payload.clients) ? payload.clients.length : 0) +
   (Array.isArray(payload.products) ? payload.products.length : 0) +
-  (Array.isArray(payload.productSales) ? payload.productSales.length : 0);
+  (Array.isArray(payload.productSales) ? payload.productSales.length : 0) +
+  (Array.isArray(payload.commands) ? payload.commands.length : 0);
 
 const minutesFromTime = (value: string): number => {
   const [h, m] = String(value || '').split(':').map(Number);
@@ -800,7 +831,7 @@ const getBusinessNow = (org: any): { date: string; minutes: number } => {
   }
 };
 
-const validateBusinessTime = (appointment: any, org: any): string | null => {
+export const validateBusinessTime = (appointment: any, org: any): string | null => {
   const start = minutesFromTime(String(appointment.start_time || ''));
   const duration = Math.max(5, Number(appointment.duration_minutes || 30));
   const end = start + duration;
@@ -847,7 +878,7 @@ const validateBusinessTime = (appointment: any, org: any): string | null => {
   return null;
 };
 
-const overlapsExistingAppointment = (appointment: any, existing: any[]): boolean => {
+export const overlapsExistingAppointment = (appointment: any, existing: any[]): boolean => {
   const date = String(appointment.date || '');
   const barberId = String(appointment.barber_id || '');
   const start = minutesFromTime(appointment.start_time);
@@ -911,23 +942,53 @@ const subscriptionKeyId = async (endpoint: string): Promise<string> => {
   return base64UrlFromBytes(new Uint8Array(digest)).slice(0, 32);
 };
 
+export type PushPayload = { title: string; body: string; tag?: string; url?: string };
+
 const sendPushToSubscription = async (
   env: Env,
   keyName: string,
-  subscription: PushSubscriptionRecord
+  subscription: PushSubscriptionRecord,
+  payload?: PushPayload
 ): Promise<void> => {
   if (!subscription.endpoint) return;
   try {
     const vapid = await getOrCreateVapidKeys(env);
     const jwt = await createVapidJwt(subscription.endpoint, vapid);
-    const response = await fetch(subscription.endpoint, {
-      method: 'POST',
-      headers: {
-        TTL: '120',
-        Urgency: 'high',
-        Authorization: `vapid t=${jwt}, k=${vapid.publicKey}`,
-      },
-    });
+    const baseHeaders = {
+      TTL: '120',
+      Urgency: 'high',
+      Authorization: `vapid t=${jwt}, k=${vapid.publicKey}`,
+    };
+
+    // Tenta enviar o conteúdo cifrado (RFC 8291). Se a cifragem falhar ou o serviço
+    // recusar o corpo, reenvia sem payload: o service worker mostra o texto padrão.
+    let response: Response | null = null;
+    if (payload && subscription.keys?.p256dh && subscription.keys?.auth) {
+      try {
+        const body = await encryptWebPushPayload(JSON.stringify(payload), {
+          endpoint: subscription.endpoint,
+          keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth },
+        });
+        response = await fetch(subscription.endpoint, {
+          method: 'POST',
+          headers: { ...baseHeaders, 'Content-Encoding': 'aes128gcm', 'Content-Type': 'application/octet-stream' },
+          body,
+        });
+        if (response.status !== 400 && response.status !== 413 && response.status !== 401 && response.status !== 403) {
+          // resposta aceita ou erro não relacionado ao corpo: segue o fluxo normal
+        } else {
+          console.warn('Web Push com payload recusado, reenviando sem corpo:', response.status);
+          response = null;
+        }
+      } catch (error) {
+        console.warn('Falha ao cifrar payload Web Push, reenviando sem corpo:', error);
+        response = null;
+      }
+    }
+    if (!response) {
+      response = await fetch(subscription.endpoint, { method: 'POST', headers: baseHeaders });
+    }
+
     if (response.status === 404 || response.status === 410) await dbDelete(env, keyName);
     if (!response.ok && response.status !== 201 && response.status !== 202) {
       console.warn('Web Push rejeitado:', response.status, await response.text().catch(() => ''));
@@ -937,12 +998,12 @@ const sendPushToSubscription = async (
   }
 };
 
-const notifyAdminDevices = async (env: Env, email: string): Promise<void> => {
+export const notifyAdminDevices = async (env: Env, email: string, payload?: PushPayload): Promise<void> => {
   const keys = await dbListKeys(env, `pushsub:${email}:`);
   await Promise.all(keys.slice(0, 25).map(async key => {
     const raw = await dbGet(env, key);
     if (!raw) return;
-    try { await sendPushToSubscription(env, key, JSON.parse(raw)); }
+    try { await sendPushToSubscription(env, key, JSON.parse(raw), payload); }
     catch { await dbDelete(env, key); }
   }));
 };
@@ -953,8 +1014,87 @@ export default {
 
     if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+    if (url.pathname === '/sitemap.xml' && request.method === 'GET') return handleSitemap(env.DB);
+    if (url.pathname === '/api/directory') return handleDirectory(request, env.DB);
+
     if (url.pathname.startsWith('/api/') && !env.DB) {
       return jsonResponse({ error: 'Banco D1 não configurado. Execute npm run setup:d1 uma única vez e depois npm run deploy.' }, 503);
+    }
+
+    // Integração WhatsApp (Fase 1 — ver CODEX_WHATSAPP_INTEGRATION.md). Endpoint dedicado,
+    // desacoplado do restante da API: não usa CORS nem sessão de painel, a Meta autentica
+    // via hub.verify_token (GET) e assinatura HMAC do corpo (POST).
+    if (url.pathname === '/api/whatsapp/webhook') {
+      if (request.method === 'GET') return verifyWhatsAppWebhook(url, env);
+      if (request.method === 'POST') return handleWhatsAppWebhook(request, env);
+      return new Response('Method Not Allowed', { status: 405 });
+    }
+
+    // Disponibilidade de horários para WhatsApp Flows e integrações externas (Fase 6)
+    if (url.pathname === '/api/availability' && (request.method === 'GET' || request.method === 'OPTIONS')) {
+      if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+      return handleAvailabilityRequest(url, env);
+    }
+
+    // Endpoint de Data Exchange para WhatsApp Flows da Meta (Fase 6)
+    if (url.pathname === '/api/whatsapp/flow' && request.method === 'POST') {
+      return handleWhatsAppFlowRequest(request, env);
+    }
+
+    // Gestão de Conexão WhatsApp por Estabelecimento (Fase 7 - Embedded Signup)
+    if (url.pathname === '/api/whatsapp/connection' && (request.method === 'GET' || request.method === 'OPTIONS')) {
+      if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+      const session = await getSessionContext(request, env);
+      if (!session) return jsonResponse({ error: 'Sessão inválida ou expirada.' }, 401);
+      if (session.role !== 'owner' && !session.permissions.ajustes) return jsonResponse({ error: 'Sem permissão para consultar a conexão do WhatsApp.' }, 403);
+      const raw = await dbGet(env, `user:${session.owner_email}`);
+      if (!raw) return jsonResponse({ error: 'Estabelecimento não encontrado.' }, 404);
+      const payload = JSON.parse(raw) as StoredPayload;
+      const slug = normalizeSlug(payload.org?.slug);
+      const connection = await getTenantWhatsAppConnection(env, slug);
+      return jsonResponse({ connection });
+    }
+
+    if (url.pathname === '/api/whatsapp/connect' && (request.method === 'POST' || request.method === 'OPTIONS')) {
+      if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+      const session = await getSessionContext(request, env);
+      if (!session) return jsonResponse({ error: 'Sessão inválida ou expirada.' }, 401);
+      if (session.role !== 'owner' && !session.permissions.ajustes) return jsonResponse({ error: 'Sem permissão para conectar o WhatsApp.' }, 403);
+      const raw = await dbGet(env, `user:${session.owner_email}`);
+      if (!raw) return jsonResponse({ error: 'Estabelecimento não encontrado.' }, 404);
+      const payload = JSON.parse(raw) as StoredPayload;
+      const slug = normalizeSlug(payload.org?.slug);
+
+      try {
+        const body = (await request.json()) as any;
+        const connection = await connectTenantWhatsApp(env, slug, {
+          phoneNumberId: body?.phoneNumberId,
+          businessAccountId: body?.businessAccountId,
+          displayPhoneNumber: body?.displayPhoneNumber,
+          verifiedName: body?.verifiedName,
+        });
+        return jsonResponse({ success: true, connection });
+      } catch (err: any) {
+        return jsonResponse({ error: err?.message || 'Falha ao conectar WhatsApp.' }, 400);
+      }
+    }
+
+    if (url.pathname === '/api/whatsapp/disconnect' && (request.method === 'POST' || request.method === 'OPTIONS')) {
+      if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+      const session = await getSessionContext(request, env);
+      if (!session) return jsonResponse({ error: 'Sessão inválida ou expirada.' }, 401);
+      if (session.role !== 'owner' && !session.permissions.ajustes) return jsonResponse({ error: 'Sem permissão para desconectar o WhatsApp.' }, 403);
+      const raw = await dbGet(env, `user:${session.owner_email}`);
+      if (!raw) return jsonResponse({ error: 'Estabelecimento não encontrado.' }, 404);
+      const payload = JSON.parse(raw) as StoredPayload;
+      const slug = normalizeSlug(payload.org?.slug);
+
+      try {
+        const connection = await disconnectTenantWhatsApp(env, slug);
+        return jsonResponse({ success: true, connection });
+      } catch (err: any) {
+        return jsonResponse({ error: err?.message || 'Falha ao desconectar WhatsApp.' }, 400);
+      }
     }
 
     // Avisos privados e direcionados, fora dos snapshots administrativos.
@@ -977,6 +1117,12 @@ export default {
     }
 
     // Piloto somente leitura: o agendamento continua sendo confirmado por /api/appointment.
+    if (url.pathname === '/api/owner-assistant') {
+      // Só o próprio barbeiro logado. A IA responde com o guia fixo; nenhum dado da conta entra no prompt.
+      const session = await getSessionContext(request, env);
+      if (!session?.login_email) return jsonResponse({ error: 'unauthorized' }, 401);
+      return handleOwnerAssistant(request, env, session.login_email);
+    }
     if (url.pathname === '/api/assistant') {
       return handleAssistantRequest(request, env, async (slug) => {
         const payload = await loadPayloadBySlug(env, slug);
@@ -1430,6 +1576,7 @@ export default {
           body.products = current.products;
           body.productSales = current.productSales;
         }
+        if (current && session.role !== 'owner' && !session.permissions.caixa) body.commands = current.commands;
         if (current?.org) {
           body.org = {
             ...body.org,
@@ -1584,7 +1731,12 @@ export default {
         await storePayload(env, current, orgSlug, String(current.updated_at || ''));
 
         if (email) {
-          const pushTask = notifyAdminDevices(env, email);
+          const pushTask = notifyAdminDevices(env, email, {
+            title: 'Novo agendamento',
+            body: String(newNotification.message || 'Um novo horário foi reservado.'),
+            tag: notificationId,
+            url: '/?tab=atendimentos',
+          });
           if (ctx?.waitUntil) ctx.waitUntil(pushTask);
           else void pushTask;
         }
@@ -1680,7 +1832,12 @@ export default {
         const email = normalizeEmail(current.org?.email);
         await storePayload(env, current, orgSlug, String(current.updated_at || ''));
         if (email) {
-          const pushTask = notifyAdminDevices(env, email);
+          const pushTask = notifyAdminDevices(env, email, {
+            title: 'Novo pedido de produtos',
+            body: `${customerName} • ${saleItems.reduce((sum, item) => sum + item.quantity, 0)} item(ns) • R$ ${total.toFixed(2)}`,
+            tag: notificationId,
+            url: '/?tab=produtos',
+          });
           if (ctx?.waitUntil) ctx.waitUntil(pushTask);
           else void pushTask;
         }
@@ -1705,8 +1862,103 @@ export default {
       }
     }
 
+    // Inscrição pública na Lista de Espera Relâmpago.
+    if (url.pathname === '/api/waitlist' && request.method === 'POST') {
+      try {
+        const body = await request.json() as any;
+        if (!body || typeof body !== 'object' || Array.isArray(body)) return jsonResponse({ error: 'Dados inválidos.' }, 400);
+
+        const orgSlug = normalizeSlug(body.org_slug);
+        const clientName = String(body.client_name || '').trim();
+        const clientPhone = String(body.client_phone || '').trim();
+        const preferredDate = String(body.preferred_date || '').trim();
+        const preferredPeriod = String(body.preferred_period || 'any');
+
+        if (!orgSlug) return jsonResponse({ error: 'Estabelecimento não identificado.' }, 400);
+        if (!clientName || !clientPhone) return jsonResponse({ error: 'Nome e WhatsApp são obrigatórios.' }, 400);
+        if (!preferredDate) return jsonResponse({ error: 'Data de preferência é obrigatória.' }, 400);
+
+        const current = await loadPayloadBySlug(env, orgSlug);
+        if (!current || !current.org) return jsonResponse({ error: 'Barbearia não encontrada.' }, 404);
+        if (accountStatus(current) === 'suspended') return jsonResponse({ error: 'Barbearia temporariamente indisponível.' }, 403);
+
+        const newEntry = {
+          id: 'wait-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+          org_id: current.org?.id || '',
+          client_name: clientName,
+          client_phone: clientPhone,
+          service_id: body.service_id ? String(body.service_id) : undefined,
+          service_name: body.service_name ? String(body.service_name) : undefined,
+          barber_id: body.barber_id ? String(body.barber_id) : undefined,
+          barber_name: body.barber_name ? String(body.barber_name) : undefined,
+          preferred_date: preferredDate,
+          preferred_period: ['morning', 'afternoon', 'evening', 'any'].includes(preferredPeriod) ? preferredPeriod : 'any',
+          notes: body.notes ? String(body.notes).slice(0, 200) : undefined,
+          status: 'waiting',
+          created_at: new Date().toISOString(),
+        };
+
+        const existingWaitlist = Array.isArray(current.waitlist) ? current.waitlist : [];
+        current.waitlist = [newEntry, ...existingWaitlist];
+
+        // Notificação para a central do painel
+        const notificationId = `notif-wait-${Date.now()}`;
+        const newNotification = {
+          id: notificationId,
+          org_id: current.org.id,
+          type: 'waitlist_entry',
+          title: '⚡ Novo cliente na Fila de Espera',
+          message: `${clientName} quer vaga para ${preferredDate.split('-').reverse().join('/')} (${newEntry.preferred_period === 'any' ? 'Qualquer horário' : newEntry.preferred_period}).`,
+          created_at: new Date().toISOString(),
+          client_name: clientName,
+          target_tab: 'agenda',
+        };
+        const existingNotifications = Array.isArray(current.notifications) ? current.notifications : [];
+        current.notifications = [newNotification, ...existingNotifications].slice(0, 100);
+
+        await storePayload(env, current, orgSlug, String(current.updated_at || ''));
+
+        const email = normalizeEmail(current.org?.email);
+        if (email) {
+          const pushTask = notifyAdminDevices(env, email, {
+            title: 'Novo cliente na lista de espera',
+            body: String(newNotification.message || 'Um cliente entrou na lista de espera.'),
+            tag: notificationId,
+            url: '/?tab=agenda',
+          });
+          if (ctx?.waitUntil) ctx.waitUntil(pushTask);
+          else void pushTask;
+        }
+
+        return jsonResponse({ success: true, entry: newEntry }, 201);
+      } catch (error: any) {
+        if (error instanceof SnapshotConflictError) return jsonResponse({ error: error.message }, 409);
+        return jsonResponse({ error: error?.message || 'Falha ao registrar na lista de espera.' }, 500);
+      }
+    }
+
     if (url.pathname.startsWith('/api/')) return jsonResponse({ error: 'Rota da API não encontrada.' }, 404);
     if (env.ASSETS) return env.ASSETS.fetch(request);
     return new Response('App carregado', { headers: { 'Content-Type': 'text/plain' } });
+  },
+
+  // Consumidor da Cloudflare Queue "whatsapp-events" (Fase 2). Cada mensagem já chega
+  // como um WhatsAppEvent tipado (produzido em integrations/whatsapp/webhook.ts) — nunca
+  // o payload bruto da Meta. Falha em um evento não derruba o lote inteiro: cada
+  // mensagem é ack()/retry() individualmente.
+  async queue(batch: MessageBatch<WhatsAppEvent>, env: Env): Promise<void> {
+    for (const message of batch.messages) {
+      try {
+        await processWhatsAppEvent(env, message.body);
+        message.ack();
+      } catch (error) {
+        console.error(JSON.stringify({
+          event: 'whatsapp_queue_message_failed',
+          attempts: message.attempts,
+          error: error instanceof Error ? error.message : 'unknown_error',
+        }));
+        message.retry();
+      }
+    }
   }
 };

@@ -89,6 +89,8 @@ const corePayload = (payload: CloudSyncPayload): Omit<CloudSyncPayload, 'updated
   notifications: payload.notifications || [],
   products: payload.products || [],
   productSales: payload.productSales || [],
+  commands: payload.commands || [],
+  waitlist: payload.waitlist || [],
 });
 
 export const cloneCloudPayload = (payload: CloudSyncPayload): CloudSyncPayload => cloneValue(payload);

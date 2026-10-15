@@ -1,4 +1,4 @@
-import { Organization, Service, Barber, Appointment, Client, AppNotification, CurrentUser, Product, ProductSale } from '../types';
+import { Organization, Service, Barber, Appointment, Client, AppNotification, CurrentUser, Product, ProductSale, ServiceCommand, WaitlistEntry } from '../types';
 
 export interface CloudSyncPayload {
   org: Organization | null;
@@ -10,6 +10,8 @@ export interface CloudSyncPayload {
   notifications?: AppNotification[];
   products?: Product[];
   productSales?: ProductSale[];
+  commands?: ServiceCommand[];
+  waitlist?: WaitlistEntry[];
   current_user?: CurrentUser;
   updated_at?: string;
 }
@@ -48,6 +50,8 @@ export const normalizeCloudPayload = (data: any): CloudSyncPayload => ({
   notifications: Array.isArray(data?.notifications) ? data.notifications : [],
   products: Array.isArray(data?.products) ? data.products : [],
   productSales: Array.isArray(data?.productSales) ? data.productSales : [],
+  commands: Array.isArray(data?.commands) ? data.commands : [],
+  waitlist: Array.isArray(data?.waitlist) ? data.waitlist : [],
   current_user: data?.current_user || undefined,
   updated_at: data?.updated_at,
 });
@@ -214,6 +218,7 @@ export const loadBarbershopFromCloud = async (
   try {
     const response = await fetch(`/api/sync?${queryParam}`, {
       method: 'GET',
+      cache: 'no-store',
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache',
@@ -341,5 +346,35 @@ export const pushProductOrderToCloud = async (
     };
   } catch {
     return { ok: false, status: 0, error: 'Sem conexão com a loja agora.' };
+  }
+};
+
+export interface WaitlistPushResult {
+  ok: boolean;
+  status: number;
+  entry?: WaitlistEntry;
+  error?: string;
+}
+
+export const pushWaitlistToCloud = async (
+  entry: Omit<WaitlistEntry, 'id' | 'status' | 'created_at'>,
+  orgSlug: string,
+): Promise<WaitlistPushResult> => {
+  const targetSlug = (orgSlug || '').toLowerCase().trim();
+  if (!targetSlug) return { ok: false, status: 400, error: 'Barbearia não identificada.' };
+
+  try {
+    const response = await fetch('/api/waitlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...entry,
+        org_slug: targetSlug,
+      }),
+    });
+    const body = await readWriteConfirmation(response);
+    return { ok: response.ok, status: response.status, entry: body.entry };
+  } catch {
+    return { ok: false, status: 0, error: 'Sem conexão com o servidor. Tente novamente.' };
   }
 };
