@@ -251,6 +251,48 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
     });
   }, [selectedDate]);
 
+  const compactDateLabel = useMemo(() => {
+    const current = new Date(selectedDate + 'T00:00:00');
+    const day = current.getDate();
+    const month = current.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+    return `${day} de ${month}`;
+  }, [selectedDate]);
+
+  const currentWeekDays = useMemo(() => {
+    const current = new Date(selectedDate + 'T00:00:00');
+    const dayOfWeek = current.getDay(); // 0: Dom ... 6: Sáb
+    const sunday = new Date(current);
+    sunday.setDate(current.getDate() - dayOfWeek);
+
+    const todayStr = getLocalDateKey();
+
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(sunday);
+      d.setDate(sunday.getDate() + i);
+      const key = getLocalDateKey(d);
+      const weekdayShort = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '').toUpperCase();
+      return {
+        date: d,
+        key,
+        dayNumber: d.getDate(),
+        weekdayShort,
+        isToday: key === todayStr,
+        isSelected: key === selectedDate,
+      };
+    });
+  }, [selectedDate]);
+
+  const weekAppointmentsCount = useMemo(() => {
+    const counts: Record<string, number> = {};
+    appointments.forEach((app) => {
+      if (!blocksAppointmentSlot(app.status)) return;
+      if (selectedBarberId !== 'all' && app.barber_id !== selectedBarberId) return;
+      const d = app.date || getLocalDateKey();
+      counts[d] = (counts[d] || 0) + 1;
+    });
+    return counts;
+  }, [appointments, selectedBarberId]);
+
   // Agendamentos específicos da data selecionada
   const dayAppointments = useMemo(() => {
     return appointments.filter(a => {
@@ -418,11 +460,25 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
             ))}
           </select>
 
-          {/* Navegador de Data */}
+          {/* Botão Hoje rápido (estilo Google Calendar) */}
+          <button
+            type="button"
+            onClick={() => setSelectedDate(getLocalDateKey())}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0 flex items-center gap-1.5 ${
+              selectedDate === getLocalDateKey()
+                ? 'bg-[#0B1120] text-emerald-400 border border-emerald-500/30'
+                : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 shadow-sm'
+            }`}
+            title="Voltar para a data de hoje"
+          >
+            Hoje
+          </button>
+
+          {/* Navegador de Data com indicação da data selecionada */}
           <div className="flex items-center gap-1 bg-[#0B1120] p-1 rounded-xl border border-slate-800">
             <button
               onClick={() => changeDate(-1)}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors active:scale-95 min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors active:scale-95 min-w-[36px] min-h-[36px] inline-flex items-center justify-center"
               title="Dia anterior"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -432,17 +488,16 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
               onClick={openDatePicker}
               aria-haspopup="dialog"
               aria-label="Abrir calendário mensal"
-              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors active:scale-95 ${
-                selectedDate === getLocalDateKey()
-                  ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20'
-                  : 'text-slate-300 hover:bg-slate-800'
-              }`}
+              className="px-2.5 py-1 text-xs font-semibold rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 transition-colors active:scale-95 inline-flex items-center gap-1.5 capitalize"
+              title="Clique para escolher uma data no calendário mensal"
             >
-              Hoje
+              <CalendarIcon className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{compactDateLabel}</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
             </button>
             <button
               onClick={() => changeDate(1)}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors active:scale-95 min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors active:scale-95 min-w-[36px] min-h-[36px] inline-flex items-center justify-center"
               title="Próximo dia"
             >
               <ChevronRight className="w-4 h-4" />
@@ -489,6 +544,90 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
             <Plus className="w-3.5 h-3.5" />
             <span>Agendar</span>
           </button>
+        </div>
+      </div>
+
+      {/* RÉGUA DA SEMANA ESTILO GOOGLE CALENDAR */}
+      <div className="bg-[#121B2E] border border-slate-800 rounded-3xl p-3 sm:p-4 shadow-xl">
+        <div className="flex items-center justify-between gap-2 px-1 mb-2.5">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400 flex items-center gap-1.5">
+            <CalendarIcon className="w-3 h-3 text-emerald-400" />
+            <span>Visão Semanal</span>
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => changeDate(-7)}
+              className="px-2 py-1 text-[11px] font-medium text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors inline-flex items-center gap-1"
+              title="Semana anterior"
+            >
+              <ChevronLeft className="w-3 h-3" />
+              <span className="hidden sm:inline">Semana anterior</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => changeDate(7)}
+              className="px-2 py-1 text-[11px] font-medium text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors inline-flex items-center gap-1"
+              title="Próxima semana"
+            >
+              <span className="hidden sm:inline">Próxima semana</span>
+              <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1 sm:gap-2">
+          {currentWeekDays.map((item) => {
+            const count = weekAppointmentsCount[item.key] || 0;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setSelectedDate(item.key)}
+                className={`flex flex-col items-center justify-center py-2 px-1 sm:py-2.5 sm:px-2 rounded-2xl transition-all active:scale-95 relative group ${
+                  item.isSelected
+                    ? 'bg-emerald-500/15 border-2 border-emerald-500 text-white shadow-lg shadow-emerald-500/10'
+                    : 'border border-slate-800/80 bg-[#0B1120]/50 hover:bg-slate-800/60 hover:border-slate-700 text-slate-300'
+                }`}
+              >
+                <span className={`text-[9px] sm:text-[11px] font-bold tracking-wider ${
+                  item.isToday
+                    ? 'text-emerald-400 font-black'
+                    : item.isSelected
+                      ? 'text-white font-bold'
+                      : 'text-slate-400 group-hover:text-slate-200'
+                }`}>
+                  {item.weekdayShort}
+                </span>
+
+                <div className="mt-1 flex items-center justify-center">
+                  <span className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-black transition-all ${
+                    item.isToday
+                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30'
+                      : item.isSelected
+                        ? 'bg-slate-800 text-white border border-slate-700'
+                        : 'text-slate-200'
+                  }`}>
+                    {item.dayNumber}
+                  </span>
+                </div>
+
+                <div className="mt-1 flex items-center justify-center min-h-[14px]">
+                  {count > 0 ? (
+                    <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
+                      item.isSelected
+                        ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-slate-800 text-slate-400 border border-slate-700/60'
+                    }`}>
+                      {count}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-600 opacity-30">•</span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
