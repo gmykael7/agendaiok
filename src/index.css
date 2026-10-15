@@ -723,34 +723,42 @@ button:disabled,
 }
 
 .app-bottom-nav {
-  background: rgba(7, 16, 29, 0.9) !important;
-  border-color: var(--app-border) !important;
-  box-shadow: 0 -18px 46px rgba(1, 7, 18, 0.4) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  padding-bottom: 0 !important;
+}
+
+.app-bottom-nav-pill {
+  background: rgba(12, 21, 39, 0.94) !important;
+  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.52), 0 4px 12px rgba(0, 0, 0, 0.28) !important;
   backdrop-filter: blur(24px) saturate(150%);
 }
 
-.app-bottom-nav-item {
-  position: relative;
-  min-height: 3.65rem;
+.app-bottom-nav-side-btn {
+  color: #8b9bb4 !important;
 }
 
-.app-bottom-nav-item::before {
-  content: '';
-  position: absolute;
-  top: -0.5rem;
-  left: 50%;
-  width: 1.8rem;
-  height: 2px;
-  border-radius: 999px;
-  background: transparent;
-  transform: translateX(-50%) scaleX(0.3);
-  transition: background-color 180ms ease, transform 180ms var(--app-ease);
+.app-bottom-nav-side-btn:hover {
+  color: #cbd5e1 !important;
 }
 
-.app-bottom-nav-item[aria-current="page"]::before {
-  background: var(--brand-color);
-  transform: translateX(-50%) scaleX(1);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--brand-color) 55%, transparent);
+.app-bottom-nav-side-btn.is-active {
+  color: #ffffff !important;
+}
+
+.app-bottom-nav-hero {
+  background: var(--brand-color) !important;
+  color: var(--brand-contrast-color) !important;
+  border: none !important;
+  box-shadow: 0 10px 24px -2px color-mix(in srgb, var(--brand-color) 55%, transparent) !important;
+}
+
+.app-bottom-nav-hero svg {
+  color: var(--brand-contrast-color) !important;
+  stroke: var(--brand-contrast-color) !important;
 }
 
 .app-content {
@@ -1404,9 +1412,39 @@ html[data-app-theme="light"] .app-sidebar {
 }
 
 html[data-app-theme="light"] .app-bottom-nav {
-  background: rgba(255, 255, 255, 0.94) !important;
-  border-color: #e2e8f0 !important;
-  box-shadow: 0 -14px 38px rgba(15, 23, 42, 0.09) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-app-theme="light"] .app-bottom-nav-pill {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border: 1px solid rgba(226, 232, 240, 0.92) !important;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.1), 0 2px 8px rgba(15, 23, 42, 0.05) !important;
+}
+
+html[data-app-theme="light"] .app-bottom-nav-side-btn {
+  color: #94a3b8 !important;
+}
+
+html[data-app-theme="light"] .app-bottom-nav-side-btn:hover {
+  color: #475569 !important;
+}
+
+html[data-app-theme="light"] .app-bottom-nav-side-btn.is-active {
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .app-bottom-nav-hero {
+  background: var(--brand-color) !important;
+  color: var(--brand-contrast-color) !important;
+  border: none !important;
+  box-shadow: 0 10px 24px -2px color-mix(in srgb, var(--brand-color) 50%, transparent) !important;
+}
+
+html[data-app-theme="light"] .app-bottom-nav-hero svg {
+  color: var(--brand-contrast-color) !important;
+  stroke: var(--brand-contrast-color) !important;
 }
 
 html[data-app-theme="light"] .app-sidebar-item:hover {
