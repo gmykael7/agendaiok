@@ -1,3 +1,4 @@
+import { appConfirm } from '../components/common/ConfirmDialog';
 import { Modal } from "../components/common/Modal";
 import React, { useEffect, useMemo, useState } from 'react';
 import { KeyRound, Plus, ShieldCheck, Trash2, UserCog, Users, X, Eye, EyeOff, Save, UserRoundCheck, Sparkles } from 'lucide-react';
@@ -56,7 +57,7 @@ export const UsersPermissionsView: React.FC<{ barbers: Barber[]; currentUser?: C
     finally { setSaving(false); }
   };
   const remove = async (user: StaffUser) => {
-    if (!confirm(`Excluir o acesso de ${user.name}?`)) return;
+    if (!await appConfirm(`Excluir o acesso de ${user.name}?`, { danger: true })) return;
     try { const result = await saveStaffUser({ action:'delete', email:user.email }); setUsers(result.users || []); }
     catch(e:any) { setError(e.message || 'Não foi possível excluir.'); }
   };
@@ -151,7 +152,7 @@ export const UsersPermissionsView: React.FC<{ barbers: Barber[]; currentUser?: C
                 <p className="text-[10px] uppercase tracking-widest text-emerald-400 font-bold">Acesso da equipe</p>
                 <h4 className="text-lg sm:text-xl font-black text-white mt-0.5">{editing ? 'Editar usuário' : 'Novo usuário'}</h4>
               </div>
-              <button aria-label="Fechar janela" onClick={() => setModalOpen(false)} className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white"><X className="w-4 h-4" /></button>
+              <button aria-label="Fechar janela" onClick={() => setModalOpen(false)} className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white min-w-[44px] min-h-[44px] inline-flex items-center justify-center"><X className="w-4 h-4" /></button>
             </div>
             <div className="modal-scroll-body p-4 sm:p-6 space-y-4">
               <div className="grid sm:grid-cols-2 gap-3">

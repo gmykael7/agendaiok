@@ -112,10 +112,10 @@ export const PublicShowcase: React.FC<PublicShowcaseProps> = ({ org }) => {
 
           {visibleGallery.length > 1 && (
             <>
-              <button type="button" onClick={showPrevious} aria-label="Foto anterior" className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-black/55 p-2 text-white backdrop-blur hover:bg-black/75 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+              <button type="button" onClick={showPrevious} aria-label="Foto anterior" className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-black/55 p-2 text-white backdrop-blur hover:bg-black/75 focus:outline-none focus:ring-2 focus:ring-emerald-400 min-w-[44px] min-h-[44px] inline-flex items-center justify-center">
                 <ChevronLeft className="h-5 w-5" />
               </button>
-              <button type="button" onClick={showNext} aria-label="Próxima foto" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-black/55 p-2 text-white backdrop-blur hover:bg-black/75 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+              <button type="button" onClick={showNext} aria-label="Próxima foto" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-black/55 p-2 text-white backdrop-blur hover:bg-black/75 focus:outline-none focus:ring-2 focus:ring-emerald-400 min-w-[44px] min-h-[44px] inline-flex items-center justify-center">
                 <ChevronRight className="h-5 w-5" />
               </button>
               <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5" aria-label="Escolher foto">

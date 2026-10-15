@@ -7,3 +7,17 @@ export function readStoredArray<T>(key: string): T[] {
     return [];
   }
 }
+
+/**
+ * Gravação com proteção contra estouro de cota (QuotaExceededError).
+ * Se o navegador atingir o limite de 5MB, impede travamento da aplicação.
+ */
+export function safeSetItem(key: string, value: string): boolean {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    console.warn(`[storage] Limite de armazenamento local atingido para "${key}". Operando em memória.`, error);
+    return false;
+  }
+}

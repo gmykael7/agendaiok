@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AgendAI — vídeo promocional</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <main id="viewport"><div id="stage">
+    <div class="glow glow-one"></div><div class="glow glow-two"></div><div class="grid"></div>
+    <header class="mast"><img src="mark.png" alt=""><span>AgendAI</span><small>GESTÃO PARA BARBEARIAS</small></header>
+    <div id="scenes"></div>
+    <section class="scene fan-scene" id="scene-6"><div class="fan-heading"><small>TUDO CONECTADO</small><h1>Um sistema.<br><em>Mais possibilidades.</em></h1></div><div id="fan"></div><p>Agenda · Reservas · Atendimento · Clientes · Resultados</p></section>
+    <section class="scene end-scene" id="scene-7"><div class="end-halo"></div><img class="end-mark" src="mark.png" alt=""><img class="end-logo" src="logo.png" alt="AgendAI"><p>Você cuida do estilo.<br><strong>O AgendAI organiza o resto.</strong></p><div class="rule"></div><span>MEUAGENDAI.FUN</span></section>
+    <footer class="stage-footer"><span>AGEND<span class="gold">AI</span></span><i></i><small>UMA NOVA ROTINA PARA SUA BARBEARIA</small></footer>
+  </div></main>
+  <div class="controls"><button id="play" type="button">▶ Reproduzir</button><input id="seek" type="range" min="0" max="900" value="0" aria-label="Posição do vídeo"><span id="time">00:00 / 00:30</span><button id="restart" type="button" aria-label="Reiniciar">↺</button></div>
+  <div id="error" hidden></div>
+</body>
+</html>

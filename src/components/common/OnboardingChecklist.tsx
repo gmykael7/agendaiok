@@ -39,7 +39,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
           <h3 className="text-lg sm:text-xl font-black text-white mt-1">Deixe sua barbearia pronta para receber agendamentos</h3>
           <p className="text-xs text-slate-400 mt-1">Quatro passos rápidos para começar sem se perder nas configurações.</p>
         </div>
-        <button type="button" onClick={onDismiss} className="p-2 rounded-xl text-slate-500 hover:text-white hover:bg-slate-800" aria-label="Fechar primeiros passos">
+        <button type="button" onClick={onDismiss} className="p-2 rounded-xl text-slate-500 hover:text-white hover:bg-slate-800 min-w-[44px] min-h-[44px] inline-flex items-center justify-center" aria-label="Fechar primeiros passos">
           <X className="w-4 h-4" />
         </button>
       </div>

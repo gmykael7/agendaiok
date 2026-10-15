@@ -1,9 +1,10 @@
 import { Modal } from "../components/common/Modal";
+import { SwipeCard } from '../components/common/SwipeCard';
 import { useClipboard } from '../hooks/useClipboard';
 import React, { useState, useMemo } from 'react';
 import { 
   ArrowRight, Plus, Scissors, CheckCircle, Clock, 
-  X, Phone, Calendar, User, DollarSign, Share2, Copy, Check, MessageSquare, QrCode, CreditCard, Banknote, AlertCircle, UserRoundCheck, Play, Sparkles, TrendingUp, UserX, CheckCheck
+  X, Phone, Calendar, User, DollarSign, Share2, Copy, Check, MessageSquare, QrCode, CreditCard, Banknote, AlertCircle, UserRoundCheck, Play, Sparkles, TrendingUp, UserX, CheckCheck, Sunrise, Sun, Moon
 } from 'lucide-react';
 import { Appointment, Service, Barber, Organization, ProductSale } from '../types';
 import { getLocalDateKey, isBookableBusinessDateTime, timeToMinutes } from '../utils/scheduling';
@@ -11,6 +12,7 @@ import { getClientBookingUrl } from '../config/urls';
 import { appointmentStatusClasses, appointmentStatusLabel, blocksAppointmentSlot, isOpenAppointmentStatus } from '../utils/appointmentStatus';
 import { buildAppointmentWhatsAppUrl, WhatsAppAction } from '../utils/whatsapp';
 import { WhatsAppActionsModal } from '../components/common/WhatsAppActionsModal';
+import { AppTour } from '../components/common/AppTour';
 
 interface DashboardViewProps {
   appointments: Appointment[];
@@ -19,7 +21,7 @@ interface DashboardViewProps {
   barbers: Barber[];
   org: Organization;
   productSales?: ProductSale[];
-  onNavigateToAgenda: () => void;
+  onNavigateToAgenda: (appointmentId?: string) => void;
   onNavigateToServices: () => void;
 }
 
@@ -61,6 +63,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateToServices,
 }) => {
   const [showModal, setShowModal] = useState(false);
+  const [showTour, setShowTour] = useState(false);
+  const [tourCompleted, setTourCompleted] = useState(() => typeof window !== 'undefined' && localStorage.getItem('agendai_tour_completed') === '1');
   const [completingApp, setCompletingApp] = useState<Appointment | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit' | 'debit' | 'cash'>('pix');
   const { copied: copiedLink, error: copyError, copy } = useClipboard();
@@ -78,9 +82,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Saudação de acordo com o horário atual
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return { text: 'Bom dia', icon: '🌅' };
-    if (hour < 18) return { text: 'Boa tarde', icon: '🌤️' };
-    return { text: 'Boa noite', icon: '🌙' };
+    if (hour < 12) return { text: 'Bom dia', Icon: Sunrise };
+    if (hour < 18) return { text: 'Boa tarde', Icon: Sun };
+    return { text: 'Boa noite', Icon: Moon };
   }, []);
 
   // Data formatada em português
@@ -114,6 +118,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     })
     .sort((a, b) => `${a.date || todayStr} ${a.start_time}`.localeCompare(`${b.date || todayStr} ${b.start_time}`));
   const proximoCliente = allScheduled[0];
+  const proximoAtendimentoHoje = useMemo(() => todayAppointments
+    .filter((appointment) => isOpenAppointmentStatus(appointment.status))
+    .sort((a, b) => a.start_time.localeCompare(b.start_time))[0], [todayAppointments]);
 
   const publicLink = getClientBookingUrl(org.slug);
 
@@ -132,6 +139,35 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const handleCopyPublicLink = () => {
     void copy(publicLink);
+  };
+
+  const openNewAppointment = () => {
+    if (services.length === 0 || barbers.length === 0) {
+      alert('Cadastre serviços e profissionais nos ajustes antes de iniciar um atendimento.');
+      return;
+    }
+    setSelectedServiceIds(services[0] ? [services[0].id] : []);
+    setSelectedBarberId(barbers[0]?.id || '');
+    setModalError('');
+    setShowModal(true);
+  };
+
+  const advanceTodayAppointment = (appointment: Appointment) => {
+    if (appointment.status === 'scheduled' || appointment.status === 'confirmed') {
+      setAppointments((items) => items.map((item) => item.id === appointment.id ? { ...item, status: 'arrived' } : item));
+      return;
+    }
+    if (appointment.status === 'arrived') {
+      setAppointments((items) => items.map((item) => item.id === appointment.id ? { ...item, status: 'in_progress' } : item));
+      return;
+    }
+    if (appointment.status === 'in_progress') setCompletingApp(appointment);
+  };
+
+  const todayAction = (appointment: Appointment) => {
+    if (appointment.status === 'scheduled' || appointment.status === 'confirmed') return { label: 'Marcar chegada', icon: UserRoundCheck };
+    if (appointment.status === 'arrived') return { label: 'Iniciar atendimento', icon: Play };
+    return { label: 'Finalizar atendimento', icon: CheckCircle };
   };
 
   const toggleServiceSelection = (id: string) => {
@@ -221,100 +257,79 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     <div className="app-view space-y-5 sm:space-y-7 xl:space-y-8 animate-fadeIn">
       {copyError && <p role="status" className="text-sm text-amber-500">{copyError}</p>}
       {/* BANNER SUPERIOR DE BOAS-VINDAS */}
-      <div className="bg-[#121B2E] border border-slate-800 rounded-3xl p-4 sm:p-7 shadow-xl relative overflow-hidden">
+      <div className="dashboard-welcome-panel rounded-[24px] p-4 sm:p-6 relative overflow-hidden">
         <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-3 sm:gap-4">
           <div className="space-y-1 min-w-0">
-            <h2 className="text-lg sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-              <span aria-hidden="true">{greeting.icon}</span> {greeting.text}, {org.owner_name || org.name}!
+            <h2 className="text-lg sm:text-2xl font-bold tracking-tight flex items-center gap-2">
+              <greeting.Icon aria-hidden="true" className="h-5 w-5 shrink-0 text-amber-500" /> {greeting.text}, {org.owner_name || org.name}!
             </h2>
-            <p className="text-xs sm:text-sm text-slate-300 font-medium truncate">
-              {formattedDate} · Resumo da sua barbearia hoje.
-            </p>
+            <p className="text-xs sm:text-sm font-medium leading-relaxed">{formattedDate} · Resumo da sua barbearia hoje.</p>
           </div>
-
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <button
-              onClick={handleCopyPublicLink}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border border-emerald-500/40 text-emerald-400 bg-emerald-950/30 hover:bg-emerald-900/40 text-xs font-semibold transition-all shrink-0 active:scale-95 shadow-sm"
-              title="Copiar link de agendamento do cliente"
-            >
+            <button onClick={handleCopyPublicLink} className="inline-flex min-h-11 items-center gap-1.5 px-3 sm:px-3.5 rounded-xl text-xs font-semibold transition-all shrink-0 active:scale-95 shadow-sm" title="Copiar link de agendamento do cliente">
               {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
-              {copiedLink ? 'Link Copiado!' : 'Link Cliente'}
+              {copiedLink ? 'Link copiado!' : 'Link Cliente'}
             </button>
-
-            <button
-              onClick={onNavigateToAgenda}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border border-slate-700 text-slate-300 bg-slate-900 hover:bg-slate-800 text-xs font-semibold transition-all shrink-0 active:scale-95"
-            >
-              Ver agenda <ArrowRight className="w-3.5 h-3.5" />
+            <button onClick={() => onNavigateToAgenda()} className="inline-flex min-h-11 items-center gap-1.5 px-3 sm:px-3.5 rounded-xl text-xs font-semibold transition-all shrink-0 active:scale-95 shadow-sm">
+              <Calendar className="w-3.5 h-3.5" /> Ver agenda
             </button>
           </div>
         </div>
-
-        {/* SUB-CARDS DENTRO DO BANNER */}
-        <div className="grid grid-cols-2 gap-2 sm:gap-3.5 mt-4 sm:mt-6">
-          <div className="bg-[#0B1120]/90 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-sm min-w-0">
-            <p className="text-[9px] min-[380px]:text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
-              AGENDADOS HOJE
-            </p>
-            <p className="text-lg min-[380px]:text-xl sm:text-2xl xl:text-3xl font-black text-emerald-400 mt-1 tracking-tight font-mono leading-tight">
-              {todayScheduled.length} <span className="text-[11px] sm:text-xs font-sans font-semibold text-slate-300">aguardando</span>
-            </p>
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mt-4 sm:mt-6">
+          <div className="dashboard-welcome-stat rounded-2xl p-3 sm:p-4">
+            <p className="text-[10px] sm:text-[11px] font-bold tracking-widest uppercase">Agendados hoje</p>
+            <p className="text-2xl sm:text-3xl font-black mt-1">{todayScheduled.length}</p>
           </div>
-
-          <div className="bg-[#0B1120]/90 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-sm min-w-0">
-            <p className="text-[9px] min-[380px]:text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
-              PRÓXIMO CLIENTE
-            </p>
-            {proximoCliente ? (
-              <div className="mt-1 min-w-0">
-                <p className="text-xs min-[380px]:text-sm sm:text-base font-black text-white truncate">
-                  {proximoCliente.client_name} <span className="text-emerald-400 font-mono text-[11px] sm:text-xs">({proximoCliente.start_time})</span>
-                </p>
-                <span className="block text-[10px] sm:text-[11px] text-slate-400 truncate mt-0.5">
-                  {proximoCliente.barber_name}
-                </span>
-              </div>
-            ) : (
-              <p className="text-xs text-slate-400 mt-1">Nenhum pendente</p>
-            )}
+          <div className="dashboard-welcome-stat rounded-2xl p-3 sm:p-4">
+            <p className="text-[10px] sm:text-[11px] font-bold tracking-widest uppercase">Próximo cliente</p>
+            {proximoCliente ? <p className="text-sm sm:text-base font-bold mt-1 truncate">{proximoCliente.date && proximoCliente.date !== todayStr ? `${proximoCliente.date.split('-').reverse().slice(0, 2).join('/')} · ` : ''}{proximoCliente.start_time} · {proximoCliente.client_name}</p> : <p className="text-sm sm:text-base font-bold mt-1">Agenda livre</p>}
           </div>
         </div>
       </div>
 
+      {!tourCompleted && <div className="agendai-feature-card relative overflow-hidden rounded-3xl border border-[#FFC400]/25 bg-gradient-to-br from-[#17243A] via-[#0D1A2C] to-[#091321] p-5 shadow-xl shadow-[#FFC400]/[0.06] sm:p-6">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-[#FFC400]/10 blur-3xl" />
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="max-w-xl">
+            <span className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-[#FFC400]"><Sparkles className="h-3.5 w-3.5" /> AgendAI em ação</span>
+            <h3 className="mt-2 text-xl font-black tracking-tight text-white sm:text-2xl">Veja como sua operação fica mais simples.</h3>
+            <p className="mt-2 text-xs leading-relaxed text-slate-300 sm:text-sm">Um tour rápido mostra sua agenda, equipe, serviços, atendimentos e resultados usando os dados desta conta.</p>
+          </div>
+          <button type="button" onClick={() => setShowTour(true)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl border border-[#FFE071]/70 bg-[#FFC400] px-5 py-3 text-xs font-black text-[#07111F] shadow-lg shadow-[#FFC400]/15 transition hover:bg-[#FFD333] active:scale-95">Abrir tour <ArrowRight className="h-4 w-4" /></button>
+        </div>
+      </div>}
+
       {/* CARDS DE MÉTRICAS PRINCIPAIS (RESPONSIVOS NO CELULAR) */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-4 xl:gap-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4 xl:gap-5">
         {/* TOTAL EM CAIXA (HOJE) */}
-        <div className="stagger-item booking-card bg-[#121B2E] border border-slate-800 rounded-2xl p-3 sm:p-5 xl:p-6 shadow-md min-w-0">
-          <p className="text-[8px] min-[380px]:text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">
-            <span className="min-[380px]:hidden">FATURA</span>
-            <span className="hidden min-[380px]:inline sm:hidden">FATURAMENTO</span>
-            <span className="hidden sm:inline">FATURAMENTO HOJE</span>
+        <div className="stagger-item booking-card col-span-2 sm:col-span-1 bg-[#121B2E] rounded-2xl p-4 sm:p-5 xl:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.12)] min-w-0 transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.18)] hover:-translate-y-0.5">
+          <p className="text-[10px] sm:text-xs font-medium tracking-wider uppercase text-slate-400 truncate">
+            FATURAMENTO HOJE
           </p>
-          <p className="text-lg min-[380px]:text-xl sm:text-3xl xl:text-4xl font-black text-emerald-400 font-mono mt-1 sm:mt-2 tracking-tight truncate">
-            R$ {totalEmCaixaHoje.toFixed(0)}
+          <p className="text-2xl sm:text-3xl xl:text-4xl font-semibold text-emerald-400 font-mono mt-1 sm:mt-2 tracking-tight tabular-nums">
+            R$ {totalEmCaixaHoje.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </p>
           <p className="text-[9px] sm:text-[10px] text-slate-500 mt-1 hidden sm:block truncate">{todayCompleted.length} serviços • {todayProductSales.length} produtos</p>
         </div>
 
         {/* ATENDIMENTOS DO DIA */}
-        <div className="stagger-item booking-card bg-[#121B2E] border border-slate-800 rounded-2xl p-3 sm:p-5 xl:p-6 shadow-md min-w-0" style={{ animationDelay: '40ms' }}>
-          <p className="text-[8px] min-[380px]:text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">
+        <div className="stagger-item booking-card bg-[#121B2E] rounded-2xl p-4 sm:p-5 xl:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.12)] min-w-0 transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.18)] hover:-translate-y-0.5" style={{ animationDelay: '40ms' }}>
+          <p className="text-[10px] sm:text-xs font-medium tracking-wider uppercase text-slate-400 truncate">
             <span className="sm:hidden">ATENDIMENTOS</span>
             <span className="hidden sm:inline">ATENDIMENTOS DO DIA</span>
           </p>
-          <p className="text-lg min-[380px]:text-xl sm:text-3xl xl:text-4xl font-black text-white font-mono mt-1 sm:mt-2 tracking-tight">
+          <p className="text-lg min-[380px]:text-xl sm:text-3xl xl:text-4xl font-semibold text-white font-mono mt-1 sm:mt-2 tracking-tight">
             {todayAppointments.length}
           </p>
           <p className="text-[9px] sm:text-[10px] text-slate-500 mt-1 hidden sm:block truncate">{todayScheduled.length} agendados</p>
         </div>
 
         {/* TOTAL AGENDAMENTOS PENDENTES */}
-        <div className="stagger-item booking-card bg-[#121B2E] border border-slate-800 rounded-2xl p-3 sm:p-5 xl:p-6 shadow-md min-w-0" style={{ animationDelay: '80ms' }}>
-          <p className="text-[8px] min-[380px]:text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">
+        <div className="stagger-item booking-card bg-[#121B2E] rounded-2xl p-4 sm:p-5 xl:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.12)] min-w-0 transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.18)] hover:-translate-y-0.5" style={{ animationDelay: '80ms' }}>
+          <p className="text-[10px] sm:text-xs font-medium tracking-wider uppercase text-slate-400 truncate">
             EM ABERTO
           </p>
-          <p className="text-lg min-[380px]:text-xl sm:text-3xl xl:text-4xl font-black text-amber-400 font-mono mt-1 sm:mt-2 tracking-tight">
+          <p className="text-lg min-[380px]:text-xl sm:text-3xl xl:text-4xl font-semibold text-amber-400 font-mono mt-1 sm:mt-2 tracking-tight">
             {allScheduled.length}
           </p>
           <p className="text-[9px] sm:text-[10px] text-slate-500 mt-1 hidden sm:block">geral</p>
@@ -323,7 +338,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* SEÇÃO: ATENDIMENTOS DA BARBEARIA */}
       <div className="space-y-3.5 pt-1">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800/70 bg-slate-950/30 p-2 pl-3 sm:bg-transparent sm:border-0 sm:p-0">
           <div>
             <h3 className="text-base sm:text-xl font-bold text-white tracking-tight">
               Atendimentos Recentes
@@ -332,19 +347,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                if (services.length === 0 || barbers.length === 0) {
-                  alert('Cadastre serviços e profissionais nos ajustes antes de iniciar um atendimento.');
-                } else {
-                  setSelectedServiceIds(services[0] ? [services[0].id] : []);
-                  setSelectedBarberId(barbers[0]?.id || '');
-                  setModalError('');
-                  setShowModal(true);
-                }
-              }}
-              className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-[10px] sm:text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-emerald-500/10 active:scale-95 whitespace-nowrap"
+              onClick={openNewAppointment}
+              className="min-h-11 px-3 sm:px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-all shadow-md shadow-emerald-500/15 active:scale-95 whitespace-nowrap"
             >
-              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <Plus className="w-4 h-4" />
               <span>Novo atendimento</span>
             </button>
           </div>
@@ -353,8 +359,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* LISTA DE ATENDIMENTOS */}
         <div className="rounded-3xl">
           {appointments.length === 0 ? (
-            <div className="bg-[#121B2E] border border-slate-800 rounded-3xl shadow-lg p-8 sm:p-12 text-center max-w-md mx-auto space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/20">
+            <div className="bg-[#121B2E] rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.10)] p-8 sm:p-12 text-center max-w-md mx-auto space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
                 <Calendar className="w-6 h-6" />
               </div>
               <h4 className="font-bold text-white text-base">Nenhum atendimento registrado</h4>
@@ -369,16 +375,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 const formattedDateBadge = isToday ? 'HOJE' : new Date(app.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
                 return (
+                  <SwipeCard
+                    key={app.id}
+                    swipeRight={{ label: 'Ver na agenda', tone: 'success', onAction: () => onNavigateToAgenda(app.id) }}
+                  >
                   <div 
                     key={app.id}
                     style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}
-                    className="stagger-item appointment-person-card bg-[#121B2E] border border-slate-800 rounded-2xl p-3.5 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-6 shadow-md transition-all space-y-2 sm:space-y-0"
+                    className="stagger-item appointment-person-card bg-[#121B2E] rounded-2xl sm:rounded-3xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.14)] space-y-2 sm:space-y-0"
                   >
                     <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 flex-1">
                       <div className="w-14 sm:w-16 text-center shrink-0 space-y-1">
-                        <span className="text-base sm:text-xl font-black text-emerald-400 font-mono block leading-tight">{app.start_time}</span>
-                        <span className={`block w-full text-[11px] sm:text-xs font-black px-1 py-1 rounded-lg border leading-none ${
-                          isToday ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/35' : 'bg-slate-800 text-slate-200 border-slate-700'
+                        <span className="text-base sm:text-xl font-bold text-emerald-400 font-mono block leading-tight">{app.start_time}</span>
+                        <span className={`block w-full text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-lg leading-tight ${
+                          isToday ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-800 text-slate-300'
                         }`}>
                           {formattedDateBadge}
                         </span>
@@ -390,12 +400,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <div className="flex flex-wrap items-center gap-1.5">
                           {app.services && app.services.length > 0 ? (
                             app.services.map((srv, idx) => (
-                              <span key={idx} className="text-[10px] sm:text-[11px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/20 font-medium">
+                              <span key={idx} className="text-[11px] bg-emerald-500/10 text-emerald-300 px-2.5 py-0.5 rounded-lg font-medium">
                                 {srv.name}
                               </span>
                             ))
                           ) : (
-                            <span className="text-[10px] sm:text-[11px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/20 font-medium">
+                            <span className="text-[11px] bg-emerald-500/10 text-emerald-300 px-2.5 py-0.5 rounded-lg font-medium">
                               {app.service_name}
                             </span>
                           )}
@@ -410,7 +420,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             <button
                               type="button"
                               onClick={() => setWhatsAppAppointment(app)}
-                              className="text-emerald-400 hover:underline flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-md text-[10px] font-medium"
+                              className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/15 px-2.5 py-0.5 rounded-lg text-[10px] font-medium transition-colors"
                               title="Ações pelo WhatsApp"
                             >
                               <MessageSquare className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
@@ -421,8 +431,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/80 w-full md:w-auto">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[9px] sm:text-xs font-semibold shrink-0 ${appointmentStatusClasses(app.status)}`}>
+                    <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/40 w-full md:w-auto">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold shrink-0 ${appointmentStatusClasses(app.status)}`}>
                         {appointmentStatusLabel(app.status)}
                       </span>
 
@@ -431,25 +441,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           {(app.status === 'scheduled' || app.status === 'confirmed') && (
                             <button
                               onClick={() => setAppointments(prev => prev.map(a => a.id === app.id ? { ...a, status: 'arrived' } : a))}
-                              className="px-2.5 py-1 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/20 text-cyan-300 rounded-xl text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition-colors active:scale-95"
-                            ><UserRoundCheck className="w-3 h-3" /> Chegou</button>
+                              className="min-h-11 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors active:scale-95"
+                            ><UserRoundCheck className="w-3.5 h-3.5" /> Chegou</button>
                           )}
                           {app.status === 'arrived' && (
                             <button
                               onClick={() => setAppointments(prev => prev.map(a => a.id === app.id ? { ...a, status: 'in_progress' } : a))}
-                              className="px-2.5 py-1 bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/20 text-blue-300 rounded-xl text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition-colors active:scale-95"
-                            ><Play className="w-3 h-3" /> Iniciar</button>
+                              className="min-h-11 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors active:scale-95"
+                            ><Play className="w-3.5 h-3.5" /> Iniciar</button>
                           )}
                           {app.status === 'in_progress' && (
                             <button
                               onClick={() => setCompletingApp(app)}
-                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] sm:text-[11px] font-bold transition-colors flex items-center gap-1 active:scale-95 shadow-sm"
-                            ><CheckCircle className="w-3 h-3" /> Finalizar</button>
+                              className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-[11px] transition-all flex items-center gap-1.5 active:scale-95 shadow-md shadow-emerald-500/15"
+                            ><CheckCircle className="w-3.5 h-3.5" /> Finalizar</button>
                           )}
                         </div>
                       )}
                     </div>
                   </div>
+                  </SwipeCard>
                 );
               })}
             </div>
@@ -458,6 +469,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* MODAL CONCLUIR ATENDIMENTO (BOTTOM SHEET NO CELULAR) */}
+      {showTour && <AppTour appointments={appointments} barbers={barbers} services={services} productSales={productSales} onClose={() => setShowTour(false)} onComplete={() => { localStorage.setItem('agendai_tour_completed', '1'); setTourCompleted(true); }} />}
       <WhatsAppActionsModal
         open={Boolean(whatsAppAppointment)}
         recipientName={whatsAppAppointment?.client_name || 'cliente'}
@@ -478,7 +490,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <CheckCircle className="w-5 h-5 text-emerald-400" />
                 Concluir Atendimento
               </h3>
-              <button aria-label="Fechar janela" onClick={() => setCompletingApp(null)} className="text-slate-400 hover:text-white p-1 rounded-lg">
+              <button aria-label="Fechar janela" onClick={() => setCompletingApp(null)} className="text-slate-400 hover:text-white p-1 rounded-lg min-w-[44px] min-h-[44px] inline-flex items-center justify-center">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -567,7 +579,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </h3>
               <button aria-label="Fechar janela" 
                 onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-white p-1 rounded-lg min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -642,7 +654,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               <Check className="w-3 h-3 stroke-[3]" />
                             </span>
                             <span className="font-semibold">{s.name}</span>
-                            <span className="shrink-0 text-[10px] text-slate-500">({s.duration_minutes}m)</span>
+                            <span className="shrink-0 text-[10px] text-slate-400">({s.duration_minutes}m)</span>
                           </span>
                           <span className="shrink-0 whitespace-nowrap font-mono font-bold text-emerald-400">R$ {s.price.toFixed(2)}</span>
                         </button>

@@ -1,18 +1,23 @@
+import { appConfirm } from '../components/common/ConfirmDialog';
+import { MotionPreference } from '../components/common/MotionPreference';
+import { readStoredArray } from '../utils/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import { useClipboard } from '../hooks/useClipboard';
 import {
   Building2, Settings, Phone, MapPin, Clock,
   Sparkles, RotateCcw, Check, Copy, ExternalLink, Share2, Smartphone, Download, Upload,
   Palette, BellRing, ShieldCheck, CloudDownload, Loader2, Info, MessageSquareText, Image as ImageIcon, Tv2, Youtube, Music2, Eye, EyeOff, DollarSign, Volume2, CalendarOff, Trash2,
-  Layout, Sliders, Scissors, CheckCircle, Flame, Moon, Sun, Layers, Sparkle, Plus, ArrowUp, ArrowDown, Instagram, Facebook, AtSign, Globe2, MapPinned
+  Layout, CheckCircle, Flame, Moon, Sun, Monitor, Plus, ArrowUp, ArrowDown, Instagram, Facebook, AtSign, Globe2, MapPinned, LocateFixed, Power
 } from 'lucide-react';
-import { BusinessClosurePeriod, Organization, PublicGalleryImage, UiBorderRadius, UiSurfaceStyle } from '../types';
+import { BusinessClosurePeriod, Organization, PublicGalleryImage } from '../types';
+import { AppThemeMode, AppThemePreference } from '../config/theme';
 import { INITIAL_ORG, INITIAL_SERVICES, INITIAL_BARBERS, INITIAL_APPOINTMENTS } from '../data/mockData';
 import { restoreLastCloudBackup, saveTvSettingsToCloud } from '../services/cloudSync';
 import { enablePushNotifications, getPushSubscriptionState, getPushSupportMessage } from '../services/pushNotifications';
 import { getAdminAppUrl, getClientBookingUrl, getTvDisplayUrl } from '../config/urls';
-import { getReadableTextColor, isLightColor, deriveAccentColor } from '../utils/color';
+import { getReadableTextColor } from '../utils/color';
 import { isSafePublicUrl, PUBLIC_GALLERY_LIMIT, sanitizePublicGallery, sanitizeSocialLinks, SOCIAL_LINK_KEYS, SocialLinkKey } from '../utils/publicShowcase';
+import { BRAZIL_STATES } from '../utils/directory';
 
 interface SettingsViewProps {
   section?: 'general' | 'appearance';
@@ -25,167 +30,11 @@ interface SettingsViewProps {
     appointments: typeof INITIAL_APPOINTMENTS;
   }) => void;
   onResetAll: () => void;
+  appThemeMode: AppThemeMode;
+  setAppThemeMode: React.Dispatch<React.SetStateAction<AppThemeMode>>;
+  appThemePreference: AppThemePreference;
+  followSystemTheme: () => void;
 }
-
-export interface ThemePreset {
-  id: string;
-  name: string;
-  niche: string;
-  tag: string;
-  primary: string;
-  accent: string;
-  background: string;
-  surface: string;
-  surfaceStyle: UiSurfaceStyle;
-  borderRadius: UiBorderRadius;
-}
-
-const THEME_PRESETS: ThemePreset[] = [
-  {
-    id: 'onyx_gold',
-    name: 'Onyx & Gold',
-    niche: 'Barbearia Clássica',
-    tag: 'Old School / Whisky',
-    primary: '#D4AF37',
-    accent: '#F59E0B',
-    background: '#090806',
-    surface: '#17140E',
-    surfaceStyle: 'glow',
-    borderRadius: 'standard',
-  },
-  {
-    id: 'midnight_cyan',
-    name: 'Midnight Cyan',
-    niche: 'Barbearia Urbana',
-    tag: 'Cyber / Tech',
-    primary: '#06B6D4',
-    accent: '#3B82F6',
-    background: '#060D1A',
-    surface: '#0E1B33',
-    surfaceStyle: 'glass',
-    borderRadius: 'standard',
-  },
-  {
-    id: 'esmeralda_imperial',
-    name: 'Esmeralda Imperial',
-    niche: 'Executivo & Moderno',
-    tag: 'Elegância Verde',
-    primary: '#10B981',
-    accent: '#34D399',
-    background: '#07100D',
-    surface: '#10211B',
-    surfaceStyle: 'glow',
-    borderRadius: 'soft',
-  },
-  {
-    id: 'rose_gold_velvet',
-    name: 'Rose Gold & Velvet',
-    niche: 'Salão & Estética',
-    tag: 'Beauty / Luxury',
-    primary: '#FB7185',
-    accent: '#F43F5E',
-    background: '#0F0A0E',
-    surface: '#1F141D',
-    surfaceStyle: 'glass',
-    borderRadius: 'soft',
-  },
-  {
-    id: 'espresso_amber',
-    name: 'Espresso & Amber',
-    niche: 'Vintage & Madeira',
-    tag: 'Couro / Tabaco',
-    primary: '#E08A3C',
-    accent: '#F59E0B',
-    background: '#0E0B09',
-    surface: '#1C1613',
-    surfaceStyle: 'solid',
-    borderRadius: 'standard',
-  },
-  {
-    id: 'deep_purple',
-    name: 'Deep Purple & Neon',
-    niche: 'Studio Criativo',
-    tag: 'Tattoo / Concept',
-    primary: '#A855F7',
-    accent: '#6366F1',
-    background: '#0C0816',
-    surface: '#18112C',
-    surfaceStyle: 'glass',
-    borderRadius: 'standard',
-  },
-  {
-    id: 'rubi_dark',
-    name: 'Rubi & Dark Metal',
-    niche: 'Garage & Rock',
-    tag: 'Automotivo / Industrial',
-    primary: '#EF4444',
-    accent: '#F87171',
-    background: '#0F0808',
-    surface: '#1E1010',
-    surfaceStyle: 'glow',
-    borderRadius: 'compact',
-  },
-  {
-    id: 'clean_nordic',
-    name: 'Clean Nordic',
-    niche: 'Minimalista Claro',
-    tag: 'Branco Puro / Contraste',
-    primary: '#0F172A',
-    accent: '#3B82F6',
-    background: '#F8FAFC',
-    surface: '#FFFFFF',
-    surfaceStyle: 'solid',
-    borderRadius: 'standard',
-  },
-  {
-    id: 'luxury_white_gold',
-    name: 'Luxury White & Gold',
-    niche: 'Estética & Clínica',
-    tag: 'Claro Sofisticado',
-    primary: '#D97706',
-    accent: '#F59E0B',
-    background: '#FFFFFF',
-    surface: '#F4F6F8',
-    surfaceStyle: 'solid',
-    borderRadius: 'soft',
-  },
-  {
-    id: 'ocean_blue',
-    name: 'Ocean Navy',
-    niche: 'Náutico & Moderno',
-    tag: 'Azul Nobre',
-    primary: '#3B82F6',
-    accent: '#60A5FA',
-    background: '#07101F',
-    surface: '#111C32',
-    surfaceStyle: 'glass',
-    borderRadius: 'standard',
-  },
-  {
-    id: 'sunset_tropic',
-    name: 'Sunset Tropic',
-    niche: 'Jovem & Dinâmico',
-    tag: 'Laranja Solar',
-    primary: '#FF6B4A',
-    accent: '#FBBF24',
-    background: '#0F0A0A',
-    surface: '#1F1414',
-    surfaceStyle: 'glow',
-    borderRadius: 'standard',
-  },
-  {
-    id: 'carbon_titanium',
-    name: 'Carbon Titanium',
-    niche: 'Monocromático Dark',
-    tag: 'Minimalista Preto',
-    primary: '#E2E8F0',
-    accent: '#94A3B8',
-    background: '#09090B',
-    surface: '#18181B',
-    surfaceStyle: 'solid',
-    borderRadius: 'compact',
-  },
-];
 
 const SOCIAL_LINK_FIELDS: Array<{
   key: SocialLinkKey;
@@ -209,25 +58,68 @@ const localDateInputValue = (date = new Date()): string => {
 const formatClosureDate = (dateStr: string): string =>
   new Date(`${dateStr}T00:00:00`).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
 
+interface SettingsToggleProps {
+  checked: boolean;
+  onClick: () => void;
+  label: string;
+  disabled?: boolean;
+  disabledLabel?: string;
+}
+
+/** Ação textual: o estado atual fica no selo e este botão diz exatamente o que fará. */
+const SettingsToggle: React.FC<SettingsToggleProps> = ({ checked, onClick, label, disabled = false, disabledLabel }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={checked}
+    aria-label={disabled ? disabledLabel || label : `${checked ? 'Desativar' : 'Ativar'} ${label}`}
+    title={disabled ? disabledLabel || label : `${checked ? 'Desativar' : 'Ativar'} ${label}`}
+    disabled={disabled}
+    className={`inline-flex h-11 min-w-28 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1120] disabled:cursor-not-allowed disabled:opacity-55 ${checked ? 'border-slate-600 bg-slate-800 text-white hover:border-slate-500 hover:bg-slate-700' : 'border-emerald-400 bg-emerald-500 text-slate-950 hover:bg-emerald-400'}`}
+  >
+    <Power aria-hidden="true" className="h-4 w-4" />
+    {disabled ? 'Complete os dados' : checked ? 'Desativar' : 'Ativar'}
+  </button>
+);
+
+const FeatureState: React.FC<{ active: boolean; pendingLabel?: string }> = ({ active, pendingLabel }) => (
+  <span className={`inline-flex min-h-7 items-center rounded-full border px-2.5 text-[10px] font-black uppercase tracking-wide ${pendingLabel ? 'border-amber-400/35 bg-amber-400/10 text-amber-200' : active ? 'border-emerald-400/35 bg-emerald-400/10 text-emerald-200' : 'border-slate-300 bg-slate-100 text-slate-600'}`}>
+    {pendingLabel || (active ? 'Ativado' : 'Desativado')}
+  </span>
+);
+
 export const SettingsView: React.FC<SettingsViewProps> = ({
   section = 'general',
   org,
   setOrg,
   onLoadDemo,
   onResetAll,
+  appThemeMode,
+  setAppThemeMode,
+  appThemePreference,
+  followSystemTheme,
 }) => {
   const [name, setName] = useState(org.name);
+  const [backupNotice, setBackupNotice] = useState('');
   const [ownerName, setOwnerName] = useState(org.owner_name || '');
   const [slug, setSlug] = useState(org.slug);
   const [phone, setPhone] = useState(org.phone);
   const [pixKey, setPixKey] = useState(org.pix_key || '');
   const [pixHolder, setPixHolder] = useState(org.pix_holder || '');
   const [address, setAddress] = useState(org.address || '');
+  const [city, setCity] = useState(org.city || '');
+  const [state, setState] = useState(org.state || '');
+  const [neighborhood, setNeighborhood] = useState(org.neighborhood || '');
+  const [directoryVisible, setDirectoryVisible] = useState(org.directory_visible === true);
+  const [directoryLatitude, setDirectoryLatitude] = useState<number | undefined>(org.directory_latitude);
+  const [directoryLongitude, setDirectoryLongitude] = useState<number | undefined>(org.directory_longitude);
+  const [directoryLocationMessage, setDirectoryLocationMessage] = useState('');
   const [openHour, setOpenHour] = useState(org.open_hour || '08:00');
   const [closeHour, setCloseHour] = useState(org.close_hour || '20:00');
   const [breakEnabled, setBreakEnabled] = useState(org.break_enabled === true);
   const [breakStart, setBreakStart] = useState(org.break_start || '12:00');
   const [breakEnd, setBreakEnd] = useState(org.break_end || '14:00');
+  const [rotationEnabled, setRotationEnabled] = useState(org.rotation_enabled === true);
   const [closedPeriods, setClosedPeriods] = useState<BusinessClosurePeriod[]>(Array.isArray(org.closed_periods) ? org.closed_periods : []);
   const [closureDate, setClosureDate] = useState(localDateInputValue());
   const [closureMode, setClosureMode] = useState<'all_day' | 'morning' | 'afternoon' | 'custom'>('all_day');
@@ -235,15 +127,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [closureEnd, setClosureEnd] = useState(org.close_hour || '20:00');
   const [closureReason, setClosureReason] = useState('Fechado excepcionalmente');
 
-  // Configurações de tema
+  // A única personalização visual da barbearia é a cor das ações principais.
   const [primaryColor, setPrimaryColor] = useState(org.primary_color || '#10b981');
-  const [accentColor, setAccentColor] = useState(org.accent_color || deriveAccentColor(org.primary_color || '#10b981'));
-  const [backgroundColor, setBackgroundColor] = useState(org.background_color || '#070B14');
-  const [surfaceColor, setSurfaceColor] = useState(org.surface_color || '#121B2E');
-  const [themePreset, setThemePreset] = useState<string>(org.theme_preset || 'esmeralda_imperial');
-  const [uiBorderRadius, setUiBorderRadius] = useState<UiBorderRadius>(org.ui_border_radius || 'standard');
-  const [uiSurfaceStyle, setUiSurfaceStyle] = useState<UiSurfaceStyle>(org.ui_surface_style || 'solid');
-  const [previewTab, setPreviewTab] = useState<'dashboard' | 'booking'>('dashboard');
 
   const [coverImageUrl, setCoverImageUrl] = useState(org.cover_image_url || '');
   const [logoImageUrl, setLogoImageUrl] = useState(org.logo_image_url || '');
@@ -282,6 +167,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isEnablingNotifications, setIsEnablingNotifications] = useState(false);
   const [isRestoringCloud, setIsRestoringCloud] = useState(false);
   const [cloudRestoreMessage, setCloudRestoreMessage] = useState('');
+  const directoryHasRequiredLocation = Boolean(city.trim()) && BRAZIL_STATES.includes(state.toUpperCase());
 
   useEffect(() => {
     setName(org.name);
@@ -291,19 +177,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setPixKey(org.pix_key || '');
     setPixHolder(org.pix_holder || '');
     setAddress(org.address || '');
+    setCity(org.city || '');
+    setState(org.state || '');
+    setNeighborhood(org.neighborhood || '');
+    setDirectoryVisible(org.directory_visible === true);
+    setDirectoryLatitude(org.directory_latitude);
+    setDirectoryLongitude(org.directory_longitude);
     setOpenHour(org.open_hour || '08:00');
     setCloseHour(org.close_hour || '20:00');
     setBreakEnabled(org.break_enabled === true);
     setBreakStart(org.break_start || '12:00');
     setBreakEnd(org.break_end || '14:00');
+    setRotationEnabled(org.rotation_enabled === true);
     setClosedPeriods(Array.isArray(org.closed_periods) ? org.closed_periods : []);
     setPrimaryColor(org.primary_color || '#10b981');
-    setAccentColor(org.accent_color || deriveAccentColor(org.primary_color || '#10b981'));
-    setBackgroundColor(org.background_color || '#070B14');
-    setSurfaceColor(org.surface_color || '#121B2E');
-    setThemePreset(org.theme_preset || 'esmeralda_imperial');
-    setUiBorderRadius(org.ui_border_radius || 'standard');
-    setUiSurfaceStyle(org.ui_surface_style || 'solid');
     setCoverImageUrl(org.cover_image_url || '');
     setLogoImageUrl(org.logo_image_url || '');
     setGalleryImages(sanitizePublicGallery(org.public_gallery));
@@ -352,19 +239,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     pix_key: pixKey.trim() || undefined,
     pix_holder: pixHolder.trim() || undefined,
     address: address.trim() || undefined,
+    city: city.trim() || undefined,
+    state: BRAZIL_STATES.includes(state.toUpperCase()) ? state.toUpperCase() : undefined,
+    neighborhood: neighborhood.trim() || undefined,
+    directory_visible: directoryVisible && Boolean(city.trim()) && BRAZIL_STATES.includes(state.toUpperCase()),
+    directory_latitude: Number.isFinite(directoryLatitude) ? directoryLatitude : undefined,
+    directory_longitude: Number.isFinite(directoryLongitude) ? directoryLongitude : undefined,
     open_hour: openHour,
     close_hour: closeHour,
     break_enabled: breakEnabled,
     break_start: breakStart,
     break_end: breakEnd,
+    rotation_enabled: rotationEnabled,
     closed_periods: periods,
     primary_color: primaryColor,
-    accent_color: accentColor,
-    background_color: backgroundColor,
-    surface_color: surfaceColor,
-    theme_preset: themePreset,
-    ui_border_radius: uiBorderRadius,
-    ui_surface_style: uiSurfaceStyle,
     cover_image_url: coverImageUrl.trim() || undefined,
     logo_image_url: logoImageUrl.trim() || undefined,
     public_gallery: sanitizePublicGallery(galleryImages),
@@ -388,10 +276,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   });
 
   const autoSaveFingerprint = JSON.stringify([
-    name, ownerName, slug, phone, pixKey, pixHolder, address,
-    openHour, closeHour, breakEnabled, breakStart, breakEnd, closedPeriods,
-    primaryColor, accentColor, backgroundColor, surfaceColor, themePreset,
-    uiBorderRadius, uiSurfaceStyle, coverImageUrl, logoImageUrl, galleryImages, socialLinks,
+    name, ownerName, slug, phone, pixKey, pixHolder, address, city, state, neighborhood, directoryVisible, directoryLatitude, directoryLongitude,
+    openHour, closeHour, breakEnabled, breakStart, breakEnd, rotationEnabled, closedPeriods,
+    primaryColor, coverImageUrl, logoImageUrl, galleryImages, socialLinks,
     tvEnabled, tvMediaType, tvMediaUrl, tvVisualMode, tvAnimations, tvNotice,
     tvShowClientNames, tvShowPrices, tvSoundEnabled, tvSoundVolume, tvSoundStyle,
     confirmTemplate, reminderTemplate, thanksTemplate, inactiveTemplate,
@@ -425,14 +312,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     if (savedSuccessTimerRef.current) clearTimeout(savedSuccessTimerRef.current);
   }, []);
 
-  const handleApplyPreset = (preset: ThemePreset) => {
-    setThemePreset(preset.id);
-    setPrimaryColor(preset.primary);
-    setAccentColor(preset.accent);
-    setBackgroundColor(preset.background);
-    setSurfaceColor(preset.surface);
-    setUiSurfaceStyle(preset.surfaceStyle);
-    setUiBorderRadius(preset.borderRadius);
+  const saveDirectoryLocation = () => {
+    if (!navigator.geolocation) {
+      setDirectoryLocationMessage('Este navegador não oferece localização.');
+      return;
+    }
+    setDirectoryLocationMessage('Solicitando sua localização…');
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setDirectoryLatitude(Number(coords.latitude.toFixed(6)));
+        setDirectoryLongitude(Number(coords.longitude.toFixed(6)));
+        setDirectoryLocationMessage('Localização salva para a busca por proximidade.');
+      },
+      () => setDirectoryLocationMessage('Não foi possível obter a localização. Autorize o acesso no navegador e tente novamente.'),
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 86_400_000 },
+    );
   };
 
   const resolveClosureTimes = () => {
@@ -564,7 +458,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const handleRestoreCloudBackup = async () => {
-    if (!window.confirm('Restaurar o último backup da nuvem? Os dados atuais serão substituídos pelo snapshot de segurança mais recente.')) return;
+    if (!await appConfirm('Restaurar o último backup da nuvem? Os dados atuais serão substituídos pelo snapshot de segurança mais recente.', { danger: true })) return;
     setIsRestoringCloud(true);
     setCloudRestoreMessage('');
     try {
@@ -597,23 +491,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     void mobileClipboard.copy(generateMobileSyncLink());
   };
 
-  const handleExportBackup = () => {
+  const handleExportBackup = async () => {
     const backup = {
       org,
-      savedOrgs: JSON.parse(localStorage.getItem('agendai_all_orgs') || '[]'),
-      services: JSON.parse(localStorage.getItem('agendai_services') || '[]'),
-      barbers: JSON.parse(localStorage.getItem('agendai_barbers') || '[]'),
-      appointments: JSON.parse(localStorage.getItem('agendai_appointments') || '[]'),
-      clients: JSON.parse(localStorage.getItem('agendai_clients') || '[]'),
+      savedOrgs: readStoredArray('agendai_all_orgs'),
+      services: readStoredArray('agendai_services'),
+      barbers: readStoredArray('agendai_barbers'),
+      appointments: readStoredArray('agendai_appointments'),
+      clients: readStoredArray('agendai_clients'),
       exportedAt: new Date().toISOString(),
     };
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+    const fileName = `backup-${org.slug}-${new Date().toISOString().split('T')[0]}.json`;
+    const file = new File([JSON.stringify(backup, null, 2)], fileName, { type: 'application/json' });
+
+    // iPhone/iPad: a folha de compartilhamento deixa salvar em Arquivos sem o Safari
+    // abrir uma pré-visualização que parece uma tela em branco.
+    if (typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: fileName });
+        setBackupNotice('Backup pronto. Escolha "Salvar em Arquivos" para guardá-lo.');
+      } catch (error) {
+        // Usuário cancelou a folha de compartilhamento: não é erro.
+        if ((error as Error)?.name !== 'AbortError') setBackupNotice('Não foi possível compartilhar o backup. Tente novamente.');
+      }
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `backup-${org.slug}-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(url);
+    setBackupNotice('Backup baixado. Confira em Downloads ou no app Arquivos.');
   };
 
   const handleImportBackup = () => {
@@ -632,10 +542,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       alert('❌ Erro: Formato de JSON de backup inválido.');
     }
   };
-
-  const previewIsLight = isLightColor(backgroundColor);
-  const previewRadiusPx = uiBorderRadius === 'compact' ? '8px' : uiBorderRadius === 'soft' ? '24px' : '16px';
-  const previewButtonRadius = uiBorderRadius === 'compact' ? '6px' : uiBorderRadius === 'soft' ? '999px' : '12px';
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-fadeIn max-w-5xl">
@@ -700,7 +606,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <form onSubmit={handleSave} className="space-y-6">
         <div className="fixed bottom-6 right-6 z-40 hidden md:flex items-center justify-end gap-3 pointer-events-none">
           {savedSuccess && (
-            <span className="pointer-events-auto rounded-xl border border-emerald-500/30 bg-[#121B2E]/95 px-3 py-2.5 text-xs font-semibold text-emerald-400 shadow-xl backdrop-blur flex items-center gap-1">
+            <span role="status" aria-live="polite" className="settings-save-toast pointer-events-auto rounded-xl border px-3 py-2.5 text-xs font-semibold shadow-xl backdrop-blur flex items-center gap-1">
               <Check className="w-4 h-4" /> Salvo com sucesso!
             </span>
           )}
@@ -710,394 +616,102 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {section === 'appearance' && (
-        <div className="bg-[#121B2E] border border-slate-800 p-5 sm:p-7 rounded-3xl space-y-7 shadow-xl">
-          {/* CABEÇALHO DO TEMA */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-5">
-            <div className="flex items-center gap-3">
+          <div className="bg-[#121B2E] border border-slate-800 p-5 sm:p-7 rounded-3xl space-y-7 shadow-xl">
+            <div className="flex items-start gap-3 border-b border-slate-800 pb-5">
               <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
                 <Palette className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white tracking-tight">Estilo Visual & Personalização de Temas</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Escolha uma atmosfera calibrada por nicho ou ajuste manualmente cada detalhe da sua marca.</p>
+                <h3 className="text-base font-bold text-white tracking-tight">Aparência simples e consistente</h3>
+                <p className="text-xs text-slate-400 mt-0.5">O AgendAI usa somente os temas claro e escuro. A única personalização da barbearia é a cor dos botões principais.</p>
               </div>
             </div>
 
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#0B1120] border border-slate-800 text-xs">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-slate-300 font-medium">{THEME_PRESETS.length} Coleções Prontas</span>
-            </div>
-          </div>
-
-          {/* 1. COLEÇÕES DE TEMAS PRONTOS */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                <Layers className="w-3.5 h-3.5 text-emerald-400" />
-                1. Coleções Prontas por Nicho
-              </h4>
-              <span className="text-[11px] text-slate-500">Clique para aplicar instantaneamente</span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {THEME_PRESETS.map((preset) => {
-                const isSelected = themePreset === preset.id || (
-                  primaryColor.toLowerCase() === preset.primary.toLowerCase() &&
-                  backgroundColor.toLowerCase() === preset.background.toLowerCase()
-                );
-
-                return (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => handleApplyPreset(preset)}
-                    className={`rounded-2xl border p-3 text-left transition-all relative overflow-hidden group active:scale-95 ${
-                      isSelected
-                        ? 'border-emerald-400 ring-2 ring-emerald-400/25 bg-emerald-500/10 shadow-lg'
-                        : 'border-slate-800 bg-[#0B1120] hover:border-slate-700'
-                    }`}
-                  >
-                    <div
-                      className="h-10 rounded-xl overflow-hidden flex border border-white/10 shadow-inner p-1 gap-1"
-                      style={{ backgroundColor: preset.background }}
-                    >
-                      <div className="w-1/3 h-full rounded-lg shadow-sm" style={{ backgroundColor: preset.primary }} />
-                      <div className="w-1/4 h-full rounded-lg opacity-80" style={{ backgroundColor: preset.accent }} />
-                      <div className="flex-1 h-full rounded-lg border border-white/5" style={{ backgroundColor: preset.surface }} />
-                    </div>
-
-                    <div className="mt-2.5 space-y-0.5">
-                      <div className="flex items-center justify-between">
-                        <strong className="text-xs text-white truncate block">{preset.name}</strong>
-                        {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
-                      </div>
-                      <span className="text-[10px] text-emerald-400/90 font-semibold block truncate">{preset.niche}</span>
-                      <span className="text-[9px] text-slate-500 block truncate">{preset.tag}</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 2. AJUSTES FINOS DE CORES */}
-          <div className="space-y-3 pt-2 border-t border-slate-800">
-            <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <Sliders className="w-3.5 h-3.5 text-emerald-400" />
-              2. Ajuste Fino de Cores
-            </h4>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {[
-                { label: 'Cor Principal (Marca)', value: primaryColor, setter: setPrimaryColor, desc: 'Botões, ícones e destaque ativo' },
-                { label: 'Cor de Destaque (Acento)', value: accentColor, setter: setAccentColor, desc: 'Gradientes e badges complementares' },
-                { label: 'Fundo do Aplicativo', value: backgroundColor, setter: setBackgroundColor, desc: 'Claro ativa o tema light completo' },
-                { label: 'Superfície dos Cards', value: surfaceColor, setter: setSurfaceColor, desc: 'Painéis, modais e cartões' },
-              ].map((item) => (
-                <label key={item.label} className="bg-[#0B1120] border border-slate-800 rounded-2xl p-3.5 flex items-center gap-3.5 cursor-pointer hover:border-slate-700 transition-colors">
-                  <div className="relative shrink-0">
-                    <input
-                      type="color"
-                      value={item.value}
-                      onChange={(e) => {
-                        setThemePreset('custom');
-                        item.setter(e.target.value);
-                      }}
-                      className="w-10 h-10 rounded-xl bg-transparent border-0 cursor-pointer"
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[11px] font-bold text-slate-300 block truncate">{item.label}</span>
-                    <span className="text-xs font-mono uppercase text-emerald-400 font-semibold">{item.value}</span>
-                    <span className="text-[9px] text-slate-500 block truncate mt-0.5">{item.desc}</span>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* 3. PERSONALIDADE DA INTERFACE */}
-          <div className="space-y-4 pt-2 border-t border-slate-800">
-            <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <Layout className="w-3.5 h-3.5 text-emerald-400" />
-              3. Personalidade da Interface (UI/UX)
-            </h4>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-[#0B1120] p-4 rounded-2xl border border-slate-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white">Arredondamento das Bordas</span>
-                  <span className="text-[10px] text-slate-400">
-                    {uiBorderRadius === 'compact' ? 'Tech / Reto (8px)' : uiBorderRadius === 'soft' ? 'Orgânico / Suave (24px)' : 'Padrão Moderno (16px)'}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: 'compact', label: 'Compacto', sub: 'Tech / Sharp' },
-                    { id: 'standard', label: 'Padrão', sub: 'Equilibrado' },
-                    { id: 'soft', label: 'Orgânico', sub: 'Soft / Pill' },
-                  ].map((rad) => (
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Layout className="w-4 h-4 text-emerald-400" />
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Tema do sistema</h4>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { mode: 'system' as const, title: 'Automático', description: 'Acompanha este aparelho.', icon: Monitor },
+                  { mode: 'dark' as const, title: 'Modo escuro', description: 'Foco e contraste para o dia a dia.', icon: Moon },
+                  { mode: 'light' as const, title: 'Modo claro', description: 'Leitura leve em ambientes iluminados.', icon: Sun },
+                ].map(({ mode, title, description, icon: Icon }) => {
+                  const active = appThemePreference === mode;
+                  return (
                     <button
-                      key={rad.id}
+                      key={mode}
                       type="button"
-                      onClick={() => setUiBorderRadius(rad.id as UiBorderRadius)}
-                      className={`p-2.5 rounded-xl border text-left transition-all ${
-                        uiBorderRadius === rad.id
-                          ? 'bg-emerald-500/15 border-emerald-500/40 text-white'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                      onClick={() => mode === 'system' ? followSystemTheme() : setAppThemeMode(mode)}
+                      aria-pressed={active}
+                      className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition-all ${
+                        active ? 'border-emerald-400 bg-emerald-500/10 ring-1 ring-emerald-400/30' : 'border-slate-800 bg-[#0B1120] hover:border-slate-700'
                       }`}
                     >
-                      <strong className="block text-xs leading-tight">{rad.label}</strong>
-                      <span className="block text-[9px] text-slate-500 mt-0.5">{rad.sub}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-[#0B1120] p-4 rounded-2xl border border-slate-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white">Acabamento dos Painéis</span>
-                  <span className="text-[10px] text-slate-400">
-                    {uiSurfaceStyle === 'glass' ? 'Glassmorphism (Vidro)' : uiSurfaceStyle === 'glow' ? 'Neon Glow (Iluminado)' : 'Sólido Profundo'}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: 'solid', label: 'Sólido', sub: 'Opaco profundo' },
-                    { id: 'glass', label: 'Glass', sub: 'Vidro translúcido' },
-                    { id: 'glow', label: 'Neon Glow', sub: 'Borda iluminada' },
-                  ].map((style) => (
-                    <button
-                      key={style.id}
-                      type="button"
-                      onClick={() => setUiSurfaceStyle(style.id as UiSurfaceStyle)}
-                      className={`p-2.5 rounded-xl border text-left transition-all ${
-                        uiSurfaceStyle === style.id
-                          ? 'bg-emerald-500/15 border-emerald-500/40 text-white'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <strong className="block text-xs leading-tight">{style.label}</strong>
-                      <span className="block text-[9px] text-slate-500 mt-0.5">{style.sub}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 4. SIMULADOR EM TEMPO REAL */}
-          <div className="space-y-3 pt-2 border-t border-slate-800">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                <Sparkle className="w-3.5 h-3.5 text-amber-400" />
-                4. Simulador em Tempo Real (Preview ao Vivo)
-              </h4>
-
-              <div className="flex items-center gap-1.5 bg-[#0B1120] p-1 rounded-xl border border-slate-800 self-start sm:self-auto">
-                <button
-                  type="button"
-                  onClick={() => setPreviewTab('dashboard')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                    previewTab === 'dashboard'
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Painel do Salão
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreviewTab('booking')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                    previewTab === 'booking'
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Página do Cliente
-                </button>
-              </div>
-            </div>
-
-            <div
-              className="rounded-3xl border border-slate-700/80 p-4 sm:p-6 transition-all duration-300 shadow-2xl overflow-hidden relative"
-              style={{
-                backgroundColor,
-                color: previewIsLight ? '#172033' : '#FFFFFF',
-              }}
-            >
-              <div
-                className="absolute -top-12 -left-12 w-48 h-48 rounded-full opacity-20 pointer-events-none blur-3xl"
-                style={{ backgroundColor: primaryColor }}
-              />
-              <div
-                className="absolute -bottom-12 -right-12 w-48 h-48 rounded-full opacity-15 pointer-events-none blur-3xl"
-                style={{ backgroundColor: accentColor }}
-              />
-
-              {previewTab === 'dashboard' ? (
-                <div className="space-y-4 relative z-10">
-                  <div
-                    className="p-3.5 flex items-center justify-between border transition-all"
-                    style={{
-                      backgroundColor: surfaceColor,
-                      borderColor: uiSurfaceStyle === 'glow' ? primaryColor : 'rgba(148,163,184,0.15)',
-                      borderRadius: previewRadiusPx,
-                      boxShadow: uiSurfaceStyle === 'glow' ? `0 0 20px -5px ${primaryColor}40` : undefined,
-                    }}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs"
-                        style={{ backgroundColor: primaryColor, color: getReadableTextColor(primaryColor) }}
-                      >
-                        <Scissors className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <strong className="text-xs block leading-tight">{name || 'Minha Barbearia'}</strong>
-                        <span className="text-[10px] opacity-70">Resumo do dia</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="px-2.5 py-1 text-[10px] font-bold rounded-lg"
-                        style={{
-                          backgroundColor: `${primaryColor}20`,
-                          color: primaryColor,
-                          border: `1px solid ${primaryColor}40`,
-                        }}
-                      >
-                        Online
+                      <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${mode === 'dark' ? 'bg-slate-800 text-slate-100' : mode === 'light' ? 'bg-slate-100 text-slate-900' : 'bg-[linear-gradient(135deg,#f8fafc_50%,#0f172a_50%)] text-slate-700 ring-1 ring-slate-300 shadow-inner'}`}>
+                        <Icon className="w-5 h-5" />
                       </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div
-                      className="p-3.5 border transition-all"
-                      style={{
-                        backgroundColor: surfaceColor,
-                        borderColor: uiSurfaceStyle === 'glow' ? `${primaryColor}60` : 'rgba(148,163,184,0.15)',
-                        borderRadius: previewRadiusPx,
-                      }}
-                    >
-                      <p className="text-[10px] uppercase font-bold opacity-60">Faturamento Hoje</p>
-                      <p className="text-xl font-black font-mono mt-1" style={{ color: primaryColor }}>
-                        R$ 480,00
-                      </p>
-                      <span className="text-[9px] opacity-70">8 atendimentos concluídos</span>
-                    </div>
-
-                    <div
-                      className="p-3.5 border transition-all"
-                      style={{
-                        backgroundColor: surfaceColor,
-                        borderColor: uiSurfaceStyle === 'glow' ? `${accentColor}60` : 'rgba(148,163,184,0.15)',
-                        borderRadius: previewRadiusPx,
-                      }}
-                    >
-                      <p className="text-[10px] uppercase font-bold opacity-60">Próximo Cliente</p>
-                      <p className="text-sm font-bold mt-1 truncate">Carlos Eduardo</p>
-                      <span className="text-[10px] font-mono font-bold" style={{ color: accentColor }}>15:00 · Corte + Barba</span>
-                    </div>
-                  </div>
-
-                  <div
-                    className="p-3.5 border flex items-center justify-between gap-3"
-                    style={{
-                      backgroundColor: surfaceColor,
-                      borderColor: 'rgba(148,163,184,0.15)',
-                      borderRadius: previewRadiusPx,
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4" style={{ color: primaryColor }} />
-                      <span className="text-xs font-semibold">Cliente na recepção: Lucas M.</span>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="px-3.5 py-1.5 text-xs font-bold transition-all shadow-md active:scale-95"
-                      style={{
-                        backgroundColor: primaryColor,
-                        color: getReadableTextColor(primaryColor),
-                        borderRadius: previewButtonRadius,
-                      }}
-                    >
-                      Iniciar
+                      <span>
+                        <strong className="block text-sm text-white">{title}</strong>
+                        <span className="block mt-0.5 text-xs text-slate-400">{description}</span>
+                      </span>
+                      {active && <Check className="ml-auto w-5 h-5 text-emerald-400" />}
                     </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4 relative z-10 max-w-sm mx-auto">
-                  <div
-                    className="p-4 border text-center space-y-3"
-                    style={{
-                      backgroundColor: surfaceColor,
-                      borderColor: uiSurfaceStyle === 'glow' ? primaryColor : 'rgba(148,163,184,0.15)',
-                      borderRadius: previewRadiusPx,
-                    }}
-                  >
-                    <div
-                      className="w-14 h-14 mx-auto rounded-full flex items-center justify-center border shadow-lg"
-                      style={{
-                        backgroundColor: `${primaryColor}20`,
-                        borderColor: `${primaryColor}50`,
-                        color: primaryColor,
-                      }}
-                    >
-                      <Scissors className="w-6 h-6" />
-                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-slate-500">No modo automático, cada aparelho acompanha sua própria configuração de aparência.</p>
+            </section>
 
-                    <div>
-                      <h5 className="font-black text-sm">{name || 'Barbearia Exemplo'}</h5>
-                      <p className="text-[10px] opacity-70 mt-0.5">Agendamento online rápido e sem filas</p>
-                    </div>
+            <section className="space-y-3 pt-5 border-t border-slate-800">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-cyan-300" />
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Animações</h4>
+              </div>
+              <MotionPreference />
+            </section>
 
-                    <div
-                      className="p-2.5 rounded-xl border flex items-center justify-between text-left"
-                      style={{
-                        backgroundColor: `${primaryColor}15`,
-                        borderColor: `${primaryColor}50`,
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-4 h-4 rounded-md flex items-center justify-center"
-                          style={{ backgroundColor: primaryColor, color: getReadableTextColor(primaryColor) }}
-                        >
-                          <Check className="w-3 h-3 stroke-[3]" />
-                        </div>
-                        <div>
-                          <strong className="text-xs block">Corte Degrade Navalhado</strong>
-                          <span className="text-[9px] opacity-70">30 minutos</span>
-                        </div>
-                      </div>
-                      <span className="font-bold text-xs font-mono" style={{ color: primaryColor }}>R$ 45,00</span>
-                    </div>
-
+            <section className="space-y-3 pt-5 border-t border-slate-800">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Cor dos botões principais</h4>
+              </div>
+              <div className="flex flex-wrap gap-3" role="radiogroup" aria-label="Cor dos botões principais">
+                {[
+                  { name: 'Azul', value: '#2296F3' },
+                  { name: 'Amarelo', value: '#FFD21F' },
+                  { name: 'Rosa', value: '#F91882' },
+                  { name: 'Roxo', value: '#7255F6' },
+                  { name: 'Laranja', value: '#FF7A00' },
+                  { name: 'Verde', value: '#10B981' },
+                ].map(({ name, value }) => {
+                  const active = primaryColor.toLowerCase() === value.toLowerCase();
+                  return (
                     <button
+                      key={value}
                       type="button"
-                      className="w-full py-2.5 text-xs font-black transition-all shadow-lg active:scale-95"
-                      style={{
-                        backgroundColor: primaryColor,
-                        color: getReadableTextColor(primaryColor),
-                        borderRadius: previewButtonRadius,
+                      title={name}
+                      aria-label={`Usar ${name} nos botões principais`}
+                      aria-pressed={active}
+                      onClick={() => {
+                        setPrimaryColor(value);
                       }}
+                      className={`flex h-12 w-12 items-center justify-center rounded-full border-4 transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-white/70 ${
+                        active ? 'border-white scale-105 shadow-lg' : 'border-transparent'
+                      }`}
+                      style={{ backgroundColor: value }}
                     >
-                      Continuar Agendamento
+                      {active && <Check className="w-6 h-6" style={{ color: getReadableTextColor(value) }} />}
                     </button>
-                  </div>
-                </div>
-              )}
-            </div>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-slate-500">Aplicada nos botões, ações e destaques. Ela não altera o tema geral do sistema.</p>
+            </section>
           </div>
-        </div>
         )}
+
 
         {/* PERFIL DO ESTABELECIMENTO */}
         <div className="bg-[#121B2E] p-5 sm:p-8 rounded-3xl border border-slate-800 space-y-5">
@@ -1134,6 +748,41 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <input id="settings-field-5" type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Rua Central, 120 - Centro" className="w-full bg-[#0B1120] border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" />
             </div>
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_120px_minmax(0,1fr)] gap-4">
+            <div>
+              <label htmlFor="settings-directory-city" className="block text-xs font-semibold text-slate-300 mb-1.5">Cidade</label>
+              <input id="settings-directory-city" type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Ex: Natal" className="w-full bg-[#0B1120] border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" />
+            </div>
+            <div>
+              <label htmlFor="settings-directory-state" className="block text-xs font-semibold text-slate-300 mb-1.5">UF</label>
+              <select id="settings-directory-state" value={state} onChange={(e) => setState(e.target.value)} className="w-full bg-[#0B1120] border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"><option value="">UF</option>{BRAZIL_STATES.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+            </div>
+            <div>
+              <label htmlFor="settings-directory-neighborhood" className="block text-xs font-semibold text-slate-300 mb-1.5">Bairro</label>
+              <input id="settings-directory-neighborhood" type="text" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} placeholder="Ex: Tirol" className="w-full bg-[#0B1120] border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" />
+            </div>
+          </div>
+          <div className="flex items-start justify-between gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[.06] p-4">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="block text-sm font-bold text-emerald-100">Exibir no diretório público do AgendAI</span>
+                <FeatureState active={directoryVisible && directoryHasRequiredLocation} pendingLabel={directoryVisible && !directoryHasRequiredLocation ? 'Informe cidade e UF' : undefined} />
+              </div>
+              <span className="mt-1 block text-xs leading-relaxed text-slate-400">Clientes poderão encontrar o nome, cidade, bairro, endereço e logo da barbearia e abrir sua página de agendamento. Preencha cidade e UF para ativar.</span>
+            </div>
+            <SettingsToggle
+              checked={directoryVisible}
+              onClick={() => setDirectoryVisible((value) => !value)}
+              label="exibição no diretório público"
+              disabled={!directoryVisible && !directoryHasRequiredLocation}
+              disabledLabel="Informe cidade e UF para ativar a exibição no diretório público"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-800 bg-[#0B1120] px-4 py-3">
+            <button type="button" onClick={saveDirectoryLocation} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-3 text-xs font-bold text-cyan-100 transition hover:bg-cyan-400/20"><LocateFixed className="h-4 w-4" /> Usar localização atual</button>
+            <span className="text-xs text-slate-400">{directoryLocationMessage || (Number.isFinite(directoryLatitude) && Number.isFinite(directoryLongitude) ? 'Localização já configurada para busca por proximidade.' : 'Necessária para aparecer nos resultados próximos ao cliente.')}</span>
+          </div>
+          {directoryVisible && (!city.trim() || !BRAZIL_STATES.includes(state.toUpperCase())) && <p className="text-xs text-amber-300">Para publicar no diretório, informe a cidade e selecione uma UF válida.</p>}
           </>
           )}
 
@@ -1195,9 +844,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[10px] font-black uppercase tracking-wider text-cyan-300">Foto {index + 1}</span>
                           <div className="flex items-center gap-1">
-                            <button type="button" onClick={() => moveGalleryImage(index, -1)} disabled={index === 0} aria-label={`Mover foto ${index + 1} para cima`} title="Mover para cima" className="w-8 h-8 rounded-lg border border-slate-700 flex items-center justify-center text-slate-300 disabled:opacity-30"><ArrowUp className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={() => moveGalleryImage(index, 1)} disabled={index === galleryImages.length - 1} aria-label={`Mover foto ${index + 1} para baixo`} title="Mover para baixo" className="w-8 h-8 rounded-lg border border-slate-700 flex items-center justify-center text-slate-300 disabled:opacity-30"><ArrowDown className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={() => removeGalleryImage(image.id)} aria-label={`Excluir foto ${index + 1}`} title="Excluir foto" className="w-8 h-8 rounded-lg border border-rose-500/25 bg-rose-500/10 flex items-center justify-center text-rose-300"><Trash2 className="w-3.5 h-3.5" /></button>
+                            <button type="button" onClick={() => moveGalleryImage(index, -1)} disabled={index === 0} aria-label={`Mover foto ${index + 1} para cima`} title="Mover para cima" className="w-8 h-8 rounded-lg border border-slate-700 flex items-center justify-center text-slate-300 disabled:opacity-30 min-w-[44px] min-h-[44px]"><ArrowUp className="w-3.5 h-3.5" /></button>
+                            <button type="button" onClick={() => moveGalleryImage(index, 1)} disabled={index === galleryImages.length - 1} aria-label={`Mover foto ${index + 1} para baixo`} title="Mover para baixo" className="w-8 h-8 rounded-lg border border-slate-700 flex items-center justify-center text-slate-300 disabled:opacity-30 min-w-[44px] min-h-[44px]"><ArrowDown className="w-3.5 h-3.5" /></button>
+                            <button type="button" onClick={() => removeGalleryImage(image.id)} aria-label={`Excluir foto ${index + 1}`} title="Excluir foto" className="w-8 h-8 rounded-lg border border-rose-500/25 bg-rose-500/10 flex items-center justify-center text-rose-300 min-w-[44px] min-h-[44px]"><Trash2 className="w-3.5 h-3.5" /></button>
                           </div>
                         </div>
                         <input type="url" required value={image.image_url} onChange={(e) => updateGalleryImage(image.id, 'image_url', e.target.value)} placeholder="https://.../ambiente.jpg" className="w-full bg-[#0B1120] border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:border-cyan-400 focus:outline-none" />
@@ -1245,6 +894,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           <div className="bg-[#0B1120] p-3.5 sm:p-4 rounded-2xl border border-slate-800 space-y-4">
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-violet-500/20 bg-violet-500/5 p-3.5">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2"><strong className="block text-xs text-white">Ativar rodízio de profissionais</strong><FeatureState active={rotationEnabled} /></div>
+                <span className="block text-[11px] text-slate-400 mt-1">Nos encaixes, o AgendAI sugere quem tem menos atendimentos no dia e alterna empates com justiça.</span>
+              </div>
+              <SettingsToggle checked={rotationEnabled} onClick={() => setRotationEnabled((value) => !value)} label="rodízio de profissionais" />
+            </div>
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label htmlFor="settings-field-10" className="block text-xs font-medium text-slate-400 mb-1 flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-emerald-400" /> Horário Abertura</label>
@@ -1257,19 +913,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
 
             <div className="border-t border-slate-800 pt-3 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold text-white">Descanso / Horário de Almoço</p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2"><p className="text-xs font-semibold text-white">Descanso / Horário de Almoço</p><FeatureState active={breakEnabled} /></div>
                   <p className="text-[10px] text-slate-500 mt-0.5">Ao ativar, nenhum cliente poderá agendar dentro desse intervalo.</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setBreakEnabled(value => !value)}
-                  className={`app-toggle relative w-12 h-7 rounded-full border transition-colors shrink-0 ${breakEnabled ? 'bg-emerald-500 border-emerald-400' : 'bg-slate-800 border-slate-700'}`}
-                  aria-pressed={breakEnabled}
-                >
-                  <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${breakEnabled ? 'left-6' : 'left-1'}`} />
-                </button>
+                <SettingsToggle checked={breakEnabled} onClick={() => setBreakEnabled((value) => !value)} label="descanso e horário de almoço" />
               </div>
 
               {breakEnabled && (
@@ -1360,7 +1009,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           <p className="text-xs font-bold text-white">{formatClosureDate(period.date)} • {period.all_day ? 'Dia inteiro' : `${period.start}–${period.end}`}</p>
                           <p className="text-[10px] text-amber-200/80 truncate mt-0.5">{period.reason || 'Fechado excepcionalmente'}</p>
                         </div>
-                        <button type="button" onClick={() => handleRemoveClosure(period.id)} className="p-2 rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 shrink-0" title="Reabrir/remover fechamento">
+                        <button type="button" onClick={() => handleRemoveClosure(period.id)} className="p-2 rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 shrink-0 min-w-[44px] min-h-[44px] inline-flex items-center justify-center" title="Reabrir/remover fechamento">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -1376,19 +1025,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-xl bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center shrink-0"><Tv2 className="w-5 h-5 text-cyan-300" /></div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">Modo TV • Painel de Espera</h4>
+                  <div className="flex flex-wrap items-center gap-2"><h4 className="text-sm font-bold text-white">Modo TV • Painel de Espera</h4><FeatureState active={tvEnabled} /></div>
                   <p className="text-[11px] text-slate-400 mt-1">Abra um link exclusivo na Smart TV, TV Box ou computador da recepção. O painel mostra somente dados próprios para exibição pública.</p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setTvEnabled((value) => !value)}
-                className={`app-toggle relative w-12 h-7 rounded-full border transition-colors shrink-0 ${tvEnabled ? 'bg-emerald-500 border-emerald-400' : 'bg-slate-800 border-slate-700'}`}
-                aria-pressed={tvEnabled}
-                title={tvEnabled ? 'Desativar tela da TV' : 'Ativar tela da TV'}
-              >
-                <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${tvEnabled ? 'left-6' : 'left-1'}`} />
-              </button>
+              <SettingsToggle checked={tvEnabled} onClick={() => setTvEnabled((value) => !value)} label="modo TV" />
             </div>
 
             <div className="rounded-2xl border border-slate-700/70 bg-slate-950/45 p-4 space-y-4">
@@ -1456,9 +1097,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button type="button" onClick={() => setTvAnimations((value) => !value)} className={`p-3 rounded-xl border text-left flex items-center gap-3 transition-colors ${tvAnimations ? 'border-violet-400/30 bg-violet-400/10' : 'border-slate-700 bg-slate-900/70'}`}>
+                <button type="button" onClick={() => setTvAnimations((value) => !value)} aria-pressed={tvAnimations} aria-label={`${tvAnimations ? 'Desativar' : 'Ativar'} cards animados`} className={`min-h-16 p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 ${tvAnimations ? 'border-violet-400/30 bg-violet-400/10' : 'border-slate-700 bg-slate-900/70'}`}>
+                  <span className="flex min-w-0 items-center gap-3">
                   <Sparkles className={`w-4 h-4 ${tvAnimations ? 'text-violet-300' : 'text-slate-500'}`} />
                   <span><strong className="block text-xs text-white">Cards animados</strong><span className="block text-[10px] text-slate-500 mt-0.5">Alterna destaques e produtos suavemente na tela.</span></span>
+                  </span>
+                  <FeatureState active={tvAnimations} />
                 </button>
                 <label className="space-y-1.5">
                   <span className="text-[11px] font-semibold text-slate-300">Aviso exibido na TV</span>
@@ -1468,13 +1112,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button type="button" onClick={() => setTvShowClientNames((value) => !value)} className={`p-3 rounded-xl border text-left flex items-center gap-3 transition-colors ${tvShowClientNames ? 'border-cyan-400/30 bg-cyan-400/10' : 'border-slate-700 bg-slate-900/70'}`}>
-                {tvShowClientNames ? <Eye className="w-4 h-4 text-cyan-300" /> : <EyeOff className="w-4 h-4 text-slate-500" />}
-                <span><strong className="block text-xs text-white">Mostrar nome abreviado</strong><span className="block text-[10px] text-slate-500 mt-0.5">Exibe “João M.”. Desativado mostra “Cliente 01”.</span></span>
+              <button type="button" onClick={() => setTvShowClientNames((value) => !value)} aria-pressed={tvShowClientNames} aria-label={`${tvShowClientNames ? 'Desativar' : 'Ativar'} exibição de nome abreviado`} className={`min-h-16 p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${tvShowClientNames ? 'border-cyan-400/30 bg-cyan-400/10' : 'border-slate-700 bg-slate-900/70'}`}>
+                <span className="flex min-w-0 items-center gap-3">{tvShowClientNames ? <Eye className="w-4 h-4 shrink-0 text-cyan-300" /> : <EyeOff className="w-4 h-4 shrink-0 text-slate-500" />}
+                <span><strong className="block text-xs text-white">Mostrar nome abreviado</strong><span className="block text-[10px] text-slate-500 mt-0.5">Exibe “João M.”. Desativado mostra “Cliente 01”.</span></span></span>
+                <FeatureState active={tvShowClientNames} />
               </button>
-              <button type="button" onClick={() => setTvShowPrices((value) => !value)} className={`p-3 rounded-xl border text-left flex items-center gap-3 transition-colors ${tvShowPrices ? 'border-cyan-400/30 bg-cyan-400/10' : 'border-slate-700 bg-slate-900/70'}`}>
-                <DollarSign className={`w-4 h-4 ${tvShowPrices ? 'text-cyan-300' : 'text-slate-500'}`} />
-                <span><strong className="block text-xs text-white">Mostrar valores</strong><span className="block text-[10px] text-slate-500 mt-0.5">Por padrão os valores ficam ocultos na recepção.</span></span>
+              <button type="button" onClick={() => setTvShowPrices((value) => !value)} aria-pressed={tvShowPrices} aria-label={`${tvShowPrices ? 'Desativar' : 'Ativar'} exibição de valores`} className={`min-h-16 p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${tvShowPrices ? 'border-cyan-400/30 bg-cyan-400/10' : 'border-slate-700 bg-slate-900/70'}`}>
+                <span className="flex min-w-0 items-center gap-3"><DollarSign className={`w-4 h-4 shrink-0 ${tvShowPrices ? 'text-cyan-300' : 'text-slate-500'}`} />
+                <span><strong className="block text-xs text-white">Mostrar valores</strong><span className="block text-[10px] text-slate-500 mt-0.5">Por padrão os valores ficam ocultos na recepção.</span></span></span>
+                <FeatureState active={tvShowPrices} />
               </button>
             </div>
 
@@ -1485,19 +1131,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <Volume2 className="w-4 h-4 text-cyan-300" />
                   </div>
                   <div>
-                    <strong className="block text-xs text-white">Som para novo agendamento</strong>
+                    <div className="flex flex-wrap items-center gap-2"><strong className="block text-xs text-white">Som para novo agendamento</strong><FeatureState active={tvSoundEnabled} /></div>
                     <span className="block text-[10px] text-slate-500 mt-0.5">A TV toca uma campainha somente quando detectar um novo atendimento. Na primeira abertura da TV, toque em “Ativar som”.</span>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setTvSoundEnabled((value) => !value)}
-                  className={`app-toggle relative w-12 h-7 rounded-full border transition-colors shrink-0 ${tvSoundEnabled ? 'bg-emerald-500 border-emerald-400' : 'bg-slate-800 border-slate-700'}`}
-                  aria-pressed={tvSoundEnabled}
-                  title={tvSoundEnabled ? 'Desativar som da TV' : 'Ativar som da TV'}
-                >
-                  <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${tvSoundEnabled ? 'left-6' : 'left-1'}`} />
-                </button>
+                <SettingsToggle checked={tvSoundEnabled} onClick={() => setTvSoundEnabled((value) => !value)} label="som para novo agendamento" />
               </div>
 
               {tvSoundEnabled && (
@@ -1620,6 +1258,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             {isRestoringCloud ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />} Último Backup da Nuvem
           </button>
         </div>
+        {backupNotice && <p role="status" className="mt-3 text-xs text-emerald-300 font-semibold">{backupNotice}</p>}
         {cloudRestoreMessage && <p className="text-xs text-slate-300">{cloudRestoreMessage}</p>}
 
         {showImportBox && (
@@ -1636,11 +1275,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <h3 className="text-sm font-bold text-white flex items-center gap-2"><Sparkles className="w-4 h-4 text-emerald-400" /> Ambiente de Demonstração e Reset</h3>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
           <div><p className="text-xs font-medium text-slate-300">Carregar Dados de Exemplo</p><p className="text-[11px] text-slate-500 mt-0.5">Preenche serviços, barbeiros e agendamentos fictícios.</p></div>
-          <button type="button" onClick={() => { if (window.confirm('Carregar dados de demonstração irá substituir os dados atuais. Deseja continuar?')) onLoadDemo({ org: INITIAL_ORG, services: INITIAL_SERVICES, barbers: INITIAL_BARBERS, appointments: INITIAL_APPOINTMENTS }); }} className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded-xl text-xs font-semibold border border-slate-700/60">Carregar Demonstração</button>
+          <button type="button" onClick={async () => { if (await appConfirm('Carregar dados de demonstração irá substituir os dados atuais. Deseja continuar?')) onLoadDemo({ org: INITIAL_ORG, services: INITIAL_SERVICES, barbers: INITIAL_BARBERS, appointments: INITIAL_APPOINTMENTS }); }} className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded-xl text-xs font-semibold border border-slate-700/60">Carregar Demonstração</button>
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-slate-800/60">
           <div><p className="text-xs font-medium text-rose-400">Zerar Dados Locais</p><p className="text-[11px] text-slate-500 mt-0.5">Apaga somente os dados deste navegador.</p></div>
-          <button type="button" onClick={() => { if (window.confirm('Atenção: os dados locais serão apagados. Deseja continuar?')) onResetAll(); }} className="px-3.5 py-2 bg-rose-950/30 hover:bg-rose-900/50 text-rose-400 border border-rose-800/40 rounded-xl text-xs font-semibold flex items-center gap-1.5"><RotateCcw className="w-3.5 h-3.5" /> Zerar Local</button>
+          <button type="button" onClick={async () => { if (await appConfirm('Atenção: os dados locais serão apagados. Deseja continuar?', { danger: true })) onResetAll(); }} className="px-3.5 py-2 bg-rose-950/30 hover:bg-rose-900/50 text-rose-400 border border-rose-800/40 rounded-xl text-xs font-semibold flex items-center gap-1.5"><RotateCcw className="w-3.5 h-3.5" /> Zerar Local</button>
         </div>
       </div>
       </>

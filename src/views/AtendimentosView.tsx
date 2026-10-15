@@ -1,11 +1,15 @@
+import { appConfirm } from '../components/common/ConfirmDialog';
+import { gsap, motionAllowed } from '../utils/motion';
+import { SwipeCard } from '../components/common/SwipeCard';
 import { Modal } from "../components/common/Modal";
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { 
   CheckSquare, Plus, Clock, CheckCircle, X, 
   Search, Phone, DollarSign, CreditCard, Banknote, QrCode, MessageSquare, Calendar, Check, AlertCircle,
   CheckCheck, UserRoundCheck, Play, UserX, Sparkles
 } from 'lucide-react';
-import { Appointment, Service, Barber, Organization } from '../types';
+import { Appointment, Service, Barber, Organization, Client } from '../types';
+import { normalizeClientPhone } from '../utils/clients';
 import { getLocalDateKey, isBookableBusinessDateTime, timeToMinutes } from '../utils/scheduling';
 import { appointmentStatusClasses, appointmentStatusLabel, blocksAppointmentSlot, isOpenAppointmentStatus } from '../utils/appointmentStatus';
 import { buildAppointmentWhatsAppUrl, WhatsAppAction } from '../utils/whatsapp';
@@ -17,6 +21,8 @@ interface AtendimentosViewProps {
   services: Service[];
   barbers: Barber[];
   org: Organization;
+  setClients: React.Dispatch<React.SetStateAction<Client[]>>;
+  onOpenCommand?: (appointment: Appointment) => void;
 }
 
 const isTimeSlotOccupied = (
@@ -52,9 +58,15 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
   services,
   barbers,
   org,
+  setClients,
+  onOpenCommand,
 }) => {
   const [filter, setFilter] = useState<'all' | 'today' | 'open' | 'completed' | 'no_show' | 'canceled'>('all');
   const [search, setSearch] = useState('');
+  const [freshAppId, setFreshAppId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const cardTopsRef = useRef<Map<string, number>>(new Map());
+
   const [showModal, setShowModal] = useState(false);
   const [completingApp, setCompletingApp] = useState<Appointment | null>(null);
   const [whatsAppAppointment, setWhatsAppAppointment] = useState<Appointment | null>(null);
@@ -90,22 +102,37 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
     );
   };
 
-  const filtered = appointments.filter(a => {
-    const isToday = (a.date || todayStr) === todayStr;
-    const matchesFilter =
-      filter === 'all' ? true :
-      filter === 'today' ? isToday :
-      filter === 'open' ? isOpenAppointmentStatus(a.status) :
-      a.status === filter;
+  const filtered = useMemo(() => {
+    const cleanSearch = search.trim().toLowerCase();
+    return appointments.filter(a => {
+      const isToday = (a.date || todayStr) === todayStr;
+      const matchesFilter =
+        filter === 'all' ? true :
+        filter === 'today' ? isToday :
+        filter === 'open' ? isOpenAppointmentStatus(a.status) :
+        a.status === filter;
 
-    const matchesSearch = 
-      a.client_name.toLowerCase().includes(search.toLowerCase()) ||
-      a.service_name.toLowerCase().includes(search.toLowerCase()) ||
-      a.barber_name.toLowerCase().includes(search.toLowerCase()) ||
-      (a.client_phone && a.client_phone.includes(search));
+      const matchesSearch = 
+        !cleanSearch ||
+        a.client_name.toLowerCase().includes(cleanSearch) ||
+        a.service_name.toLowerCase().includes(cleanSearch) ||
+        a.barber_name.toLowerCase().includes(cleanSearch) ||
+        (a.client_phone && a.client_phone.includes(cleanSearch));
 
-    return matchesFilter && matchesSearch;
-  });
+      return matchesFilter && matchesSearch;
+    });
+  }, [appointments, todayStr, filter, search]);
+
+  const [visibleCount, setVisibleCount] = useState(30);
+
+  useEffect(() => {
+    setVisibleCount(30);
+  }, [filter, search]);
+
+  const paginatedAppointments = useMemo(
+    () => filtered.slice(0, visibleCount),
+    [filtered, visibleCount]
+  );
 
   const handleFinishAppointment = (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,6 +141,15 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
     setAppointments(prev => prev.map(a => 
       a.id === completingApp.id ? { ...a, status: 'completed', payment_method: paymentMethod } : a
     ));
+    // O retorno concluído é a única ação que soma pontos automaticamente.
+    setClients(prev => prev.map(client => {
+      const clientPhone = normalizeClientPhone(client.phone);
+      const appointmentPhone = normalizeClientPhone(completingApp.client_phone);
+      const sameClient = appointmentPhone
+        ? clientPhone === appointmentPhone
+        : client.name.trim().toLocaleLowerCase('pt-BR') === completingApp.client_name.trim().toLocaleLowerCase('pt-BR');
+      return sameClient ? { ...client, loyalty_points: Math.max(0, Number(client.loyalty_points || 0)) + 10 } : client;
+    }));
     setCompletingApp(null);
   };
 
@@ -171,6 +207,8 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
     };
 
     setAppointments(prev => [created, ...prev]);
+    setFreshAppId(created.id);
+    window.setTimeout(() => setFreshAppId(null), 1400);
     setClientName('');
     setClientPhone('');
     setSelectedServiceIds([]);
@@ -179,6 +217,24 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
 
   const getAppointmentWhatsApp = (app: Appointment, action: WhatsAppAction) =>
     buildAppointmentWhatsAppUrl(org, app, action);
+
+  // Reordenação suave: quando um atendimento entra no topo, os cards de baixo deslizam
+  // da posição antiga até a nova (técnica FLIP), em vez de pularem de lugar.
+  useLayoutEffect(() => {
+    const root = listRef.current;
+    if (!root) return;
+    const next = new Map<string, number>();
+    root.querySelectorAll<HTMLElement>('[data-appointment-id]').forEach((el) => {
+      const id = el.dataset.appointmentId as string;
+      const top = el.getBoundingClientRect().top;
+      next.set(id, top);
+      const previous = cardTopsRef.current.get(id);
+      if (previous !== undefined && Math.abs(previous - top) > 1 && motionAllowed()) {
+        gsap.fromTo(el, { y: previous - top }, { y: 0, duration: 0.42, ease: 'power3.out', overwrite: 'auto', clearProps: 'transform' });
+      }
+    });
+    cardTopsRef.current = next;
+  }, [paginatedAppointments]);
 
   return (
     <div className="app-view space-y-4 sm:space-y-6 animate-fadeIn">
@@ -254,22 +310,35 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
             <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/20">
               <CheckSquare className="w-6 h-6" />
             </div>
-            <h4 className="font-bold text-white text-base">Nenhum atendimento encontrado</h4>
+            <h4 className="font-bold text-white text-base">{appointments.length === 0 ? 'Seus atendimentos aparecem aqui' : 'Nenhum atendimento encontrado'}</h4>
             <p className="text-xs text-slate-400">
-              Ajuste a busca ou os filtros para encontrar os atendimentos desejados.
+              {appointments.length === 0
+                ? 'Crie o primeiro atendimento ou compartilhe o link de agendamento para os clientes marcarem sozinhos.'
+                : 'Ajuste a busca ou os filtros para encontrar os atendimentos desejados.'}
             </p>
           </div>
         ) : (
-          <div className="space-y-3 sm:space-y-3.5">
-            {filtered.map((app, index) => {
+          <div ref={listRef} className="space-y-3 sm:space-y-3.5">
+            {paginatedAppointments.map((app, index) => {
               const isToday = (app.date || todayStr) === todayStr;
               const formattedDateBadge = isToday ? 'HOJE' : new Date(app.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
               return (
+                <SwipeCard
+                  key={app.id}
+                  dataId={app.id}
+                  swipeRight={app.status === 'in_progress' ? { label: 'Finalizar', tone: 'success', onAction: () => setCompletingApp(app) } : undefined}
+                  swipeLeft={(app.status === 'scheduled' || app.status === 'confirmed') ? { label: 'Cancelar', tone: 'danger', onAction: async () => {
+                    if (await appConfirm(`Cancelar o atendimento de ${app.client_name} às ${app.start_time}?`, { danger: true })) {
+                      setAppointments(prev => prev.map(a => a.id === app.id ? { ...a, status: 'canceled' } : a));
+                    }
+                  } } : undefined}
+                >
                 <div
                   key={app.id}
                   style={{ animationDelay: `${Math.min(index, 10) * 35}ms` }}
-                  className="stagger-item appointment-person-card bg-[#121B2E] border border-slate-800 rounded-2xl p-3.5 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-6 shadow-md transition-all space-y-2 sm:space-y-0"
+                  data-status={app.status}
+                  className={`stagger-item appointment-person-card ${freshAppId === app.id ? 'atendimento-enter' : ''} bg-[#121B2E] border border-slate-800 rounded-2xl p-3.5 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-6 shadow-md transition-all space-y-2 sm:space-y-0`}
                 >
                   <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 flex-1">
                     <div className="w-14 sm:w-16 text-center shrink-0 space-y-1">
@@ -359,6 +428,15 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
 
                         {app.status === 'in_progress' && (
                           <button
+                            onClick={() => onOpenCommand?.(app)}
+                            className="w-full md:min-w-[6.5rem] min-h-9 px-2 bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/25 text-violet-300 rounded-xl text-[11px] font-bold transition-colors inline-flex items-center justify-center gap-1 whitespace-nowrap active:scale-95"
+                          >
+                            <DollarSign className="w-3.5 h-3.5 shrink-0" /> <span>Comanda</span>
+                          </button>
+                        )}
+
+                        {app.status === 'in_progress' && (
+                          <button
                             onClick={() => setCompletingApp(app)}
                             className="w-full md:min-w-[6.5rem] min-h-9 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-bold transition-colors inline-flex items-center justify-center gap-1 whitespace-nowrap active:scale-95 shadow-sm"
                           >
@@ -368,8 +446,8 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
 
                         {(app.status === 'scheduled' || app.status === 'confirmed') && (
                           <button
-                            onClick={() => {
-                              if (window.confirm(`Marcar ${app.client_name} como não compareceu?`)) {
+                            onClick={async () => {
+                              if (await appConfirm(`Marcar ${app.client_name} como não compareceu?`, { danger: true })) {
                                 setAppointments(prev => prev.map(a => a.id === app.id ? { ...a, status: 'no_show' } : a));
                               }
                             }}
@@ -380,8 +458,12 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
                         )}
 
                         <button
-                          onClick={() => setAppointments(prev => prev.map(a => a.id === app.id ? { ...a, status: 'canceled' } : a))}
-                          className="w-full md:min-w-[6.5rem] min-h-9 px-2 bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-300 rounded-xl text-[11px] font-bold transition-colors inline-flex items-center justify-center whitespace-nowrap active:scale-95"
+                          onClick={async () => {
+                            if (await appConfirm(`Cancelar o atendimento de ${app.client_name} às ${app.start_time}?`, { danger: true })) {
+                              setAppointments(prev => prev.map(a => a.id === app.id ? { ...a, status: 'canceled' } : a));
+                            }
+                          }}
+                          className="col-span-2 xl:col-span-1 w-full md:min-w-[6.5rem] min-h-9 px-2 bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-300 rounded-xl text-[11px] font-bold transition-colors inline-flex items-center justify-center whitespace-nowrap active:scale-95"
                         >
                           Cancelar
                         </button>
@@ -389,11 +471,27 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
                     )}
                   </div>
                 </div>
+                </SwipeCard>
               );
             })}
           </div>
         )}
       </div>
+
+      {filtered.length > visibleCount && (
+        <div className="flex justify-center pt-2 pb-2">
+          <button
+            type="button"
+            onClick={() => setVisibleCount((prev) => prev + 30)}
+            className="px-6 py-3 rounded-2xl border border-slate-700/80 bg-slate-900/90 hover:bg-slate-800 text-xs font-bold text-emerald-400 hover:text-white transition-all shadow-md active:scale-95 flex items-center gap-2"
+          >
+            <span>Carregar mais atendimentos</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
+              {filtered.length - visibleCount} restantes
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* MODAL CONCLUIR ATENDIMENTO */}
       <WhatsAppActionsModal
@@ -416,7 +514,7 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
                 <CheckCircle className="w-5 h-5 text-emerald-400" />
                 Concluir Atendimento
               </h3>
-              <button aria-label="Fechar janela" onClick={() => setCompletingApp(null)} className="text-slate-400 hover:text-white p-1 rounded-lg">
+              <button aria-label="Fechar janela" onClick={() => setCompletingApp(null)} className="text-slate-400 hover:text-white p-1 rounded-lg min-w-[44px] min-h-[44px] inline-flex items-center justify-center">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -503,7 +601,7 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
                 <Plus className="w-5 h-5 text-emerald-400" />
                 Novo Atendimento
               </h3>
-              <button aria-label="Fechar janela" onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white p-1 rounded-lg">
+              <button aria-label="Fechar janela" onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white p-1 rounded-lg min-w-[44px] min-h-[44px] inline-flex items-center justify-center">
                 <X className="w-5 h-5" />
               </button>
             </div>

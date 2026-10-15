@@ -2,22 +2,30 @@ import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import { 
   CheckCircle, Clock, Calendar, 
   MapPin, Phone, MessageSquare, ArrowLeft, User, 
-  Sparkles, Check, ChevronLeft, ChevronRight, AlertCircle, Share2, Plus, CheckSquare, Square, Lock, ShoppingBag, ShoppingCart, Minus, PackageCheck, Image as ImageIcon
+  Sparkles, Check, ChevronLeft, ChevronRight, AlertCircle, Share2, Plus, CheckSquare, Square, Lock, ShoppingBag, ShoppingCart, Minus, PackageCheck, Image as ImageIcon,
+  Zap
 } from 'lucide-react';
-import { Organization, Service, Barber, Appointment, Product } from '../types';
+import { Organization, Service, Barber, Appointment, Product, WaitlistEntry } from '../types';
 import { pushAppointmentToCloud, pushProductOrderToCloud } from '../services/cloudSync';
 import { BarberAvatar } from '../components/common/BarberAvatar';
 import { BrandLogo } from '../components/common/BrandLogo';
+import { ActionButton } from '../components/common/ActionButton';
 import { AgencyCredit } from '../components/common/AgencyCredit';
 import { BookingAssistant } from '../components/common/BookingAssistant';
 import { PublicShowcase } from '../components/common/PublicShowcase';
+import { PublicThemeToggle } from '../components/common/PublicThemeToggle';
+import { PageSeo } from '../components/common/PageSeo';
+import { PublicWaitlistModal } from '../components/waitlist/PublicWaitlistModal';
 import { TurnstileWidget, type TurnstileWidgetHandle } from '../components/common/TurnstileWidget';
 import { assistantSlots } from '../services/bookingAssistant';
 import type { AssistantSlot } from '../services/bookingAssistant';
 import { generateBusinessSlots, getBusinessClosureAtTime, getBusinessClosuresForDate, isBookableBusinessDateTime, isBookableBusinessTime, isBusinessClosedAllDay, overlapsBusinessClosure, timeToMinutes } from '../utils/scheduling';
 import { getPublicBookingDateStatus, isPublicTimeSlotOccupied } from '../utils/publicBookingAvailability';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
+import { filterServiceCatalog } from '../utils/serviceCatalog';
+import { buildGoogleCalendarUrl, downloadIcsFile } from '../utils/calendarLinks';
 import { gsap, MOTION_ALLOWED_QUERY, useGSAP } from '../utils/motion';
+import type { AppThemeMode } from '../config/theme';
 
 interface TenantBookingViewProps {
   org: Organization;
@@ -27,8 +35,11 @@ interface TenantBookingViewProps {
   products?: Product[];
   onProductsChanged?: (products: Product[]) => void;
   onAddAppointment: (newApp: Omit<Appointment, 'id'> & { id?: string }) => Appointment | void;
+  onAddWaitlist?: (entry: WaitlistEntry) => void;
   onBackToAdmin?: () => void;
   isStandalone?: boolean;
+  appThemeMode?: AppThemeMode;
+  onThemeModeChange?: (mode: AppThemeMode) => void;
 }
 
 // Verifica se um slot de horário está ocupado por agendamento existente
@@ -130,10 +141,15 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
   products = [],
   onProductsChanged,
   onAddAppointment,
+  onAddWaitlist,
   onBackToAdmin,
   isStandalone = false,
+  appThemeMode = 'dark',
+  onThemeModeChange,
 }) => {
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [serviceQuery, setServiceQuery] = useState('');
+  const [serviceCategory, setServiceCategory] = useState('');
   const [stepDirection, setStepDirection] = useState<'forward' | 'backward'>('forward');
   const goToStep = (next: 1 | 2 | 3 | 4 | 5) => {
     setStepDirection(next >= step ? 'forward' : 'backward');
@@ -149,6 +165,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
   const [lastCreatedAppointment, setLastCreatedAppointment] = useState<Appointment | null>(null);
   const [bookingError, setBookingError] = useState<string>('');
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
+  const [bookingButtonStatus, setBookingButtonStatus] = useState<'idle' | 'loading' | 'success'>('idle');
   const [statusClock, setStatusClock] = useState(() => new Date());
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const now = new Date();
@@ -160,6 +177,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
   const [productCustomerPhone, setProductCustomerPhone] = useState('');
   const [productOrderError, setProductOrderError] = useState('');
   const [productOrderSuccess, setProductOrderSuccess] = useState(false);
+  const [showWaitlistModal, setShowWaitlistModal] = useState(false);
   const [isSubmittingProductOrder, setIsSubmittingProductOrder] = useState(false);
   const [bookingTurnstileToken, setBookingTurnstileToken] = useState('');
   const [productTurnstileToken, setProductTurnstileToken] = useState('');
@@ -335,6 +353,9 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
   }, [services]);
 
   const publicProducts = useMemo(() => products.filter((product) => product.active !== false && product.public_visible !== false && Number(product.stock || 0) > 0), [products]);
+  const serviceCategories = [...new Set(activeServices.map(service => service.category).filter(Boolean))];
+  const effectiveServiceCategory = serviceCategories.includes(serviceCategory) ? serviceCategory : '';
+  const visibleServices = filterServiceCatalog(activeServices, serviceQuery, effectiveServiceCategory);
 
   const productCartItems = useMemo(() => Object.entries(productCart).map(([productId, quantity]) => {
     const product = publicProducts.find((item) => item.id === productId);
@@ -359,12 +380,12 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
     const phone = phoneDigits.startsWith('55') ? phoneDigits : `55${phoneDigits}`;
     const lines = productCartItems.map(({ product, quantity }) => `• ${quantity}x ${product.name} - R$ ${(product.price * quantity).toFixed(2)}`);
     const text = [
-      `🛍️ *Pedido de produtos - ${org.name}*`,
+      `*Pedido de produtos - ${org.name}*`,
       '',
       ...lines,
       '',
-      `💰 *Total:* R$ ${productCartTotal.toFixed(2)}`,
-      org.pix_key ? `📲 *Pix:* ${org.pix_key}${org.pix_holder ? ` (${org.pix_holder})` : ''}` : '',
+      `*Total:* R$ ${productCartTotal.toFixed(2)}`,
+      org.pix_key ? `*Pix:* ${org.pix_key}${org.pix_holder ? ` (${org.pix_holder})` : ''}` : '',
       '',
       `Cliente: ${productCustomerName}`,
       `WhatsApp: ${productCustomerPhone}`,
@@ -463,18 +484,18 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
       : `• ${app.service_name} - R$ ${app.price.toFixed(2)}`;
 
     const textLines = [
-      `💈 *NOVO AGENDAMENTO ONLINE - ${org.name.toUpperCase()}*`,
+      `*NOVO AGENDAMENTO ONLINE - ${org.name.toUpperCase()}*`,
       '',
-      `👤 *Cliente:* ${app.client_name}`,
-      `📱 *WhatsApp:* ${app.client_phone}`,
+      `• *Cliente:* ${app.client_name}`,
+      `• *WhatsApp:* ${app.client_phone}`,
       '',
-      `✂️ *Serviços Agendados (${app.services?.length || 1}):*`,
+      `• *Serviços Agendados (${app.services?.length || 1}):*`,
       servicesListText,
       '',
-      `💰 *Valor Total:* R$ ${app.price.toFixed(2)} (${app.duration_minutes || totalDuration} min)`,
-      `💈 *Profissional:* ${app.barber_name}`,
-      `📅 *Data:* ${formattedSelectedDate}`,
-      `⏰ *Horário:* às ${app.start_time}`,
+      `• *Valor Total:* R$ ${app.price.toFixed(2)} (${app.duration_minutes || totalDuration} min)`,
+      `• *Profissional:* ${app.barber_name}`,
+      `• *Data:* ${formattedSelectedDate}`,
+      `• *Horário:* às ${app.start_time}`,
       '',
       `_Agendamento registrado no sistema AgendAI._`
     ];
@@ -562,11 +583,13 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
     // Confirma primeiro no servidor. Assim o cliente nunca recebe uma confirmação falsa
     // quando outro aparelho acabou de reservar o mesmo horário.
     setIsSubmittingBooking(true);
+    setBookingButtonStatus('loading');
     const cloudResult = await pushAppointmentToCloud(fullApp, org.slug, bookingTurnstileToken);
     setIsSubmittingBooking(false);
     bookingTurnstileRef.current?.reset();
 
     if (!cloudResult.ok) {
+      setBookingButtonStatus('idle');
       setBookingError(cloudResult.error || 'Não foi possível confirmar o agendamento. Tente novamente.');
       if (cloudResult.status === 409) {
         setSelectedTime('');
@@ -574,6 +597,10 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
       }
       return;
     }
+
+    // Mostra o check por um instante antes de trocar para a tela de confirmação.
+    setBookingButtonStatus('success');
+    await new Promise((resolve) => window.setTimeout(resolve, 650));
 
     const savedAppointment = cloudResult.appointment || fullApp;
     const created = onAddAppointment(savedAppointment);
@@ -589,9 +616,46 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
     }
   };
 
+  const bookingStructuredData = useMemo(() => ({
+    '@context': 'https://schema.org',
+    '@type': 'HairSalon',
+    name: org.name,
+    url: `https://meuagendai.fun/agendar/${encodeURIComponent(org.slug)}`,
+    telephone: org.phone || undefined,
+    image: org.logo_image_url || org.cover_image_url || undefined,
+    address: org.address ? {
+      '@type': 'PostalAddress',
+      streetAddress: org.address,
+      addressLocality: org.city || undefined,
+      addressRegion: org.state || undefined,
+      addressCountry: 'BR',
+    } : undefined,
+    hasOfferCatalog: {
+      '@type': 'OfferCatalog',
+      name: 'Serviços',
+      itemListElement: services.filter((service) => service.active !== false).slice(0, 30).map((service) => ({
+        '@type': 'Offer',
+        price: Number(service.price).toFixed(2),
+        priceCurrency: 'BRL',
+        itemOffered: { '@type': 'Service', name: service.name, description: service.description || undefined },
+      })),
+    },
+    potentialAction: {
+      '@type': 'ReserveAction',
+      target: `https://meuagendai.fun/agendar/${encodeURIComponent(org.slug)}`,
+      result: { '@type': 'Reservation', name: 'Agendamento de serviço' },
+    },
+  }), [org, services]);
+
   return (
     <div ref={bookingRootRef} className={`booking-view w-full ${isStandalone ? 'min-h-screen bg-[#070B14] py-4 sm:py-8 px-2 sm:px-4 flex items-center justify-center' : 'max-w-xl mx-auto py-2 sm:py-4 animate-fadeIn'}`}>
+      <PageSeo title={`${org.name} | Agendamento online`} description={`Veja serviços, profissionais e horários disponíveis e agende seu atendimento online na ${org.name}.`} path={`/agendar/${org.slug}`} structuredData={bookingStructuredData} noIndex={!isStandalone} />
       <div className={`w-full ${publicMode === 'products' ? 'max-w-7xl' : 'max-w-2xl'}`}>
+        {isStandalone && onThemeModeChange && (
+          <div className="mb-3 flex justify-end">
+            <PublicThemeToggle mode={appThemeMode} onChange={onThemeModeChange} />
+          </div>
+        )}
         {/* BOTÃO DE RETORNO AO PAINEL (APENAS PARA O ADMINISTRADOR) */}
         {!isStandalone && onBackToAdmin && (
           <div className="flex justify-between items-center mb-3">
@@ -621,7 +685,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
 
             <div className="px-5 sm:px-7 pb-5 sm:pb-6 -mt-8 relative z-10">
               <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden bg-white border-4 border-[#121B2E] flex items-center justify-center shadow-2xl shadow-black/30 shrink-0 ${org.logo_image_url ? 'p-0' : 'p-2'}`}>
+                <div className={`organization-avatar w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border-4 border-[#121B2E] flex items-center justify-center shadow-2xl shadow-black/30 shrink-0 ${org.logo_image_url ? 'p-0' : 'p-2'}`}>
                   {org.logo_image_url ? (
                     <img
                       src={org.logo_image_url}
@@ -633,7 +697,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                   )}
                 </div>
                 <div className="flex-1 min-w-0 pb-1">
-                  <h2 className="booking-cover-title text-2xl sm:text-3xl font-black text-white tracking-tight">{org.name}</h2>
+                  <h1 className="booking-cover-title font-display text-2xl sm:text-3xl font-normal text-white tracking-tight">{org.name}</h1>
                   <p className="text-[11px] sm:text-xs text-cyan-300 font-semibold mt-1">Agende seus serviços ou compre produtos físicos na mesma página.</p>
                 </div>
               </div>
@@ -660,6 +724,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
           </div>
 
           <PublicShowcase org={org} />
+
 
           {publicMode === 'services' && !confirmed && (
             <BookingAssistant key={org.slug} org={org} services={services} barbers={barbers} appointments={appointments} onChooseSlot={chooseAssistantSlot} />
@@ -698,7 +763,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
           )}
 
           {publicMode === 'products' && productOrderError && (
-            <div className="mx-4 sm:mx-6 mt-4 p-3.5 bg-rose-950/40 border border-rose-800/60 rounded-2xl text-rose-300 text-xs flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{productOrderError}</div>
+            <div role="alert" className="mx-4 sm:mx-6 mt-4 p-3.5 bg-rose-950/40 border border-rose-800/60 rounded-2xl text-rose-300 text-xs flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{productOrderError}</div>
           )}
 
           {/* SERVIÇOS E PRODUTOS FICAM EM FLUXOS SEPARADOS */}
@@ -706,13 +771,13 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
             productOrderSuccess ? (
               <div data-booking-panel className="p-6 sm:p-8 text-center space-y-5">
                 <div className="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 mx-auto flex items-center justify-center"><PackageCheck className="w-8 h-8" /></div>
-                <div><h3 className="text-xl font-black text-white">Pedido recebido!</h3><p className="text-xs text-slate-400 mt-1">A barbearia recebeu seu pedido. Os itens foram reservados no estoque.</p></div>
+                <div><h2 className="text-xl font-black text-white">Pedido recebido!</h2><p className="text-xs text-slate-400 mt-1">A barbearia recebeu seu pedido. Os itens foram reservados no estoque.</p></div>
                 <button type="button" onClick={() => { setProductOrderSuccess(false); setProductCustomerName(''); setProductCustomerPhone(''); }} className="w-full rounded-xl bg-slate-800 px-4 py-3 text-xs font-black text-white">Fazer outro pedido</button>
               </div>
             ) : (
               <div data-booking-panel className="p-4 sm:p-6 grid xl:grid-cols-[1fr_300px] gap-5">
                 <div className="space-y-3">
-                  <div><h3 className="text-sm font-black text-white flex items-center gap-2"><ShoppingBag className="w-4 h-4 text-cyan-300" />Produtos disponíveis</h3><p className="text-[11px] text-slate-500 mt-1">Produtos físicos separados do catálogo de serviços.</p></div>
+                  <div><h2 className="text-sm font-black text-white flex items-center gap-2"><ShoppingBag className="w-4 h-4 text-cyan-300" />Produtos disponíveis</h2><p className="text-[11px] text-slate-500 mt-1">Produtos físicos separados do catálogo de serviços.</p></div>
                   {publicProducts.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-700 p-8 text-center"><ShoppingBag className="w-8 h-8 text-slate-700 mx-auto" /><p className="text-sm font-bold text-white mt-3">Nenhum produto disponível agora</p><p className="text-[11px] text-slate-500 mt-1">A vitrine será atualizada quando o estabelecimento cadastrar produtos com estoque.</p></div>
                   ) : (
@@ -720,19 +785,26 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                       <div key={product.id} className="min-w-0 rounded-2xl border border-slate-800 bg-[#0B1120] p-2.5 sm:p-3.5">
                         <div className="aspect-square sm:aspect-[4/3] rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center">{product.image_url ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" /> : <ImageIcon className="w-8 h-8 text-slate-700" />}</div>
                         <p className="text-[9px] uppercase tracking-widest text-cyan-300 mt-3">{product.category}</p><h4 className="font-black text-white mt-0.5">{product.name}</h4>{product.description && <p className="text-[10px] text-slate-500 mt-1 line-clamp-2">{product.description}</p>}
-                        <div className="mt-3 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2"><div className="min-w-0"><p className="text-sm sm:text-lg font-black text-emerald-300 font-mono">R$ {product.price.toFixed(2)}</p><p className={`text-[9px] font-bold ${Number(product.stock) <= 3 ? 'text-amber-300' : 'text-slate-500'}`}>{Number(product.stock) <= 3 ? 'Últimas unidades' : 'Em estoque'}</p></div><div className="flex items-center justify-between sm:justify-start rounded-xl border border-slate-800 bg-slate-900 p-1 w-full sm:w-auto"><button type="button" disabled={!qty} onClick={() => changeProductCart(product, -1)} className="w-8 h-8 flex items-center justify-center text-slate-300 disabled:opacity-30"><Minus className="w-3.5 h-3.5" /></button><span className="w-6 text-center text-xs font-black text-white">{qty}</span><button type="button" disabled={qty >= Number(product.stock)} onClick={() => changeProductCart(product, 1)} className="w-8 h-8 rounded-lg bg-cyan-400/10 flex items-center justify-center text-cyan-200 disabled:opacity-30"><Plus className="w-3.5 h-3.5" /></button></div></div>
+                        <div className="mt-3 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2"><div className="min-w-0"><p className="text-sm sm:text-lg font-black text-emerald-300 font-mono">R$ {product.price.toFixed(2)}</p><p className={`text-[9px] font-bold ${Number(product.stock) <= 3 ? 'text-amber-300' : 'text-slate-500'}`}>{Number(product.stock) <= 3 ? 'Últimas unidades' : 'Em estoque'}</p></div><div role="group" aria-label={`Quantidade de ${product.name}`} className="flex items-center justify-between sm:justify-start rounded-xl border border-slate-800 bg-slate-900 p-1 w-full sm:w-auto"><button type="button" disabled={!qty} aria-label={`Remover uma unidade de ${product.name}`} onClick={() => changeProductCart(product, -1)} className="h-11 w-11 flex items-center justify-center rounded-lg text-slate-300 transition-colors hover:bg-white/5 disabled:opacity-30"><Minus className="w-4 h-4" /></button><span aria-live="polite" aria-atomic="true" className="w-7 text-center text-xs font-black text-white">{qty}</span><button type="button" disabled={qty >= Number(product.stock)} aria-label={`Adicionar uma unidade de ${product.name}`} onClick={() => changeProductCart(product, 1)} className="h-11 w-11 rounded-lg bg-cyan-400/10 flex items-center justify-center text-cyan-200 transition-colors hover:bg-cyan-400/20 disabled:opacity-30"><Plus className="w-4 h-4" /></button></div></div>
                       </div>
                     ); })}</div>
                   )}
                 </div>
-                <form onSubmit={submitProductOrder} className="rounded-2xl border border-slate-800 bg-slate-950/45 p-4 h-fit space-y-3 xl:sticky xl:top-4">
-                  <div className="flex items-center justify-between"><h3 className="text-sm font-black text-white flex items-center gap-2"><ShoppingCart className="w-4 h-4 text-cyan-300" />Seu carrinho</h3><span className="text-[10px] text-slate-500">{productCartItems.reduce((s, item) => s + item.quantity, 0)} itens</span></div>
+                <form onSubmit={submitProductOrder} aria-labelledby="product-checkout-title" className="rounded-2xl border border-slate-800 bg-slate-950/45 p-4 h-fit space-y-3 xl:sticky xl:top-4">
+                  <div className="flex items-center justify-between"><h3 id="product-checkout-title" className="text-sm font-black text-white flex items-center gap-2"><ShoppingCart className="w-4 h-4 text-cyan-300" />Seu carrinho</h3><span aria-live="polite" aria-atomic="true" className="text-[10px] text-slate-500">{productCartItems.reduce((s, item) => s + item.quantity, 0)} itens</span></div>
                   {productCartItems.length === 0 ? <p className="rounded-xl border border-dashed border-slate-700 p-4 text-center text-[10px] text-slate-500">Adicione um produto para começar.</p> : <div className="space-y-2 max-h-48 overflow-y-auto">{productCartItems.map(({ product, quantity }) => <div key={product.id} className="rounded-xl border border-slate-800 bg-[#0B1120] px-3 py-2 text-[10px] flex justify-between gap-2"><span className="text-white">{quantity}× {product.name}</span><strong className="text-emerald-300 font-mono">R$ {(product.price * quantity).toFixed(2)}</strong></div>)}</div>}
-                  <div className="border-t border-slate-800 pt-3 flex justify-between items-center"><span className="text-xs text-slate-400">Total</span><strong className="text-xl text-emerald-300 font-black font-mono">R$ {productCartTotal.toFixed(2)}</strong></div>
-                  <input required value={productCustomerName} onChange={(e) => setProductCustomerName(e.target.value)} placeholder="Seu nome" className="w-full rounded-xl border border-slate-800 bg-[#0B1120] px-3 py-2.5 text-xs text-white" /><input required type="tel" value={productCustomerPhone} onChange={(e) => setProductCustomerPhone(e.target.value)} placeholder="Seu WhatsApp com DDD" className="w-full rounded-xl border border-slate-800 bg-[#0B1120] px-3 py-2.5 text-xs text-white" />
+                  <div className="border-t border-slate-800 pt-3 flex justify-between items-center"><span className="text-xs text-slate-400">Total</span><strong aria-live="polite" aria-atomic="true" className="text-xl text-emerald-300 font-black font-mono">R$ {productCartTotal.toFixed(2)}</strong></div>
+                  <div>
+                    <label htmlFor="product-customer-name" className="mb-1.5 block text-xs font-semibold text-slate-300">Seu nome</label>
+                    <input id="product-customer-name" name="customer_name" autoComplete="name" required value={productCustomerName} onChange={(e) => setProductCustomerName(e.target.value)} placeholder="Como devemos chamar você?" className="min-h-11 w-full rounded-xl border border-slate-800 bg-[#0B1120] px-3 py-2.5 text-xs text-white" />
+                  </div>
+                  <div>
+                    <label htmlFor="product-customer-phone" className="mb-1.5 block text-xs font-semibold text-slate-300">Seu WhatsApp com DDD</label>
+                    <input id="product-customer-phone" name="customer_phone" autoComplete="tel-national" inputMode="tel" required type="tel" value={productCustomerPhone} onChange={(e) => setProductCustomerPhone(e.target.value)} placeholder="(84) 99999-0000" className="min-h-11 w-full rounded-xl border border-slate-800 bg-[#0B1120] px-3 py-2.5 text-xs text-white" />
+                  </div>
                   {org.pix_key && <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-[10px] text-slate-300"><strong className="text-emerald-300 block">Pagamento via Pix disponível</strong>{org.pix_key}</div>}
                   <TurnstileWidget ref={productTurnstileRef} action="product_order" onTokenChange={handleProductTurnstileToken} />
-                  <button disabled={!productCartItems.length || isSubmittingProductOrder} type="submit" className="w-full rounded-xl bg-cyan-400 py-3 text-xs font-black text-slate-950 disabled:opacity-40">{isSubmittingProductOrder ? 'Enviando pedido...' : 'Enviar pedido à barbearia'}</button>
+                  <button disabled={!productCartItems.length || isSubmittingProductOrder} type="submit" className="min-h-11 w-full rounded-xl bg-cyan-400 py-3 text-xs font-black text-slate-950 disabled:opacity-40">{isSubmittingProductOrder ? 'Enviando pedido...' : 'Enviar pedido à barbearia'}</button>
                   <p className="text-[9px] text-center text-slate-500">O pedido entra no painel como pendente e os itens ficam reservados no estoque.</p>
                 </form>
               </div>
@@ -743,7 +815,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                 <Clock className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">Barbearia em Configuração</h3>
+                <h2 className="text-base font-bold text-white">Barbearia em Configuração</h2>
                 <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
                   Este estabelecimento ainda está configurando os serviços e a equipe. Tente novamente em alguns minutos.
                 </p>
@@ -789,7 +861,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
               </div>
 
               <div className="animate-riseIn" style={{ animationDelay: '0.1s' }}>
-                <h3 className="text-xl sm:text-2xl font-bold text-white">Agendamento Confirmado!</h3>
+                <h2 className="text-xl sm:text-2xl font-bold text-white">Agendamento Confirmado!</h2>
                 <p className="text-xs text-slate-300 mt-1">
                   Seu horário foi salvo e sincronizado no sistema da barbearia.
                 </p>
@@ -857,6 +929,33 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                   Clique no botão para abrir o WhatsApp e avisar a barbearia sobre sua chegada.
                 </p>
 
+                {/* BOTÕES ADICIONAR AO CALENDÁRIO */}
+                <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                  <span className="text-xs font-semibold text-slate-300 block text-center sm:text-left">
+                    Salvar na sua Agenda:
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <a
+                      href={buildGoogleCalendarUrl(org, lastCreatedAppointment)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="py-2.5 px-3 bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm"
+                    >
+                      <Calendar className="w-4 h-4 text-emerald-400" />
+                      Google Agenda
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => downloadIcsFile(org, lastCreatedAppointment)}
+                      className="py-2.5 px-3 bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm"
+                    >
+                      <Clock className="w-4 h-4 text-cyan-400" />
+                      Apple / Outlook (.ics)
+                    </button>
+                  </div>
+                </div>
+
                 <button
                   onClick={() => {
                     setConfirmed(false);
@@ -886,10 +985,10 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
               {step === 1 && (
                 <div key="step-1" data-booking-panel className="space-y-3.5 sm:space-y-4">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <h2 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 text-xs flex items-center justify-center font-bold">1</span>
                       Escolha a Data
-                    </h3>
+                    </h2>
                   </div>
 
                   <div className="rounded-2xl border border-slate-800 bg-[#0A1324]/70 p-2.5 sm:p-3">
@@ -898,7 +997,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                         type="button"
                         disabled={!canGoPreviousMonth}
                         onClick={() => moveCalendarMonth(-1)}
-                        className="w-9 h-9 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-300 flex items-center justify-center disabled:opacity-25 disabled:cursor-not-allowed hover:border-cyan-400/40"
+                        className="w-9 h-9 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-300 flex items-center justify-center disabled:opacity-25 disabled:cursor-not-allowed hover:border-cyan-400/40 min-w-[44px] min-h-[44px]"
                         aria-label="Mês anterior"
                       >
                         <ChevronLeft className="w-4 h-4" />
@@ -911,7 +1010,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                         type="button"
                         disabled={!canGoNextMonth}
                         onClick={() => moveCalendarMonth(1)}
-                        className="w-9 h-9 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-300 flex items-center justify-center disabled:opacity-25 disabled:cursor-not-allowed hover:border-cyan-400/40"
+                        className="w-9 h-9 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-300 flex items-center justify-center disabled:opacity-25 disabled:cursor-not-allowed hover:border-cyan-400/40 min-w-[44px] min-h-[44px]"
                         aria-label="Próximo mês"
                       >
                         <ChevronRight className="w-4 h-4" />
@@ -1011,10 +1110,10 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                 <div key="step-2" data-booking-panel className="space-y-3.5 sm:space-y-4">
                   <div className="flex justify-between items-center">
                     <div>
-                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                      <h2 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                         <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 text-xs flex items-center justify-center font-bold">2</span>
                         Selecione os Serviços
-                      </h3>
+                      </h2>
                       <p className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">
                         Pode marcar mais de um serviço para o mesmo pedido.
                       </p>
@@ -1024,8 +1123,15 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                     </button>
                   </div>
 
-                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1 booking-scroll">
-                    {activeServices.map((service, index) => {
+                  <label className="block text-xs text-slate-300" htmlFor="public-service-search">Buscar serviço</label>
+                  <input id="public-service-search" type="search" value={serviceQuery} onChange={event => setServiceQuery(event.target.value)} placeholder="Ex.: corte, barba, Pai & Filho…" className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-white" />
+                  <div className="flex flex-wrap gap-2" aria-label="Categorias de serviços">
+                    {['', ...serviceCategories].map(category => <button key={category} type="button" aria-pressed={effectiveServiceCategory === category} onClick={() => setServiceCategory(category)} className={`rounded-full border px-3 py-2 text-xs ${effectiveServiceCategory === category ? 'bg-emerald-400 text-slate-950 border-emerald-400' : 'border-slate-700 text-slate-300'}`}>{category || 'Todos'}</button>)}
+                  </div>
+                  <p className="text-xs text-slate-400" role="status">{visibleServices.length} serviço(s) encontrado(s). A busca não remove serviços já selecionados.</p>
+                  {!visibleServices.length && <button type="button" onClick={() => { setServiceQuery(''); setServiceCategory(''); }} className="text-sm text-emerald-400">Nenhum resultado. Limpar filtros</button>}
+                  <div className="space-y-2 max-h-96 overflow-y-auto pr-1 booking-scroll">
+                    {visibleServices.map((service, index) => {
                       const isSelected = selectedServices.some(s => s.id === service.id);
 
                       return (
@@ -1065,6 +1171,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                               <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
                                 <Clock className="w-3 h-3 text-slate-500" /> {service.duration_minutes} min • {service.category}
                               </p>
+                              {(service.badge || service.description) && <p className="mt-1 text-[10px] leading-relaxed text-slate-500">{service.badge ? <span className="mr-1 font-bold text-amber-200">{service.badge}:</span> : null}{service.description}</p>}
                             </div>
                           </div>
 
@@ -1115,10 +1222,10 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
               {step === 3 && (
                 <div key="step-3" data-booking-panel className="space-y-3.5 sm:space-y-4">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <h2 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 text-xs flex items-center justify-center font-bold">3</span>
                       Escolha o Profissional
-                    </h3>
+                    </h2>
                     <button onClick={() => goToStep(2)} className="text-xs text-emerald-400 hover:underline">
                       Alterar ({selectedServices.length})
                     </button>
@@ -1152,6 +1259,8 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                         <div>
                           <h4 className="font-bold text-white group-hover:text-emerald-400 transition-colors text-xs sm:text-sm">{barber.full_name}</h4>
                           <p className="text-[11px] text-slate-400">{barber.role}</p>
+                          {barber.bio && <p className="mt-2 text-xs text-slate-300 break-words">{barber.bio}</p>}
+                          {!!barber.specialties?.length && <div className="mt-2 flex flex-wrap gap-1">{barber.specialties.map(specialty => <span key={specialty} className="rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] text-emerald-300">{specialty}</span>)}</div>}
                         </div>
                       </div>
                     ))}
@@ -1163,10 +1272,10 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
               {step === 4 && (
                 <div key="step-4" data-booking-panel className="space-y-3.5 sm:space-y-4">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <h2 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 text-xs flex items-center justify-center font-bold">4</span>
                       Horário de Início
-                    </h3>
+                    </h2>
                     <button onClick={() => goToStep(3)} className="text-xs text-emerald-400 hover:underline">
                       Alterar barbeiro
                     </button>
@@ -1266,6 +1375,34 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                     )}
                     </>
                   )}
+
+                  {/* CARD DE CONVITE PARA A LISTA DE ESPERA RELÂMPAGO */}
+                  <div className="public-waitlist-invite-card mt-4 p-3.5 sm:p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <div className="waitlist-invite-icon w-8 h-8 rounded-xl bg-amber-400/20 border border-amber-400/35 flex items-center justify-center text-amber-300 shrink-0 mt-0.5 shadow-sm">
+                        <Zap className="w-4 h-4 text-amber-400 animate-pulse" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="waitlist-invite-title text-xs font-bold text-white flex items-center gap-1.5 flex-wrap">
+                          Não encontrou seu horário ideal?
+                          <span className="waitlist-invite-tag text-[9px] px-1.5 py-0.2 rounded-full bg-amber-400/20 text-amber-300 font-extrabold border border-amber-400/30">
+                            VAGA RELÂMPAGO
+                          </span>
+                        </p>
+                        <p className="waitlist-invite-text text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                          Entre na nossa Fila de Espera: se alguém desmarcar, avisamos você imediatamente no WhatsApp!
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowWaitlistModal(true)}
+                      className="waitlist-invite-btn w-full sm:w-auto px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black transition-all shadow-md active:scale-95 shrink-0 flex items-center justify-center gap-1.5"
+                    >
+                      <Zap className="w-3.5 h-3.5 fill-slate-950 text-slate-950" />
+                      Entrar na Fila
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -1273,10 +1410,10 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
               {step === 5 && (
                 <form onSubmit={handleFinishBooking} key="step-5" data-booking-panel className="space-y-3.5 sm:space-y-4">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <h2 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 text-xs flex items-center justify-center font-bold">5</span>
                       Seus Dados de Contato
-                    </h3>
+                    </h2>
                     <button type="button" onClick={() => goToStep(4)} className="text-xs text-emerald-400 hover:underline">
                       Alterar horário
                     </button>
@@ -1333,18 +1470,16 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
 
                   <TurnstileWidget ref={bookingTurnstileRef} action="public_booking" onTokenChange={handleBookingTurnstileToken} />
 
-                  <button
+                  <ActionButton
                     type="submit"
-                    disabled={isSubmittingBooking}
+                    status={bookingButtonStatus}
+                    loadingLabel="Confirmando no sistema..."
+                    successLabel="Agendamento confirmado"
+                    icon={<MessageSquare className="w-4 h-4 fill-slate-950" />}
                     className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-2xl transition-all duration-200 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 hover:-translate-y-0.5 text-sm mt-1 flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-60 disabled:cursor-wait disabled:hover:translate-y-0"
                   >
-                    {isSubmittingBooking ? (
-                      <span className="w-4 h-4 rounded-full border-2 border-slate-950/30 border-t-slate-950 animate-spin" />
-                    ) : (
-                      <MessageSquare className="w-4 h-4 fill-slate-950" />
-                    )}
-                    {isSubmittingBooking ? 'Confirmando no sistema...' : `Confirmar Agendamento (R$ ${totalPrice.toFixed(2)})`}
-                  </button>
+                    {`Confirmar Agendamento (R$ ${totalPrice.toFixed(2)})`}
+                  </ActionButton>
                 </form>
               )}
             </div>
@@ -1355,6 +1490,20 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
           </div>
         </div>
       </div>
+
+      <PublicWaitlistModal
+        open={showWaitlistModal}
+        onClose={() => setShowWaitlistModal(false)}
+        org={org}
+        selectedDate={selectedDate}
+        selectedBarber={selectedBarber}
+        selectedServices={selectedServices}
+        barbers={activeBarbers}
+        services={activeServices}
+        initialClientName={clientName}
+        initialClientPhone={clientPhone}
+        onSuccess={(entry) => onAddWaitlist?.(entry)}
+      />
     </div>
   );
 };

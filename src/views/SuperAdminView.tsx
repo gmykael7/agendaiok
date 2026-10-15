@@ -1,7 +1,9 @@
+import { appConfirm } from '../components/common/ConfirmDialog';
 import { Modal } from "../components/common/Modal";
 import React, { useEffect, useMemo, useState } from 'react';
 import { Building2, CheckCircle2, Clock3, ExternalLink, Loader2, LockKeyhole, Search, ShieldCheck, Sparkles, UsersRound, Ban, CalendarDays, RefreshCw } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
+import { BrandLoader } from '../components/common/AppLoader';
 import { AgencyCredit } from '../components/common/AgencyCredit';
 import { SuperAdminNotices } from '../components/common/SuperAdminNotices';
 import { clearAuthToken, getAuthToken } from '../services/cloudSync';
@@ -74,6 +76,12 @@ export const SuperAdminView: React.FC = () => {
 
   const saveTenant = async () => {
     if (!editing) return;
+    const previous = tenants.find(t => t.email === editing.email);
+    // Suspender uma barbearia bloqueia o acesso dos clientes dela: exige confirmação.
+    if (editing.status === 'suspended' && previous?.status !== 'suspended') {
+      const confirmed = await appConfirm(`Suspender "${editing.name}"? A barbearia perde o acesso ao painel até ser reativada.`, { danger: true });
+      if (!confirmed) return;
+    }
     setSaving(true); setError('');
     try {
       await updateSuperAdminTenant({ email: editing.email, status: editing.status, plan: editing.plan, due_date: editing.due_date });
@@ -82,7 +90,7 @@ export const SuperAdminView: React.FC = () => {
     finally { setSaving(false); }
   };
 
-  if (loading) return <div className="superadmin-view min-h-screen bg-[#061120] text-white flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-cyan-300" /></div>;
+  if (loading) return <div className="superadmin-view min-h-[60dvh] bg-[#061120] text-white flex items-center justify-center p-6"><BrandLoader size={64} label="Carregando painel" /></div>;
 
   if (!authorized) {
     return (

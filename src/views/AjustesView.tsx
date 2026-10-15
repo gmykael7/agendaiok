@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { 
   Settings, Users, Scissors, Building2, Palette,
-  ShieldCheck, Boxes
+  ShieldCheck, Boxes, MessageSquare
 } from 'lucide-react';
 import { Organization, Service, Barber, Appointment, CurrentUser, Product, ProductSale } from '../types';
 import { TeamView } from './TeamView';
@@ -9,9 +9,11 @@ import { ServicesView } from './ServicesView';
 import { SettingsView } from './SettingsView';
 import { UsersPermissionsView } from './UsersPermissionsView';
 import { ProductsView } from './ProductsView';
+import { WhatsAppSettingsSection } from '../components/settings/WhatsAppSettingsSection';
 import { INITIAL_ORG, INITIAL_SERVICES, INITIAL_BARBERS, INITIAL_APPOINTMENTS } from '../data/mockData';
+import { AppThemeMode, AppThemePreference } from '../config/theme';
 
-type SettingsSubTab = 'team' | 'services' | 'products' | 'general' | 'appearance' | 'users';
+type SettingsSubTab = 'team' | 'services' | 'products' | 'general' | 'appearance' | 'users' | 'whatsapp';
 
 interface AjustesViewProps {
   initialTab?: 'team' | 'services' | 'general' | 'appearance';
@@ -34,6 +36,10 @@ interface AjustesViewProps {
   }) => void;
   onResetAll: () => void;
   currentUser?: CurrentUser;
+  appThemeMode: AppThemeMode;
+  setAppThemeMode: React.Dispatch<React.SetStateAction<AppThemeMode>>;
+  appThemePreference: AppThemePreference;
+  followSystemTheme: () => void;
 }
 
 export const AjustesView: React.FC<AjustesViewProps> = ({
@@ -52,6 +58,10 @@ export const AjustesView: React.FC<AjustesViewProps> = ({
   onLoadDemo,
   onResetAll,
   currentUser,
+  appThemeMode,
+  setAppThemeMode,
+  appThemePreference,
+  followSystemTheme,
 }) => {
   const [subTab, setSubTab] = useState<SettingsSubTab>(initialTab);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -93,12 +103,13 @@ export const AjustesView: React.FC<AjustesViewProps> = ({
       {/* NAVEGAÇÃO POR SUB-ABAS MOBILE */}
       <div className="grid grid-cols-2 gap-2 sm:hidden">
         {[
-          { id: 'team', label: 'Equipe', detail: `${barbers.length} profissionais`, icon: Users, visible: true },
+          { id: 'team', label: 'Equipe', detail: `${barbers.length} ${barbers.length === 1 ? 'profissional' : 'profissionais'}`, icon: Users, visible: true },
           { id: 'services', label: 'Serviços', detail: `${services.length} cadastrados`, icon: Scissors, visible: true },
-          { id: 'products', label: 'Produtos', detail: `${products.length} no estoque`, icon: Boxes, visible: currentUser?.permissions?.products !== false },
+          { id: 'products', label: 'Produtos', detail: `${products.length} ${products.length === 1 ? 'item' : 'itens'} em estoque`, icon: Boxes, visible: currentUser?.permissions?.products !== false },
           { id: 'users', label: 'Usuários', detail: 'Permissões', icon: ShieldCheck, visible: currentUser?.permissions?.usuarios !== false },
           { id: 'general', label: 'Perfil e horários', detail: 'Configurações gerais', icon: Building2, visible: true },
           { id: 'appearance', label: 'Aparência', detail: 'Temas, cores e estilo', icon: Palette, visible: true },
+          { id: 'whatsapp', label: 'WhatsApp', detail: 'Conectar número', icon: MessageSquare, visible: true },
         ].filter((item) => item.visible).map((item) => {
           const Icon = item.icon;
           const isActive = subTab === item.id;
@@ -127,7 +138,7 @@ export const AjustesView: React.FC<AjustesViewProps> = ({
       </div>
 
       {/* NAVEGAÇÃO POR SUB-ABAS DESKTOP */}
-      <div className="hidden sm:grid sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-2 bg-[#121B2E] p-1.5 rounded-2xl border border-slate-800 shadow-sm">
+      <div className="hidden sm:grid sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-7 gap-2 bg-[#121B2E] p-1.5 rounded-2xl border border-slate-800 shadow-sm">
         <button
           onClick={() => navigateToSubTab('team')}
           className={`flex min-h-11 items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-center text-xs font-bold transition-all active:scale-95 ${
@@ -201,6 +212,18 @@ export const AjustesView: React.FC<AjustesViewProps> = ({
           <Palette className="w-4 h-4" />
           Aparência
         </button>
+
+        <button
+          onClick={() => navigateToSubTab('whatsapp')}
+          className={`flex min-h-11 items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-center text-xs font-bold transition-all active:scale-95 ${
+            subTab === 'whatsapp'
+              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          WhatsApp Oficial
+        </button>
       </div>
 
       {/* CONTEÚDO DA SUB-ABA */}
@@ -241,6 +264,10 @@ export const AjustesView: React.FC<AjustesViewProps> = ({
             setOrg={setOrg}
             onLoadDemo={onLoadDemo}
             onResetAll={onResetAll}
+            appThemeMode={appThemeMode}
+            setAppThemeMode={setAppThemeMode}
+            appThemePreference={appThemePreference}
+            followSystemTheme={followSystemTheme}
           />
         )}
 
@@ -251,7 +278,15 @@ export const AjustesView: React.FC<AjustesViewProps> = ({
             setOrg={setOrg}
             onLoadDemo={onLoadDemo}
             onResetAll={onResetAll}
+            appThemeMode={appThemeMode}
+            setAppThemeMode={setAppThemeMode}
+            appThemePreference={appThemePreference}
+            followSystemTheme={followSystemTheme}
           />
+        )}
+
+        {subTab === 'whatsapp' && (
+          <WhatsAppSettingsSection org={org} setOrg={setOrg} />
         )}
       </div>
     </div>

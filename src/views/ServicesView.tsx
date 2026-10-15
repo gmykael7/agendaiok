@@ -1,6 +1,8 @@
+import { appConfirm } from '../components/common/ConfirmDialog';
 import { Modal } from "../components/common/Modal";
 import React, { useState } from 'react';
-import { Scissors, Plus, Clock, Trash2, Edit3, X, CheckCircle, Tag, Sparkles } from 'lucide-react';
+import { Scissors, Plus, Clock, Trash2, Edit3, X, Sparkles, Coffee, HeartHandshake } from 'lucide-react';
+import { ActionButton } from '../components/common/ActionButton';
 import { Service } from '../types';
 
 interface ServicesViewProps {
@@ -8,7 +10,13 @@ interface ServicesViewProps {
   setServices: React.Dispatch<React.SetStateAction<Service[]>>;
 }
 
-const DEFAULT_CATEGORIES = ['Cabelo', 'Barba', 'Combos', 'Estética', 'Sobrancelha', 'Outros'];
+const DEFAULT_CATEGORIES = ['Cabelo', 'Barba', 'Combos', 'Estética', 'Sobrancelha', 'Experiências', 'Day Spa', 'Planos', 'Outros'];
+
+const EXPERIENCE_PRESETS: Service[] = [
+  { id: 'experience-father-son', name: 'Plano Pai & Filho', description: 'Dois cortes, ritual de boas-vindas e registro da evolução dos cortes.', badge: 'Experiência em família', price: 0, duration_minutes: 75, category: 'Experiências', active: false },
+  { id: 'experience-day-spa-60', name: 'Day Spa Masculino 60', description: 'Corte, barba e cuidado facial express para sair renovado.', badge: 'Presente perfeito', price: 0, duration_minutes: 60, category: 'Day Spa', active: false },
+  { id: 'experience-day-spa-120', name: 'Day Spa Masculino 120', description: 'Ritual completo com corte, barba, pele, massagem express e mãos.', badge: 'Experiência completa', price: 0, duration_minutes: 120, category: 'Day Spa', active: false },
+];
 
 export const ServicesView: React.FC<ServicesViewProps> = ({
   services,
@@ -22,6 +30,9 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
   const [price, setPrice] = useState('');
   const [duration, setDuration] = useState('30');
   const [category, setCategory] = useState('Cabelo');
+  const [description, setDescription] = useState('');
+  const [badge, setBadge] = useState('');
+  const [presetMessage, setPresetMessage] = useState('');
 
   const openAddModal = () => {
     setEditingService(null);
@@ -29,6 +40,8 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
     setPrice('');
     setDuration('30');
     setCategory('Cabelo');
+    setDescription('');
+    setBadge('');
     setShowModal(true);
   };
 
@@ -38,11 +51,16 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
     setPrice(service.price.toString());
     setDuration(service.duration_minutes.toString());
     setCategory(service.category);
+    setDescription(service.description || '');
+    setBadge(service.badge || '');
     setShowModal(true);
   };
 
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'loading' | 'success'>('idle');
+
   const handleSaveService = (e: React.FormEvent) => {
     e.preventDefault();
+    if (saveStatus !== 'idle') return;
     if (!name.trim() || !price) return;
 
     const parsedPrice = parseFloat(price);
@@ -55,6 +73,8 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
         price: parsedPrice,
         duration_minutes: parsedDuration,
         category: category.trim() || 'Geral',
+        description: description.trim() || undefined,
+        badge: badge.trim() || undefined,
       } : s));
     } else {
       const newService: Service = {
@@ -63,22 +83,41 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
         price: parsedPrice,
         duration_minutes: parsedDuration,
         category: category.trim() || 'Geral',
+        description: description.trim() || undefined,
+        badge: badge.trim() || undefined,
         active: true,
       };
       setServices(prev => [...prev, newService]);
     }
 
-    setShowModal(false);
+    setSaveStatus('success');
+    window.setTimeout(() => {
+      setShowModal(false);
+      setSaveStatus('idle');
+    }, 550);
   };
 
-  const handleDeleteService = (id: string) => {
-    if (window.confirm('Tem certeza que deseja remover este serviço?')) {
+  const handleDeleteService = async (id: string) => {
+    if (await appConfirm('Tem certeza que deseja remover este serviço?', { danger: true })) {
       setServices(prev => prev.filter(s => s.id !== id));
     }
   };
 
   const toggleActive = (id: string) => {
     setServices(prev => prev.map(s => s.id === id ? { ...s, active: !s.active } : s));
+  };
+
+  const addExperiencePresets = () => {
+    const existingNames = new Set(services.map(service => service.name.trim().toLocaleLowerCase('pt-BR')));
+    const additions = EXPERIENCE_PRESETS
+      .filter(service => !existingNames.has(service.name.toLocaleLowerCase('pt-BR')))
+      .map(service => ({ ...service, id: `${service.id}-${Date.now()}`, org_id: services[0]?.org_id }));
+    if (additions.length === 0) {
+      setPresetMessage('As experiências sugeridas já estão no catálogo.');
+      return;
+    }
+    setServices(previous => [...previous, ...additions]);
+    setPresetMessage(`${additions.length} experiências adicionadas como rascunho. Defina o preço e ative quando estiver pronto.`);
   };
 
   return (
@@ -102,6 +141,21 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
           <span>Novo Serviço</span>
         </button>
       </div>
+
+      <section className="services-experience-panel rounded-3xl border border-cyan-400/20 bg-gradient-to-r from-cyan-400/[0.07] via-[#121B2E] to-amber-300/[0.06] p-4 sm:p-5 shadow-md">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 text-cyan-200"><HeartHandshake className="w-5 h-5" /></div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-200">Experiências que fidelizam</p>
+              <h3 className="mt-1 text-sm font-black text-white">Pai & Filho e Day Spa prontos para configurar</h3>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-400">Inclua também o lounge no ritual: café especial, água saborizada, Wi‑Fi, videogame e um espaço para conversar ou trabalhar.</p>
+            </div>
+          </div>
+          <button type="button" onClick={addExperiencePresets} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-300/10 px-3.5 py-2.5 text-xs font-black text-cyan-100 transition hover:bg-cyan-300/15 active:scale-95"><Coffee className="w-4 h-4" />Adicionar como rascunho</button>
+        </div>
+        {presetMessage && <p className="mt-3 rounded-xl border border-cyan-400/15 bg-slate-950/35 px-3 py-2 text-[11px] text-cyan-100">{presetMessage}</p>}
+      </section>
 
       {/* LISTA OU EMPTY STATE */}
       {services.length === 0 ? (
@@ -151,6 +205,8 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
                 </div>
 
                 <h4 className="font-bold text-white text-base sm:text-lg mt-3 leading-snug">{service.name}</h4>
+                {service.badge && <span className="mt-2 inline-flex rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-200">{service.badge}</span>}
+                {service.description && <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{service.description}</p>}
 
                 <div className="flex items-center gap-4 mt-3 text-xs text-slate-400">
                   <span className="flex items-center gap-1.5">
@@ -166,14 +222,14 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
               <div className="flex items-center justify-end gap-1.5 pt-3.5 mt-3.5 border-t border-slate-800/70">
                 <button
                   onClick={() => openEditModal(service)}
-                  className="p-2 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-xl transition-colors"
+                  className="p-2 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-xl transition-colors min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
                   title="Editar serviço"
                 >
                   <Edit3 className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => handleDeleteService(service.id)}
-                  className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-950/20 rounded-xl transition-colors"
+                  className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-950/20 rounded-xl transition-colors min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
                   title="Excluir serviço"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -195,7 +251,7 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
               </h3>
               <button aria-label="Fechar janela" 
                 onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-white p-1 rounded-lg min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -215,6 +271,16 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
                     placeholder="Ex: Corte Degrade Navalhado"
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
                   />
+                </div>
+
+                <div>
+                  <label htmlFor="services-field-5" className="block text-xs font-semibold text-slate-300 mb-1">Descrição curta</label>
+                  <textarea id="services-field-5" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={180} rows={2} placeholder="Ex.: Inclui café especial e cuidado facial express" className="w-full resize-none bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" />
+                </div>
+
+                <div>
+                  <label htmlFor="services-field-6" className="block text-xs font-semibold text-slate-300 mb-1">Selo opcional</label>
+                  <input id="services-field-6" type="text" value={badge} onChange={(e) => setBadge(e.target.value)} maxLength={40} placeholder="Ex.: Presente perfeito" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -272,12 +338,15 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
                 >
                   Cancelar
                 </button>
-                <button
+                <ActionButton
                   type="submit"
+                  status={saveStatus}
+                  loadingLabel="Salvando..."
+                  successLabel="Salvo"
                   className="px-5 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-emerald-400 transition-colors shadow-sm active:scale-95"
                 >
                   {editingService ? 'Salvar Alterações' : 'Cadastrar Serviço'}
-                </button>
+                </ActionButton>
               </div>
             </form>
           </div>

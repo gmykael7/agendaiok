@@ -58,7 +58,7 @@ export const WhatsAppActionsModal: React.FC<WhatsAppActionsModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-400 transition hover:text-white"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-400 transition hover:text-white min-w-[44px] min-h-[44px]"
             aria-label="Fechar mensagens do WhatsApp"
           >
             <X className="h-4 w-4" />

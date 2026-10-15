@@ -1,0 +1,100 @@
+{
+  "version": "3.0",
+  "screens": [
+    {
+      "id": "APPOINTMENT_SCREEN",
+      "title": "Agendar Horário",
+      "data": {
+        "services": {
+          "type": "array",
+          "__example__": [
+            {
+              "id": "svc1",
+              "title": "Corte Masculino - R$ 50,00"
+            }
+          ]
+        },
+        "barbers": {
+          "type": "array",
+          "__example__": [
+            {
+              "id": "any",
+              "title": "Qualquer profissional"
+            }
+          ]
+        },
+        "dates": {
+          "type": "array",
+          "__example__": [
+            {
+              "id": "2026-09-14",
+              "title": "14/09/2026"
+            }
+          ]
+        },
+        "slots": {
+          "type": "array",
+          "__example__": [
+            {
+              "id": "10:00",
+              "title": "10:00"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Dropdown",
+            "name": "service_id",
+            "label": "Serviço desejado",
+            "required": true,
+            "data-source": "${data.services}"
+          },
+          {
+            "type": "Dropdown",
+            "name": "barber_id",
+            "label": "Profissional",
+            "required": false,
+            "data-source": "${data.barbers}"
+          },
+          {
+            "type": "Dropdown",
+            "name": "date",
+            "label": "Data do Atendimento",
+            "required": true,
+            "data-source": "${data.dates}"
+          },
+          {
+            "type": "RadioButtonsGroup",
+            "name": "start_time",
+            "label": "Horário Disponível",
+            "required": true,
+            "data-source": "${data.slots}"
+          },
+          {
+            "type": "TextInput",
+            "name": "client_name",
+            "label": "Seu Nome Completo",
+            "required": true
+          },
+          {
+            "type": "Footer",
+            "label": "Confirmar Agendamento",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {
+                "service_id": "${form.service_id}",
+                "barber_id": "${form.barber_id}",
+                "date": "${form.date}",
+                "start_time": "${form.start_time}",
+                "client_name": "${form.client_name}"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

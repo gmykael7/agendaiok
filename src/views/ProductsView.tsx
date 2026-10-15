@@ -1,3 +1,4 @@
+import { appConfirm } from '../components/common/ConfirmDialog';
 import { Modal } from "../components/common/Modal";
 import React, { useMemo, useState } from 'react';
 import {
@@ -186,8 +187,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
     setCatalogModal(false);
   };
 
-  const deleteProduct = (product: Product) => {
-    if (!confirm(`Excluir o produto “${product.name}”? O histórico das vendas será preservado.`)) return;
+  const deleteProduct = async (product: Product) => {
+    if (!await appConfirm(`Excluir o produto “${product.name}”? O histórico das vendas será preservado.`, { danger: true })) return;
     setProducts((current) => current.filter((item) => item.id !== product.id));
     setCart((current) => { const next = { ...current }; delete next[product.id]; return next; });
   };
@@ -198,8 +199,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
     setProductSales((current) => current.map((item) => item.id === sale.id ? { ...item, status: 'completed', payment_method: method, completed_at: nowIso } : item));
   };
 
-  const cancelPublicOrder = (sale: ProductSale) => {
-    if (!confirm('Cancelar este pedido e devolver os itens ao estoque?')) return;
+  const cancelPublicOrder = async (sale: ProductSale) => {
+    if (!await appConfirm('Cancelar este pedido e devolver os itens ao estoque?', { danger: true })) return;
     setProducts((current) => current.map((product) => {
       const reserved = sale.items.find((item) => item.product_id === product.id);
       return reserved ? { ...product, stock: Number(product.stock || 0) + reserved.quantity } : product;
@@ -245,7 +246,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 return <div key={product.id} style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }} className="stagger-item booking-card min-w-0 rounded-2xl border border-slate-800 bg-slate-950/45 p-2.5 sm:p-3.5 flex flex-col gap-2.5 sm:gap-3 shadow-sm hover:border-emerald-500/40 transition-all">
                   <div className="aspect-square sm:aspect-[4/3] rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center">{product.image_url ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" /> : <ImageIcon className="w-8 h-8 text-slate-700" />}</div>
                   <div className="min-w-0"><p className="text-[10px] text-cyan-300 uppercase tracking-wider truncate font-semibold">{product.category}</p><h3 className="font-bold text-white truncate mt-0.5 text-sm">{product.name}</h3><div className="flex justify-between items-center mt-2"><span className="text-emerald-400 font-black font-mono">{money(product.price)}</span><span className={`text-[10px] font-bold ${soldOut ? 'text-rose-300' : Number(product.stock) <= 3 ? 'text-amber-300' : 'text-slate-500'}`}>{soldOut ? 'Sem estoque' : `${product.stock} un.`}</span></div></div>
-                  <div className="flex items-center justify-between rounded-xl bg-slate-900/80 border border-slate-800 p-1"><button disabled={!qty} onClick={() => changeCart(product, -1)} className="w-8 h-8 rounded-lg text-slate-300 disabled:opacity-30 flex items-center justify-center hover:bg-slate-800 transition-colors"><Minus className="w-3.5 h-3.5" /></button><span className="font-black text-white font-mono text-xs">{qty}</span><button disabled={soldOut || qty >= Number(product.stock)} onClick={() => changeCart(product, 1)} className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-300 disabled:opacity-30 flex items-center justify-center hover:bg-emerald-500/20 transition-colors"><Plus className="w-3.5 h-3.5" /></button></div>
+                  <div className="flex items-center justify-between rounded-xl bg-slate-900/80 border border-slate-800 p-1"><button type="button" aria-label={`Diminuir quantidade de ${product.name}`} disabled={!qty} onClick={() => changeCart(product, -1)} className="min-w-[44px] min-h-[44px] rounded-lg text-slate-300 disabled:opacity-30 flex items-center justify-center hover:bg-slate-800 transition-colors"><Minus className="w-3.5 h-3.5" /></button><span className="font-black text-white font-mono text-xs">{qty}</span><button type="button" aria-label={`Aumentar quantidade de ${product.name}`} disabled={soldOut || qty >= Number(product.stock)} onClick={() => changeCart(product, 1)} className="min-w-[44px] min-h-[44px] rounded-lg bg-emerald-500/10 text-emerald-300 disabled:opacity-30 flex items-center justify-center hover:bg-emerald-500/20 transition-colors"><Plus className="w-3.5 h-3.5" /></button></div>
                 </div>;
               })}</div>
             )}
@@ -269,7 +270,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             <div className="flex gap-2.5 sm:gap-3"><div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0">{product.image_url ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" /> : <Boxes className="w-6 h-6 text-slate-700" />}</div><div className="min-w-0 flex-1"><p className="text-[9px] text-cyan-300 uppercase tracking-widest truncate font-semibold">{product.category}</p><h3 className="font-bold text-white truncate text-sm">{product.name}</h3><p className="text-emerald-400 font-mono font-black mt-1">{money(product.price)}</p></div></div>
             <div className="grid grid-cols-3 gap-2 mt-3 text-center"><div className="rounded-xl bg-slate-900/70 p-2"><p className="text-[9px] text-slate-400 font-semibold">Estoque</p><p className={`font-black font-mono text-xs ${Number(product.stock) <= 3 ? 'text-amber-300' : 'text-white'}`}>{product.stock}</p></div><div className="rounded-xl bg-slate-900/70 p-2"><p className="text-[9px] text-slate-400 font-semibold">Site</p><p className={`text-[10px] font-black ${product.public_visible !== false ? 'text-emerald-400' : 'text-slate-500'}`}>{product.public_visible !== false ? 'Visível' : 'Oculto'}</p></div><div className="rounded-xl bg-slate-900/70 p-2"><p className="text-[9px] text-slate-400 font-semibold">Status</p><p className={`text-[10px] font-black ${product.active !== false ? 'text-cyan-300' : 'text-slate-500'}`}>{product.active !== false ? 'Ativo' : 'Inativo'}</p></div></div>
             {Number(product.stock) <= 3 && product.active !== false && <p className="mt-3 text-[10px] text-amber-300 flex items-center gap-1.5 font-semibold"><AlertTriangle className="w-3.5 h-3.5" />Estoque baixo</p>}
-            <div className="mt-4 pt-3 border-t border-slate-800 flex justify-end gap-1.5"><button onClick={() => openEditProduct(product)} className="p-2 rounded-xl bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"><Pencil className="w-4 h-4" /></button><button onClick={() => deleteProduct(product)} className="p-2 rounded-xl bg-rose-950/25 text-rose-300 hover:bg-rose-900/40 transition-colors"><Trash2 className="w-4 h-4" /></button></div>
+            <div className="mt-4 pt-3 border-t border-slate-800 flex justify-end gap-1.5"><button onClick={() => openEditProduct(product)} className="p-2 rounded-xl bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors min-w-[44px] min-h-[44px] inline-flex items-center justify-center"><Pencil className="w-4 h-4" /></button><button onClick={() => deleteProduct(product)} className="p-2 rounded-xl bg-rose-950/25 text-rose-300 hover:bg-rose-900/40 transition-colors min-w-[44px] min-h-[44px] inline-flex items-center justify-center"><Trash2 className="w-4 h-4" /></button></div>
           </div>)}</div>}
         </div>
       )}
@@ -287,7 +288,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       {catalogModal && (
         <Modal label="Cadastro de produto" onClose={() => setCatalogModal(false)} className="fixed inset-0 z-[220] app-mobile-modal bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-hidden" onMouseDown={(event) => { if (event.target === event.currentTarget) setCatalogModal(false); }}>
           <div className="modal-shell-fixed w-full sm:max-w-2xl max-h-[92dvh] rounded-3xl border border-slate-700 bg-[#0d1729] shadow-2xl">
-            <div className="modal-static-header sticky top-0 z-10 bg-[#0d1729]/95 backdrop-blur-xl border-b border-slate-800 px-5 py-4 flex items-center justify-between"><div><p className="text-[10px] uppercase tracking-widest text-emerald-400 font-bold">Produto físico</p><h3 className="text-lg sm:text-xl font-black text-white mt-0.5">{editing ? 'Editar produto' : 'Novo produto'}</h3></div><button aria-label="Fechar janela" type="button" onClick={() => setCatalogModal(false)} className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white"><X className="w-4 h-4" /></button></div>
+            <div className="modal-static-header sticky top-0 z-10 bg-[#0d1729]/95 backdrop-blur-xl border-b border-slate-800 px-5 py-4 flex items-center justify-between"><div><p className="text-[10px] uppercase tracking-widest text-emerald-400 font-bold">Produto físico</p><h3 className="text-lg sm:text-xl font-black text-white mt-0.5">{editing ? 'Editar produto' : 'Novo produto'}</h3></div><button aria-label="Fechar janela" type="button" onClick={() => setCatalogModal(false)} className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white min-w-[44px] min-h-[44px] inline-flex items-center justify-center"><X className="w-4 h-4" /></button></div>
             <form onSubmit={saveProduct} className="flex min-h-0 flex-1 flex-col">
               <div className="modal-scroll-body p-5 grid sm:grid-cols-2 gap-4">
                 <label className="sm:col-span-2 text-xs text-slate-300 font-semibold">Nome *<input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Pomada efeito matte" className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500" /></label>

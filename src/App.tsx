@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
+import { flushSync } from 'react-dom';
 import { 
   TabType, 
   Organization, 
@@ -9,14 +10,19 @@ import {
   AppNotification,
   CurrentUser,
   Product,
-  ProductSale
+  ProductSale,
+  ServiceCommand,
+  WaitlistEntry
 } from './types';
 import { Sidebar } from './components/layout/Sidebar';
 import { BottomNav } from './components/layout/BottomNav';
 import { Header } from './components/layout/Header';
 import { PlatformNotices } from './components/common/PlatformNotices';
 import { LoadingState } from './components/common/LoadingState';
-import { readStoredArray } from './utils/storage';
+import { readStoredArray, safeSetItem } from './utils/storage';
+import { motionAllowed } from './utils/motion';
+import { setAgendaFocus } from './utils/agendaFocus';
+import { OwnerAssistant } from './components/common/OwnerAssistant';
 import { bookingSlugFromLocation, isPublicBookingLocation } from './utils/routes';
 import { useClipboard } from './hooks/useClipboard';
 import { Modal } from './components/common/Modal';
@@ -27,6 +33,9 @@ const AgendaView = lazy(() => import('./views/AgendaView').then(m => ({ default:
 const CaixaView = lazy(() => import('./views/CaixaView').then(m => ({ default: m.CaixaView })));
 const RelatoriosView = lazy(() => import('./views/RelatoriosView').then(m => ({ default: m.RelatoriosView })));
 const ProductsView = lazy(() => import('./views/ProductsView').then(m => ({ default: m.ProductsView })));
+const ComandasView = lazy(() => import('./views/ComandasView').then(m => ({ default: m.ComandasView })));
+const SubscriptionsView = lazy(() => import('./views/SubscriptionsView').then(m => ({ default: m.SubscriptionsView })));
+const CampaignsView = lazy(() => import('./views/CampaignsView').then(m => ({ default: m.CampaignsView })));
 const ClientesView = lazy(() => import('./views/ClientesView').then(m => ({ default: m.ClientesView })));
 const AjustesView = lazy(() => import('./views/AjustesView').then(m => ({ default: m.AjustesView })));
 const TenantBookingView = lazy(() => import('./views/TenantBookingView').then(m => ({ default: m.TenantBookingView })));
@@ -34,6 +43,9 @@ const TvDisplayView = lazy(() => import('./views/TvDisplayView').then(m => ({ de
 const AuthView = lazy(() => import('./views/AuthView').then(m => ({ default: m.AuthView })));
 const SuperAdminView = lazy(() => import('./views/SuperAdminView').then(m => ({ default: m.SuperAdminView })));
 const LandingView = lazy(() => import('./views/LandingView').then(m => ({ default: m.LandingView })));
+const DirectoryView = lazy(() => import('./views/DirectoryView').then(m => ({ default: m.DirectoryView })));
+const PrivacyPolicyView = lazy(() => import('./views/PrivacyPolicyView').then(m => ({ default: m.PrivacyPolicyView })));
+const TermsOfServiceView = lazy(() => import('./views/TermsOfServiceView').then(m => ({ default: m.TermsOfServiceView })));
 import { 
   INITIAL_ORG, 
   INITIAL_SERVICES, 
@@ -51,13 +63,13 @@ import {
 } from './services/cloudSync';
 import { Bell, Calendar, CheckCircle2, Clock, Sparkles, User, X, Smartphone, QrCode, Copy, Check, Share2, ArrowRight, Cloud, RefreshCw } from 'lucide-react';
 import { BrandLogo } from './components/common/BrandLogo';
-import { BarberPoleLoader } from './components/common/BarberPoleLoader';
+import { BrandLoader } from './components/common/AppLoader';
 import { OnboardingChecklist } from './components/common/OnboardingChecklist';
 import { AgencyCredit } from './components/common/AgencyCredit';
 import { dedupeClients, upsertClient } from './utils/clients';
 import { getAdminAppUrl } from './config/urls';
 import { getLocalDateKey } from './utils/scheduling';
-import { getReadableTextColor, isLightColor, deriveAccentColor, adjustHexBrightness } from './utils/color';
+import { AppThemeMode, AppThemePreference, applyAppTheme, readStoredAppThemeMode, readStoredAppThemePreference, resolveSystemThemeMode, APP_THEME_STORAGE_KEY } from './config/theme';
 import { cloneCloudPayload, ConflictPreference, reconcileCloudPayload } from './utils/cloudReconciliation';
 
 const STORAGE_KEYS = {
@@ -70,6 +82,8 @@ const STORAGE_KEYS = {
   NOTIFICATIONS: 'agendai_notifications',
   PRODUCTS: 'agendai_products',
   PRODUCT_SALES: 'agendai_product_sales',
+  COMMANDS: 'agendai_commands',
+  WAITLIST: 'agendai_waitlist',
   AUTH_SESSION: 'agendai_session_active',
 };
 
@@ -98,6 +112,8 @@ const cloudPayloadFingerprint = (payload: CloudSyncPayload): string => JSON.stri
   notifications: payload.notifications || [],
   products: payload.products || [],
   productSales: payload.productSales || [],
+  commands: payload.commands || [],
+  waitlist: payload.waitlist || [],
 });
 
 
@@ -184,10 +200,93 @@ const getSlugFromUrl = (): string | null => {
   return bookingSlugFromLocation(window.location);
 };
 
+const ADMIN_TABS: readonly TabType[] = [
+  'dashboard', 'atendimentos', 'agenda', 'comandas', 'assinaturas', 'campanhas',
+  'caixa', 'clientes', 'produtos', 'relatorios', 'ajustes', 'booking',
+];
+
+const getAdminTabFromUrl = (): TabType => {
+  const requested = new URLSearchParams(window.location.search).get('tab') as TabType | null;
+  return requested && ADMIN_TABS.includes(requested) ? requested : 'dashboard';
+};
+
 export default function App() {
+  const [ownerAssistantOpen, setOwnerAssistantOpen] = useState(false);
   const isSuperAdminRoute = window.location.pathname.toLowerCase().startsWith('/superadmin');
   const tvSlug = getTvSlugFromUrl();
   const isTvRoute = Boolean(tvSlug);
+  const [appThemePreference, setAppThemePreference] = useState<AppThemePreference>(readStoredAppThemePreference);
+  const [appThemeMode, setAppThemeModeState] = useState<AppThemeMode>(readStoredAppThemeMode);
+  // Retângulo do elemento tocado (card ou botão): a troca de tema nasce dele.
+  const lastOriginRef = useRef<{ top: number; right: number; bottom: number; left: number; radius: number }>({
+    top: window.innerHeight / 2, left: window.innerWidth / 2, right: window.innerWidth / 2, bottom: window.innerHeight / 2, radius: 0,
+  });
+  useEffect(() => {
+    const remember = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      const origin = target?.closest('button, [role="button"], [class*="rounded-"]') as HTMLElement | null;
+      if (origin) {
+        const rect = origin.getBoundingClientRect();
+        const radius = parseFloat(getComputedStyle(origin).borderTopLeftRadius) || 0;
+        lastOriginRef.current = {
+          top: rect.top,
+          left: rect.left,
+          right: window.innerWidth - rect.right,
+          bottom: window.innerHeight - rect.bottom,
+          radius,
+        };
+      } else {
+        const x = event.clientX;
+        const y = event.clientY;
+        lastOriginRef.current = { top: y, left: x, right: window.innerWidth - x, bottom: window.innerHeight - y, radius: 0 };
+      }
+    };
+    window.addEventListener('pointerdown', remember, { capture: true });
+    return () => window.removeEventListener('pointerdown', remember, { capture: true });
+  }, []);
+
+  // Atualiza o estado do tema sem bloquear a tela (sem flushSync): a aplicação visual
+  // já aconteceu no documento, então a re-renderização pesada não atrasa a animação.
+  const appThemeModeRef = useRef<AppThemeMode>(appThemeMode);
+  useEffect(() => { appThemeModeRef.current = appThemeMode; }, [appThemeMode]);
+
+  const commitThemeMode = useCallback((next: AppThemeMode) => {
+    setAppThemeModeState(next);
+    setAppThemePreference(next);
+    safeSetItem(APP_THEME_STORAGE_KEY, next);
+  }, []);
+
+  const setAppThemeMode = useCallback<React.Dispatch<React.SetStateAction<AppThemeMode>>>((value) => {
+    const next = typeof value === 'function' ? value(appThemeModeRef.current) : value;
+    const doc = document as Document & { startViewTransition?: (cb: () => Promise<void> | void) => { ready: Promise<void> } };
+    if (!doc.startViewTransition || !motionAllowed()) {
+      commitThemeMode(next);
+      applyAppTheme(next, document.documentElement.style.getPropertyValue('--brand-color') || '#10B981');
+      return;
+    }
+    const o = lastOriginRef.current;
+    const transition = doc.startViewTransition(() => {
+      // Cores aplicadas direto no documento: custo mínimo, o novo tema aparece já no snapshot.
+      applyAppTheme(next, document.documentElement.style.getPropertyValue('--brand-color') || '#10B981');
+      commitThemeMode(next);
+    });
+    transition.ready.then(() => {
+      document.documentElement.animate(
+        {
+          clipPath: [
+            `inset(${o.top}px ${o.right}px ${o.bottom}px ${o.left}px round ${o.radius}px)`,
+            'inset(0px 0px 0px 0px round 0px)',
+          ],
+        },
+        { duration: 600, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', pseudoElement: '::view-transition-new(root)' },
+      );
+    }).catch(() => undefined);
+  }, [commitThemeMode]);
+  const followSystemTheme = useCallback(() => {
+    setAppThemePreference('system');
+    safeSetItem(APP_THEME_STORAGE_KEY, 'system');
+    setAppThemeModeState(resolveSystemThemeMode());
+  }, []);
 
   const [savedOrgs, setSavedOrgs] = useState<Organization[]>(() => {
     return readStoredArray<Organization>(STORAGE_KEYS.ALL_ORGS);
@@ -260,9 +359,16 @@ export default function App() {
     try { const parsed = JSON.parse(saved); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
   });
 
+  const [commands, setCommands] = useState<ServiceCommand[]>(() => readStoredArray<ServiceCommand>(STORAGE_KEYS.COMMANDS));
+
+  const [waitlist, setWaitlist] = useState<WaitlistEntry[]>(() => {
+    return readStoredArray<WaitlistEntry>(STORAGE_KEYS.WAITLIST);
+  });
+
   const [isClientRoute, setIsClientRoute] = useState<boolean>(() => {
     return isPublicBookingLocation(window.location);
   });
+  const [isDirectoryRoute, setIsDirectoryRoute] = useState<boolean>(() => window.location.pathname.toLowerCase().startsWith('/barbearias'));
   const [publicRouteSlug, setPublicRouteSlug] = useState(getSlugFromUrl);
 
   const [isLoadingPublicData, setIsLoadingPublicData] = useState<boolean>(() => isClientRoute);
@@ -270,7 +376,7 @@ export default function App() {
   const [publicCloudData, setPublicCloudData] = useState<CloudSyncPayload | null>(null);
   const publicOrgData = publicCloudData?.org || null;
 
-  const [currentTab, setCurrentTab] = useState<TabType>('dashboard');
+  const [currentTab, setCurrentTab] = useState<TabType>(getAdminTabFromUrl);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'team' | 'services' | 'general'>('team');
   const [authEntry, setAuthEntry] = useState<'landing' | 'login' | 'register'>(() => {
     const hash = window.location.hash.toLowerCase();
@@ -293,18 +399,35 @@ export default function App() {
   }, []);
 
   const navigateToTab = useCallback((tab: TabType) => {
+    if (!isClientRoute && !isDirectoryRoute && !isTvRoute && tab !== 'auth') {
+      const url = new URL(window.location.href);
+      if (tab === 'dashboard') url.searchParams.delete('tab');
+      else url.searchParams.set('tab', tab);
+      window.history.pushState({ tab }, '', `${url.pathname}${url.search}${url.hash}`);
+    }
     setCurrentTab(tab);
     requestAnimationFrame(() => {
       adminScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
       window.scrollTo({ top: 0, behavior: 'auto' });
     });
-  }, []);
+  }, [isClientRoute, isDirectoryRoute, isTvRoute]);
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => typeof window === 'undefined' ? false : localStorage.getItem('agendai_onboarding_dismissed') !== '1');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const { copied: copiedSyncLink, error: copySyncError, copy: copySyncLink } = useClipboard();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState('');
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+  useEffect(() => {
+    const up = () => setIsOnline(true);
+    const down = () => setIsOnline(false);
+    window.addEventListener('online', up);
+    window.addEventListener('offline', down);
+    return () => {
+      window.removeEventListener('online', up);
+      window.removeEventListener('offline', down);
+    };
+  }, []);
   const [pendingCloudConflict, setPendingCloudConflict] = useState<PendingCloudConflict | null>(null);
 
   const [toastNotification, setToastNotification] = useState<{
@@ -323,9 +446,10 @@ export default function App() {
   const lastSavedCloudFingerprintRef = useRef<string>('');
   const lastSyncedCloudPayloadRef = useRef<CloudSyncPayload | null>(null);
   const isCloudHydratedRef = useRef(false);
+  const isCloudPullInFlightRef = useRef(false);
   const skipNextCloudSaveRef = useRef(false);
-  const latestPayloadRef = useRef<CloudSyncPayload>({ org, savedOrgs, services, barbers, appointments, clients, notifications, products, productSales });
-  latestPayloadRef.current = { org, savedOrgs, services, barbers, appointments, clients, notifications, products, productSales };
+  const latestPayloadRef = useRef<CloudSyncPayload>({ org, savedOrgs, services, barbers, appointments, clients, notifications, products, productSales, commands, waitlist });
+  latestPayloadRef.current = { org, savedOrgs, services, barbers, appointments, clients, notifications, products, productSales, commands, waitlist };
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   // Refs para acesso livre de stale closures dentro de intervalos de sincronização
@@ -335,6 +459,8 @@ export default function App() {
   const clientsRef = useRef(clients);
   const productsRef = useRef(products);
   const productSalesRef = useRef(productSales);
+  const commandsRef = useRef(commands);
+  const waitlistRef = useRef(waitlist);
   const orgRef = useRef(org);
   const notificationBaselineRef = useRef<Map<string, Appointment>>(new Map());
   const notificationBaselineInitializedRef = useRef(false);
@@ -345,6 +471,8 @@ export default function App() {
   useEffect(() => { clientsRef.current = clients; }, [clients]);
   useEffect(() => { productsRef.current = products; }, [products]);
   useEffect(() => { productSalesRef.current = productSales; }, [productSales]);
+  useEffect(() => { commandsRef.current = commands; }, [commands]);
+  useEffect(() => { waitlistRef.current = waitlist; }, [waitlist]);
   useEffect(() => { orgRef.current = org; }, [org]);
 
   // Hidrata o estado React diretamente com o conteúdo autenticado da nuvem.
@@ -364,6 +492,8 @@ export default function App() {
     const nextNotifications = notificationsForOrg(Array.isArray(cloudData.notifications) ? cloudData.notifications : [], cloudData.org);
     const nextProducts = Array.isArray(cloudData.products) ? cloudData.products : [];
     const nextProductSales = Array.isArray(cloudData.productSales) ? cloudData.productSales : [];
+    const nextCommands = Array.isArray(cloudData.commands) ? cloudData.commands : [];
+    const nextWaitlist = Array.isArray(cloudData.waitlist) ? cloudData.waitlist : [];
 
     const normalizedCloudData: CloudSyncPayload = {
       org: cloudData.org,
@@ -375,6 +505,8 @@ export default function App() {
       notifications: nextNotifications,
       products: nextProducts,
       productSales: nextProductSales,
+      commands: nextCommands,
+      waitlist: nextWaitlist,
       current_user: cloudData.current_user,
       updated_at: cloudData.updated_at,
     };
@@ -390,6 +522,8 @@ export default function App() {
     clientsRef.current = nextClients;
     productsRef.current = nextProducts;
     productSalesRef.current = nextProductSales;
+    commandsRef.current = nextCommands;
+    waitlistRef.current = nextWaitlist;
 
     setOrg(cloudData.org);
     setSavedOrgs(nextSavedOrgs);
@@ -400,6 +534,8 @@ export default function App() {
     setNotifications(mergeNotifications([], nextNotifications));
     setProducts(nextProducts);
     setProductSales(nextProductSales);
+    setCommands(nextCommands);
+    setWaitlist(nextWaitlist);
     if (cloudData.current_user) { setCurrentUser(cloudData.current_user); localStorage.setItem('agendai_current_user', JSON.stringify(cloudData.current_user)); }
 
     if (!notificationBaselineInitializedRef.current) {
@@ -407,15 +543,17 @@ export default function App() {
       notificationBaselineInitializedRef.current = true;
     }
 
-    localStorage.setItem(STORAGE_KEYS.CURRENT_ORG, JSON.stringify(cloudData.org));
-    localStorage.setItem(STORAGE_KEYS.ALL_ORGS, JSON.stringify(nextSavedOrgs));
-    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(nextServices));
-    localStorage.setItem(STORAGE_KEYS.BARBERS, JSON.stringify(nextBarbers));
-    localStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(nextAppointments));
-    localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(nextClients));
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(mergeNotifications([], nextNotifications)));
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(nextProducts));
-    localStorage.setItem(STORAGE_KEYS.PRODUCT_SALES, JSON.stringify(nextProductSales));
+    safeSetItem(STORAGE_KEYS.CURRENT_ORG, JSON.stringify(cloudData.org));
+    safeSetItem(STORAGE_KEYS.ALL_ORGS, JSON.stringify(nextSavedOrgs));
+    safeSetItem(STORAGE_KEYS.SERVICES, JSON.stringify(nextServices));
+    safeSetItem(STORAGE_KEYS.BARBERS, JSON.stringify(nextBarbers));
+    safeSetItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(nextAppointments));
+    safeSetItem(STORAGE_KEYS.CLIENTS, JSON.stringify(nextClients));
+    safeSetItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(mergeNotifications([], nextNotifications)));
+    safeSetItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(nextProducts));
+    safeSetItem(STORAGE_KEYS.PRODUCT_SALES, JSON.stringify(nextProductSales));
+    safeSetItem(STORAGE_KEYS.COMMANDS, JSON.stringify(nextCommands));
+    safeSetItem(STORAGE_KEYS.WAITLIST, JSON.stringify(nextWaitlist));
   }, []);
 
   const reconcileAfterCloudConflict = useCallback(async (
@@ -478,38 +616,25 @@ export default function App() {
     };
   }, []);
 
-  // Aplica a paleta e personalizações escolhidas pelo estabelecimento em todas as telas.
+  // A interface usa somente os modos globais claro e escuro. A barbearia pode
+  // personalizar apenas a cor das ações principais, sem afetar fundos e cards.
   useEffect(() => {
-    const themedOrg = isClientRoute ? publicOrgData : org;
-    const root = document.documentElement;
-    const primaryColor = themedOrg?.primary_color || '#10b981';
-    const backgroundColor = themedOrg?.background_color || '#070B14';
-    const surfaceColor = themedOrg?.surface_color || '#121B2E';
-    const accentColor = themedOrg?.accent_color || deriveAccentColor(primaryColor);
-    const surfaceStyle = themedOrg?.ui_surface_style || 'solid';
-    const borderRadius = themedOrg?.ui_border_radius || 'standard';
-    const isLight = isLightColor(backgroundColor);
+    // Landing e diretório são experiências da plataforma, com tema único para clientes.
+    // Apenas a página de uma barbearia pode usar sua cor principal nos destaques.
+    const themedOrg = isClientRoute ? publicOrgData : (isDirectoryRoute || !isLoggedIn ? null : org);
+    applyAppTheme(appThemeMode, themedOrg?.primary_color || '#10B981');
+  }, [appThemeMode, org, publicOrgData, isClientRoute, isDirectoryRoute]);
 
-    root.style.setProperty('--brand-color', primaryColor);
-    root.style.setProperty('--brand-contrast-color', getReadableTextColor(primaryColor));
-    root.style.setProperty('--brand-accent', accentColor);
-    root.style.setProperty('--brand-accent-soft', isLight ? adjustHexBrightness(accentColor, 0.4) : adjustHexBrightness(accentColor, 1.3));
-    root.style.setProperty('--app-bg-color', backgroundColor);
-    root.style.setProperty('--app-surface-color', surfaceColor);
-    root.style.setProperty('--app-surface-dark', isLight ? '#ffffff' : adjustHexBrightness(surfaceColor, 0.7));
-    root.style.setProperty('--app-surface-elevated', isLight ? '#f1f5f9' : adjustHexBrightness(surfaceColor, 1.25));
-
-    const radiusMap: Record<string, string> = {
-      compact: '0.75rem',
-      standard: '1.25rem',
-      soft: '1.75rem',
-    };
-    root.style.setProperty('--app-card-radius', radiusMap[borderRadius] || '1.25rem');
-
-    root.dataset.appTheme = isLight ? 'light' : 'dark';
-    root.dataset.surfaceStyle = surfaceStyle;
-    root.dataset.borderRadius = borderRadius;
-  }, [org, publicOrgData, isClientRoute]);
+  // No modo automático, acompanha a preferência do sistema inclusive quando ela
+  // muda enquanto o aplicativo está aberto.
+  useEffect(() => {
+    if (appThemePreference !== 'system' || typeof window === 'undefined') return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const updateFromSystem = () => setAppThemeModeState(media.matches ? 'dark' : 'light');
+    updateFromSystem();
+    media.addEventListener('change', updateFromSystem);
+    return () => media.removeEventListener('change', updateFromSystem);
+  }, [appThemePreference]);
 
   // 1. CARREGAMENTO INICIAL: BUSCAR DADOS DA NUVEM IMEDIATAMENTE AO ABRIR A PÁGINA
   useEffect(() => {
@@ -603,6 +728,10 @@ export default function App() {
     const handleHashChange = () => {
       setIsClientRoute(isPublicBookingLocation(window.location));
       setPublicRouteSlug(getSlugFromUrl());
+      setIsDirectoryRoute(window.location.pathname.toLowerCase().startsWith('/barbearias'));
+      if (!isPublicBookingLocation(window.location) && !window.location.pathname.toLowerCase().startsWith('/barbearias')) {
+        setCurrentTab(getAdminTabFromUrl());
+      }
     };
 
     window.addEventListener('hashchange', handleHashChange);
@@ -635,6 +764,8 @@ export default function App() {
       notifications,
       products,
       productSales,
+      commands,
+      waitlist,
       updated_at: lastCloudTimestamp.current || undefined,
     };
     const fingerprint = cloudPayloadFingerprint(payload);
@@ -685,6 +816,8 @@ export default function App() {
             broadcastChannelRef.current.postMessage({ type: 'NOTIFICATIONS_SYNC', payload: synced.notifications || [], tenant: tenantKeyForOrg(synced.org) });
             broadcastChannelRef.current.postMessage({ type: 'PRODUCTS_SYNC', payload: synced.products || [], tenant: tenantKeyForOrg(synced.org) });
             broadcastChannelRef.current.postMessage({ type: 'PRODUCT_SALES_SYNC', payload: synced.productSales || [], tenant: tenantKeyForOrg(synced.org) });
+            broadcastChannelRef.current.postMessage({ type: 'COMMANDS_SYNC', payload: synced.commands || [], tenant: tenantKeyForOrg(synced.org) });
+            broadcastChannelRef.current.postMessage({ type: 'WAITLIST_SYNC', payload: synced.waitlist || [], tenant: tenantKeyForOrg(synced.org) });
             broadcastChannelRef.current.postMessage({ type: 'ORG_SYNC', payload: synced.org, tenant: tenantKeyForOrg(synced.org) });
           } catch (e) {}
         }
@@ -693,20 +826,22 @@ export default function App() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [services, barbers, appointments, clients, notifications, products, productSales, org, savedOrgs, isLoggedIn, isClientRoute, isTvRoute, applyPrivateCloudData, reconcileAfterCloudConflict]);
+  }, [services, barbers, appointments, clients, notifications, products, productSales, commands, waitlist, org, savedOrgs, isLoggedIn, isClientRoute, isTvRoute, applyPrivateCloudData, reconcileAfterCloudConflict]);
 
-  // 4. SINCRONIZAÇÃO ENTRE APARELHOS: consulta leve a cada 60s e ao voltar para a aba.
+  // 4. SINCRONIZAÇÃO ENTRE APARELHOS: consulta leve e atualização imediata
+  // ao abrir, recuperar a conexão ou voltar para o aplicativo.
   useEffect(() => {
-    if (!isInitialLoadDone.current || !isLoggedIn || isClientRoute || isTvRoute) return;
+    if (!isSessionValidated || !isInitialLoadDone.current || !isLoggedIn || isClientRoute || isTvRoute) return;
 
     const syncLiveCloud = async () => {
-      if (isManualSyncing || document.visibilityState === 'hidden') return;
+      if (isManualSyncing || document.visibilityState === 'hidden' || isCloudPullInFlightRef.current) return;
       const hasPendingEdits = () => isCloudHydratedRef.current && cloudPayloadFingerprint(latestPayloadRef.current) !== lastSavedCloudFingerprintRef.current;
       if (hasPendingEdits()) return;
 
       const targetIdentifier = orgRef.current?.email || orgRef.current?.slug;
       if (!targetIdentifier) return;
 
+      isCloudPullInFlightRef.current = true;
       try {
         const cloudData = await loadBarbershopFromCloud(targetIdentifier);
         if (hasPendingEdits()) return;
@@ -733,17 +868,31 @@ export default function App() {
             applyPrivateCloudData(cloudData);
           }
         }
-      } catch (e) {}
+      } catch (e) {
+      } finally {
+        isCloudPullInFlightRef.current = false;
+      }
     };
 
-    const interval = setInterval(syncLiveCloud, 60_000);
+    const syncWhenVisible = () => {
+      if (document.visibilityState === 'visible') void syncLiveCloud();
+    };
+
+    void syncLiveCloud();
+    const interval = setInterval(syncLiveCloud, 5_000);
     window.addEventListener('focus', syncLiveCloud);
+    window.addEventListener('online', syncLiveCloud);
+    window.addEventListener('pageshow', syncLiveCloud);
+    document.addEventListener('visibilitychange', syncWhenVisible);
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', syncLiveCloud);
+      window.removeEventListener('online', syncLiveCloud);
+      window.removeEventListener('pageshow', syncLiveCloud);
+      document.removeEventListener('visibilitychange', syncWhenVisible);
     };
-  }, [isManualSyncing, isLoggedIn, isClientRoute, isTvRoute, applyPrivateCloudData]);
+  }, [isManualSyncing, isLoggedIn, isSessionValidated, isClientRoute, isTvRoute, applyPrivateCloudData]);
 
   // Sincronização entre abas com BroadcastChannel e storage event
   useEffect(() => {
@@ -790,6 +939,16 @@ export default function App() {
             setProducts(payload);
           } else if (type === 'PRODUCT_SALES_SYNC' && Array.isArray(payload)) {
             setProductSales(payload);
+          } else if (type === 'COMMANDS_SYNC' && Array.isArray(payload)) {
+            setCommands(payload);
+          } else if (type === 'WAITLIST_SYNC' && Array.isArray(payload)) {
+            setWaitlist(payload);
+          } else if (type === 'NEW_WAITLIST_ENTRY' && payload) {
+            setWaitlist(prev => {
+              const exists = prev.some(w => w.id === payload.id);
+              if (exists) return prev;
+              return [payload, ...prev];
+            });
           } else if (type === 'ORG_SYNC' && payload) {
             setOrg(payload);
           }
@@ -812,46 +971,54 @@ export default function App() {
     };
   }, []);
 
-  // Persistência local
+  // Persistência local segura contra estouro de cota
   useEffect(() => {
-    if (org && !isClientRoute) localStorage.setItem(STORAGE_KEYS.CURRENT_ORG, JSON.stringify(org));
-  }, [org]);
+    if (org && !isClientRoute) safeSetItem(STORAGE_KEYS.CURRENT_ORG, JSON.stringify(org));
+  }, [org, isClientRoute]);
 
   useEffect(() => {
-    if (!isClientRoute) localStorage.setItem(STORAGE_KEYS.ALL_ORGS, JSON.stringify(savedOrgs));
-  }, [savedOrgs]);
+    if (!isClientRoute) safeSetItem(STORAGE_KEYS.ALL_ORGS, JSON.stringify(savedOrgs));
+  }, [savedOrgs, isClientRoute]);
 
   useEffect(() => {
-    if (!isClientRoute) localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, isLoggedIn ? 'true' : 'false');
-  }, [isLoggedIn]);
+    if (!isClientRoute) safeSetItem(STORAGE_KEYS.AUTH_SESSION, isLoggedIn ? 'true' : 'false');
+  }, [isLoggedIn, isClientRoute]);
 
   useEffect(() => {
-    if (!isClientRoute) localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
+    if (!isClientRoute) safeSetItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
   }, [services, isClientRoute]);
 
   useEffect(() => {
-    if (!isClientRoute) localStorage.setItem(STORAGE_KEYS.BARBERS, JSON.stringify(barbers));
+    if (!isClientRoute) safeSetItem(STORAGE_KEYS.BARBERS, JSON.stringify(barbers));
   }, [barbers, isClientRoute]);
 
   useEffect(() => {
-    if (!isClientRoute) localStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(appointments));
+    if (!isClientRoute) safeSetItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(appointments));
   }, [appointments, isClientRoute]);
 
   useEffect(() => {
-    if (!isClientRoute) localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(clients));
+    if (!isClientRoute) safeSetItem(STORAGE_KEYS.CLIENTS, JSON.stringify(clients));
   }, [clients, isClientRoute]);
 
   useEffect(() => {
-    if (!isClientRoute) localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
+    if (!isClientRoute) safeSetItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
   }, [notifications, isClientRoute]);
 
   useEffect(() => {
-    if (!isClientRoute) localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+    if (!isClientRoute) safeSetItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
   }, [products, isClientRoute]);
 
   useEffect(() => {
-    if (!isClientRoute) localStorage.setItem(STORAGE_KEYS.PRODUCT_SALES, JSON.stringify(productSales));
+    if (!isClientRoute) safeSetItem(STORAGE_KEYS.PRODUCT_SALES, JSON.stringify(productSales));
   }, [productSales, isClientRoute]);
+
+  useEffect(() => {
+    if (!isClientRoute) safeSetItem(STORAGE_KEYS.COMMANDS, JSON.stringify(commands));
+  }, [commands, isClientRoute]);
+
+  useEffect(() => {
+    if (!isClientRoute) safeSetItem(STORAGE_KEYS.WAITLIST, JSON.stringify(waitlist));
+  }, [waitlist, isClientRoute]);
 
   useEffect(() => {
     if (!isLoggedIn || isClientRoute || isTvRoute || !isCloudHydratedRef.current) return;
@@ -1007,6 +1174,54 @@ export default function App() {
   const pendingAppointmentsCount = useMemo(() => {
     return appointments.filter(a => ['scheduled', 'confirmed', 'arrived', 'in_progress'].includes(a.status)).length;
   }, [appointments]);
+
+  // Fecha o consumo sem duplicar faturamento: serviços tornam-se atendimento
+  // concluído e produtos tornam-se venda de estoque, ambos já lidos pelo Caixa.
+  const handleCloseCommand = useCallback((command: ServiceCommand) => {
+    if (!org || command.status !== 'closed') return;
+    const now = new Date();
+    const nowIso = command.closed_at || now.toISOString();
+    const date = getLocalDateKey(now);
+    const time = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const serviceTotal = command.service_items.reduce((sum, item) => sum + Number(item.price || 0), 0);
+    const productTotal = command.product_items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
+    const payment = command.payment_method || 'pix';
+    setCommands(current => current.map(item => item.id === command.id ? command : item));
+    if (serviceTotal > 0) {
+      const appointmentId = command.linked_appointment_id || `cmd-service-${command.id}`;
+      const serviceAppointment: Appointment = {
+        id: appointmentId, org_id: org.id, client_name: command.client_name, client_phone: command.client_phone || '',
+        service_id: command.service_items[0]?.service_id, service_name: command.service_items.map(item => item.name).join(' + '),
+        services: command.service_items.map(item => ({ id: item.service_id, name: item.name, price: item.price, duration_minutes: item.duration_minutes })),
+        duration_minutes: command.service_items.reduce((sum, item) => sum + Number(item.duration_minutes || 0), 0),
+        barber_id: command.barber_id || '', barber_name: command.barber_name || 'Não informado', start_time: time,
+        price: serviceTotal, status: 'completed', payment_method: payment, date, created_at: nowIso,
+      };
+      setAppointments(current => current.some(item => item.id === appointmentId) ? current.map(item => item.id === appointmentId ? { ...item, ...serviceAppointment } : item) : [serviceAppointment, ...current]);
+      setClients(current => upsertClient(current, { name: command.client_name, phone: command.client_phone || '', org_id: org.id, visitDelta: 1, spentDelta: serviceTotal, lastVisit: 'Hoje' }).map(client => client.phone === command.client_phone || (!command.client_phone && client.name === command.client_name) ? { ...client, loyalty_points: Number(client.loyalty_points || 0) + 10 } : client));
+    }
+    if (productTotal > 0) {
+      const saleId = `cmd-product-${command.id}`;
+      setProductSales(current => current.some(item => item.id === saleId) ? current : [{ id: saleId, org_id: org.id, origin: 'internal', status: 'completed', items: command.product_items, total: productTotal, customer_name: command.client_name, customer_phone: command.client_phone, payment_method: payment, date, time, created_at: nowIso, completed_at: nowIso }, ...current]);
+      setProducts(current => current.map(product => { const sold = command.product_items.find(item => item.product_id === product.id); return sold ? { ...product, stock: Math.max(0, Number(product.stock || 0) - Number(sold.quantity || 0)) } : product; }));
+    }
+  }, [org]);
+
+  const handleOpenAppointmentCommand = useCallback((appointment: Appointment) => {
+    if (!org) return;
+    const existing = commands.find(command => command.linked_appointment_id === appointment.id && command.status === 'open');
+    if (!existing) {
+      const serviceItems = appointment.services?.length
+        ? appointment.services.map(service => ({ service_id: service.id, name: service.name, price: Number(service.price || 0), duration_minutes: Number(service.duration_minutes || 30) }))
+        : [{ service_id: appointment.service_id || `legacy-${appointment.id}`, name: appointment.service_name, price: Number(appointment.price || 0), duration_minutes: Number(appointment.duration_minutes || 30) }];
+      setCommands(current => [{
+        id: `cmd-${appointment.id}`, org_id: org.id, status: 'open', client_name: appointment.client_name,
+        client_phone: appointment.client_phone || undefined, barber_id: appointment.barber_id || undefined, barber_name: appointment.barber_name || undefined,
+        service_items: serviceItems, product_items: [], linked_appointment_id: appointment.id, opened_at: new Date().toISOString(),
+      }, ...current]);
+    }
+    navigateToTab('comandas');
+  }, [commands, navigateToTab, org]);
 
   const handleForceCloudSync = async () => {
     if (!org || isManualSyncing) return;
@@ -1189,6 +1404,7 @@ export default function App() {
     localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
     localStorage.removeItem(STORAGE_KEYS.PRODUCTS);
     localStorage.removeItem(STORAGE_KEYS.PRODUCT_SALES);
+    localStorage.removeItem(STORAGE_KEYS.COMMANDS);
     localStorage.removeItem('agendai_current_user');
     setCurrentUser(undefined);
     setSavedOrgs([]);
@@ -1199,6 +1415,7 @@ export default function App() {
     setNotifications([]);
     setProducts([]);
     setProductSales([]);
+    setCommands([]);
     setIsLoggedIn(false);
     setOrg(null);
     setCurrentTab('auth');
@@ -1231,6 +1448,7 @@ export default function App() {
       notifications: [],
       products: [],
       productSales: [],
+      commands: [],
     });
 
     if (broadcastChannelRef.current) {
@@ -1256,6 +1474,7 @@ export default function App() {
     setNotifications([]);
     setProducts([]);
     setProductSales([]);
+    setCommands([]);
     notificationBaselineInitializedRef.current = false;
     notificationBaselineRef.current = new Map();
     setIsLoggedIn(false);
@@ -1271,6 +1490,17 @@ export default function App() {
 
   const currentPublicOrg = isClientRoute ? publicOrgData : org;
 
+  const isPrivacyRoute = typeof window !== 'undefined' && (window.location.pathname.toLowerCase().startsWith('/privacidade') || window.location.hash.toLowerCase().includes('privacidade'));
+  const isTermsRoute = typeof window !== 'undefined' && (window.location.pathname.toLowerCase().startsWith('/termos') || window.location.hash.toLowerCase().includes('termos'));
+
+  if (isPrivacyRoute) {
+    return <PrivacyPolicyView />;
+  }
+
+  if (isTermsRoute) {
+    return <TermsOfServiceView />;
+  }
+
   // SUPER ADMIN AGÊNCIA G7 (rota isolada do painel de cada estabelecimento)
   if (isSuperAdminRoute) {
     return <SuperAdminView />;
@@ -1281,17 +1511,21 @@ export default function App() {
     return <TvDisplayView slug={tvSlug} />;
   }
 
+  // Diretório público: não exige sessão e só recebe campos aprovados pelo endpoint.
+  if (isDirectoryRoute) {
+    return <DirectoryView appThemeMode={appThemeMode} onThemeModeChange={setAppThemeMode} />;
+  }
+
   // 1. ROTA PÚBLICA DE AGENDAMENTO DO CLIENTE (MOBILE-FIRST)
   if (isClientRoute || currentTab === 'booking') {
     if (isLoadingPublicData) {
       return (
-        <div className="app-loading-screen min-h-screen safe-screen bg-[#070B14] text-slate-100 flex flex-col items-center justify-center p-6 text-center">
-          <div className="w-full max-w-md rounded-[28px] brand-panel px-7 py-8 space-y-5">
-            <BarberPoleLoader />
-            <div className="space-y-2">
-              <p className="text-[11px] uppercase tracking-[0.35em] text-cyan-200 font-semibold">AgendAI</p>
-              <h3 className="text-xl font-black text-white">Carregando sua experiência premium</h3>
-              <p className="text-xs text-slate-400">Buscando serviços, produtos, equipe e horários em tempo real.</p>
+        <div className="app-loading-screen min-h-[60dvh] safe-screen bg-[#070B14] text-slate-100 flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-full max-w-xs space-y-6">
+            <BrandLoader size={72} />
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-white">Preparando sua agenda</h3>
+              <p className="text-xs text-slate-400">Buscando serviços, equipe e horários.</p>
             </div>
             <AgencyCredit centered compact className="pt-2 border-0" />
           </div>
@@ -1301,8 +1535,8 @@ export default function App() {
 
     if (!currentPublicOrg) {
       return (
-        <div className="app-loading-screen min-h-screen safe-screen bg-[#070B14] text-slate-100 flex flex-col items-center justify-center p-6 text-center">
-          <div className="w-full max-w-md rounded-[28px] brand-panel px-7 py-8 space-y-5">
+        <div className="app-loading-screen min-h-[60dvh] safe-screen bg-[#070B14] text-slate-100 flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-full max-w-sm space-y-5">
             <div className="mx-auto w-20 h-20 rounded-full overflow-hidden bg-white border border-cyan-400/20 flex items-center justify-center shadow-[0_18px_40px_rgba(6,182,212,0.16)] p-3">
               <BrandLogo variant="mark" className="w-full h-full" />
             </div>
@@ -1318,7 +1552,7 @@ export default function App() {
     }
 
     return (
-      <main className="min-h-screen safe-screen bg-[#070B14] text-slate-100 font-sans p-3 sm:p-6 flex items-center justify-center">
+      <main className="booking-public-shell min-h-screen safe-screen bg-[#070B14] text-slate-100 font-sans p-3 sm:p-6 flex items-center justify-center">
         <TenantBookingView 
           org={currentPublicOrg}
           services={isClientRoute ? publicCloudData?.services || [] : services}
@@ -1327,6 +1561,7 @@ export default function App() {
           products={isClientRoute ? publicCloudData?.products || [] : products}
           onProductsChanged={isClientRoute ? items => setPublicCloudData(current => current ? { ...current, products: items } : current) : setProducts}
           onAddAppointment={handleAddAppointment}
+          onAddWaitlist={(entry) => setWaitlist(prev => [entry, ...prev])}
           onBackToAdmin={isLoggedIn && org ? () => {
             if (isClientRoute) {
               window.location.assign(getAdminAppUrl('/'));
@@ -1336,6 +1571,8 @@ export default function App() {
             setCurrentTab('dashboard');
           } : undefined}
           isStandalone={isClientRoute}
+          appThemeMode={appThemeMode}
+          onThemeModeChange={setAppThemeMode}
         />
       </main>
     );
@@ -1344,15 +1581,10 @@ export default function App() {
   // Valida o token no servidor antes de liberar qualquer tela administrativa.
   if (isLoggedIn && org && !isSessionValidated) {
     return (
-      <div className="app-loading-screen min-h-screen safe-screen bg-[#070B14] text-slate-100 flex items-center justify-center p-6">
-        <div className="w-full max-w-md rounded-[28px] brand-panel px-7 py-8 text-center space-y-5">
-          <BarberPoleLoader />
-          <div className="space-y-2">
-            <h3 className="text-xl font-black text-white">Validando sessão segura</h3>
-            <p className="text-xs text-slate-400">Aguarde enquanto autenticamos seu acesso na nuvem.</p>
-          </div>
-          <p className="text-sm text-slate-300">Carregando painel...</p>
-          <AgencyCredit centered compact className="pt-2 border-0" />
+      <div className="app-loading-screen min-h-[60dvh] safe-screen bg-[#070B14] text-slate-100 flex items-center justify-center p-6">
+        <div className="w-full max-w-xs text-center space-y-5">
+          <BrandLoader size={72} label="Validando sua sessão" />
+          <p className="text-xs text-slate-400">Autenticando seu acesso com segurança.</p>
         </div>
       </div>
     );
@@ -1361,7 +1593,7 @@ export default function App() {
   // 2. TELA DE AUTENTICAÇÃO (ACESSO RESTRITO - LOGIN OBRIGATÓRIO)
   if (!isLoggedIn || !org) {
     if (authEntry === 'landing') {
-      return <LandingView onLogin={() => openAuthEntry('login')} onRegister={() => openAuthEntry('register')} />;
+      return <LandingView onLogin={() => openAuthEntry('login')} onRegister={() => openAuthEntry('register')} appThemeMode={appThemeMode} onThemeModeChange={setAppThemeMode} />;
     }
 
     return (
@@ -1424,7 +1656,7 @@ export default function App() {
               </button>
               <button
                 onClick={() => {
-                  setCurrentTab('agenda');
+                  navigateToTab('agenda');
                   setToastNotification(null);
                 }}
                 className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20"
@@ -1454,6 +1686,7 @@ export default function App() {
           onOpenSidebar={() => setIsSidebarOpen(true)}
           onNavigateToBooking={() => navigateToTab('booking')}
           pendingAppointmentsCount={pendingAppointmentsCount}
+          syncTone={!isOnline ? 'offline' : syncStatusMsg.startsWith('⚠️') ? 'warn' : syncStatusMsg.startsWith('✅') ? 'saved' : 'ok'}
           onLogout={handleLogout}
           clients={clients}
           appointments={appointments}
@@ -1462,6 +1695,8 @@ export default function App() {
           onMarkNotificationRead={handleMarkNotificationRead}
           onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
           onNavigate={navigateToTab}
+          assistantOpen={ownerAssistantOpen}
+          onAssistantToggle={() => setOwnerAssistantOpen((open) => !open)}
         />
 
         {/* Apenas esta área rola. Assim o cabeçalho nunca sobe junto com a página. */}
@@ -1530,7 +1765,7 @@ export default function App() {
                 barbers={barbers}
                 org={org}
                 productSales={productSales}
-                onNavigateToAgenda={() => navigateToTab('agenda')}
+                onNavigateToAgenda={(appointmentId) => { if (appointmentId) setAgendaFocus(appointmentId); navigateToTab('agenda'); }}
                 onNavigateToServices={() => navigateToTab('ajustes')}
               />
             )}
@@ -1542,6 +1777,8 @@ export default function App() {
                 services={services}
                 barbers={barbers}
                 org={org}
+                setClients={setClients}
+                onOpenCommand={handleOpenAppointmentCommand}
               />
             )}
 
@@ -1552,8 +1789,20 @@ export default function App() {
                 barbers={barbers}
                 services={services}
                 org={org}
+                setOrg={setOrg as React.Dispatch<React.SetStateAction<Organization>>}
+                waitlist={waitlist}
+                setWaitlist={setWaitlist}
               />
             )}
+
+            {currentTab === 'comandas' && currentUser?.permissions?.caixa !== false && (
+              <ComandasView org={org} commands={commands} setCommands={setCommands} services={services} products={products} clients={clients} barbers={barbers} onCloseCommand={handleCloseCommand} />
+            )}
+
+            {currentTab === 'assinaturas' && currentUser?.permissions?.ajustes !== false && (
+              <SubscriptionsView org={org} setOrg={setOrg as React.Dispatch<React.SetStateAction<Organization>>} clients={clients} />
+            )}
+            {currentTab === 'campanhas' && currentUser?.permissions?.clientes !== false && <CampaignsView clients={clients} appointments={appointments} org={org} />}
 
             {currentTab === 'caixa' && currentUser?.permissions?.caixa !== false && (
               <CaixaView 
@@ -1601,6 +1850,10 @@ export default function App() {
                 initialTab={settingsInitialTab}
                 org={org}
                 setOrg={setOrg as React.Dispatch<React.SetStateAction<Organization>>}
+                appThemeMode={appThemeMode}
+                setAppThemeMode={setAppThemeMode}
+                appThemePreference={appThemePreference}
+                followSystemTheme={followSystemTheme}
                 services={services}
                 setServices={setServices}
                 barbers={barbers}
@@ -1633,6 +1886,8 @@ export default function App() {
         pendingCount={pendingAppointmentsCount}
         permissions={currentUser?.permissions}
       />
+
+      <OwnerAssistant open={ownerAssistantOpen} onOpenChange={setOwnerAssistantOpen} onNavigate={navigateToTab} />
 
       {/* MODAL DE SINCRONIZAÇÃO ENTRE DISPOSITIVOS */}
       {showSyncModal && (

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Bot, ChevronDown, Send, Sparkles } from 'lucide-react';
+import { ChevronDown, Send, Sparkles } from 'lucide-react';
+import { AgendaiMascot } from './AgendaiMascot';
 import { answerBookingAssistant, assistantAddDays, assistantToday, isAssistantReply } from '../../services/bookingAssistant';
 import type { AssistantData, AssistantReply, AssistantSelection, AssistantSlot } from '../../services/bookingAssistant';
 
@@ -81,7 +82,7 @@ export function BookingAssistant({ onChooseSlot, ...data }: Props) {
   return (
     <section className="booking-assistant mx-4 sm:mx-6 mt-4 rounded-2xl border border-emerald-400/30 bg-emerald-400/5 overflow-hidden" aria-label="Assistente de agendamento">
       <button type="button" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-controls="booking-assistant-panel" className="w-full flex items-center gap-3 p-4 text-left">
-        <span className="w-10 h-10 shrink-0 rounded-xl bg-emerald-400/15 flex items-center justify-center"><Bot className="w-5 h-5 text-emerald-300" /></span>
+        <span className="w-10 h-10 shrink-0 flex items-center justify-center"><AgendaiMascot size={40} interactive={false} label="Assistente AgendAI" /></span>
         <span className="flex-1 min-w-0"><span className="block text-sm font-bold text-white">Precisa de ajuda para agendar?</span><span className="block text-xs text-slate-400 mt-1">Assistente AgendAI · experimental</span></span>
         <ChevronDown className={`w-4 h-4 text-emerald-300 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>

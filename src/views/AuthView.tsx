@@ -224,7 +224,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           <button
             type="button"
             onClick={onBack}
-            className="absolute left-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-400 transition hover:text-white sm:left-5 sm:top-5"
+            className="absolute left-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-400 transition hover:text-white sm:left-5 sm:top-5 min-w-[44px] min-h-[44px]"
             aria-label="Voltar para a apresentação do AgendAI"
             title="Voltar"
           >

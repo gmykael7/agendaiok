@@ -1,16 +1,22 @@
+import { appConfirm } from '../components/common/ConfirmDialog';
 import { Modal } from "../components/common/Modal";
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { peekAgendaFocus, consumeAgendaFocus } from '../utils/agendaFocus';
+import { consumeBarberSearchFocus } from '../utils/searchFocus';
+import { createPortal } from 'react-dom';
 import { 
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, 
   Clock, User, Scissors, Plus, CheckCircle, AlertCircle,
   Phone, MessageSquare, Check, X, DollarSign, QrCode, CreditCard, Banknote, Lock, ChevronDown, BellRing, HeartHandshake,
-  CheckCheck, UserRoundCheck, Play, UserX, Sparkles
+  CheckCheck, UserRoundCheck, Play, UserX, Sparkles, Zap
 } from 'lucide-react';
-import { Appointment, Barber, Service, Organization } from '../types';
+import { Appointment, Barber, Service, Organization, WaitlistEntry } from '../types';
 import { generateBusinessSlots, getLocalDateKey, isBookableBusinessDateTime, timeToMinutes } from '../utils/scheduling';
 import { buildAppointmentWhatsAppUrl, WhatsAppAction } from '../utils/whatsapp';
 import { WhatsAppActionsModal } from '../components/common/WhatsAppActionsModal';
 import { appointmentStatusClasses, appointmentStatusLabel, blocksAppointmentSlot, isOpenAppointmentStatus } from '../utils/appointmentStatus';
+import { WaitlistModal } from '../components/waitlist/WaitlistModal';
+import { findWaitlistMatches } from '../utils/waitlist';
 
 interface AgendaViewProps {
   appointments: Appointment[];
@@ -18,6 +24,9 @@ interface AgendaViewProps {
   barbers: Barber[];
   services: Service[];
   org: Organization;
+  setOrg?: React.Dispatch<React.SetStateAction<Organization>>;
+  waitlist?: WaitlistEntry[];
+  setWaitlist?: React.Dispatch<React.SetStateAction<WaitlistEntry[]>>;
 }
 
 const isTimeSlotOccupied = (
@@ -53,13 +62,87 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   barbers,
   services,
   org,
+  setOrg,
+  waitlist = [],
+  setWaitlist,
 }) => {
   const [selectedBarberId, setSelectedBarberId] = useState<string>('all');
+  const [pendingBarberFocus, setPendingBarberFocus] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateKey());
+  const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const id = consumeBarberSearchFocus();
+    if (!id || !barbers.some((barber) => barber.id === id)) return;
+    setSelectedBarberId(id);
+    setPendingBarberFocus(id);
+  }, [barbers]);
+
+  useEffect(() => {
+    if (!pendingBarberFocus) return;
+    const element = document.querySelector<HTMLElement>('[data-barber-filter]');
+    if (!element) return;
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    element.classList.add('agenda-focus-flash');
+    setPendingBarberFocus(null);
+    const timer = window.setTimeout(() => element.classList.remove('agenda-focus-flash'), 1800);
+    return () => window.clearTimeout(timer);
+  }, [pendingBarberFocus, selectedBarberId]);
+
+  // Foco vindo de notificação ou de "Ver na agenda": muda para a data do atendimento.
+  useEffect(() => {
+    const id = peekAgendaFocus();
+    if (!id) return;
+    const target = appointments.find(a => a.id === id);
+    if (!target) { consumeAgendaFocus(); return; }
+    setSelectedDate(target.date || getLocalDateKey());
+    setPendingScrollId(id);
+  }, [appointments]);
+
+  // Depois que a data muda, rola até o card e destaca por um instante.
+  useEffect(() => {
+    if (!pendingScrollId) return;
+    const el = document.querySelector<HTMLElement>(`[data-appointment-id="${pendingScrollId}"]`);
+    consumeAgendaFocus();
+    setPendingScrollId(null);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('agenda-focus-flash');
+    const timer = window.setTimeout(() => el.classList.remove('agenda-focus-flash'), 1800);
+    return () => window.clearTimeout(timer);
+  }, [pendingScrollId, selectedDate, appointments]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
 
   const [completingApp, setCompletingApp] = useState<Appointment | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit' | 'debit' | 'cash'>('pix');
   const [whatsAppAppointment, setWhatsAppAppointment] = useState<Appointment | null>(null);
+  const [confirmedFeedback, setConfirmedFeedback] = useState<Appointment | null>(null);
+
+  useEffect(() => {
+    if (!confirmedFeedback) return;
+    const timeout = window.setTimeout(() => setConfirmedFeedback(null), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [confirmedFeedback]);
+
+  const confirmAppointment = (appointment: Appointment) => {
+    setAppointments(prev => prev.map(item => item.id === appointment.id ? { ...item, status: 'confirmed' } : item));
+    setConfirmedFeedback(appointment);
+  };
+
+  // Modal e estado da Fila de Espera Relâmpago
+  const [showWaitlistModal, setShowWaitlistModal] = useState(false);
+  const [releasedSlotAlert, setReleasedSlotAlert] = useState<{
+    date: string;
+    time: string;
+    barber_id?: string;
+    barber_name: string;
+    service_name?: string;
+    matches: WaitlistEntry[];
+  } | null>(null);
 
   // Modal novo agendamento na agenda
   const [showAddModal, setShowAddModal] = useState(false);
@@ -69,6 +152,55 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [barberId, setBarberId] = useState(barbers[0]?.id || '');
   const [addModalError, setAddModalError] = useState('');
+
+  const handleCancelAppointment = (app: Appointment) => {
+    setAppointments(prev => prev.map(a => a.id === app.id ? { ...a, status: 'canceled' } : a));
+
+    const targetDate = app.date || selectedDate;
+    const matches = findWaitlistMatches(waitlist, targetDate, app.start_time, app.barber_id);
+    if (matches.length > 0) {
+      setReleasedSlotAlert({
+        date: targetDate,
+        time: app.start_time,
+        barber_id: app.barber_id,
+        barber_name: app.barber_name,
+        service_name: app.service_name,
+        matches,
+      });
+    }
+  };
+
+  const handleClaimWaitlistSlot = (
+    entry: WaitlistEntry,
+    slot: { date: string; time: string; barberId: string; barberName: string }
+  ) => {
+    const srv = services.find(s => s.id === entry.service_id) || services[0];
+    const newApp: Appointment = {
+      id: 'app-claimed-' + Date.now(),
+      org_id: org.id,
+      client_name: entry.client_name,
+      client_phone: entry.client_phone,
+      service_id: srv?.id || '',
+      service_name: srv?.name || entry.service_name || 'Atendimento',
+      barber_id: slot.barberId,
+      barber_name: slot.barberName,
+      start_time: slot.time,
+      price: srv?.price || 0,
+      status: 'scheduled',
+      date: slot.date,
+      created_at: new Date().toISOString(),
+    };
+
+    setAppointments(prev => [newApp, ...prev]);
+    if (setWaitlist) {
+      setWaitlist(prev =>
+        prev.map(w =>
+          w.id === entry.id ? { ...w, status: 'claimed', claimed_at: new Date().toISOString() } : w
+        )
+      );
+    }
+    setReleasedSlotAlert(null);
+  };
 
   const slots = useMemo(() => generateBusinessSlots(org, 30, 30), [
     org.open_hour,
@@ -83,6 +215,31 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
     current.setDate(current.getDate() + days);
     setSelectedDate(getLocalDateKey(current));
   };
+
+  const openDatePicker = () => {
+    const current = new Date(selectedDate + 'T00:00:00');
+    setCalendarMonth(new Date(current.getFullYear(), current.getMonth(), 1));
+    setShowDatePicker(true);
+  };
+
+  const calendarDays = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const firstWeekday = new Date(year, month, 1).getDay();
+    return Array.from({ length: 42 }, (_, index) => {
+      const day = new Date(year, month, index - firstWeekday + 1);
+      return {
+        date: day,
+        key: getLocalDateKey(day),
+        isCurrentMonth: day.getMonth() === month,
+      };
+    });
+  }, [calendarMonth]);
+
+  const calendarMonthLabel = useMemo(
+    () => calendarMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+    [calendarMonth],
+  );
 
   const formattedDateTitle = useMemo(() => {
     const current = new Date(selectedDate + 'T00:00:00');
@@ -108,6 +265,23 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
     const active = barbers.filter(b => b.active !== false);
     return selectedBarberId === 'all' ? active : active.filter(b => b.id === selectedBarberId);
   }, [barbers, selectedBarberId]);
+
+  // Rodízio justo: primeiro considera quem atendeu menos no dia; em caso de
+  // empate, parte do profissional atendido por último, sem favorecer sempre o
+  // primeiro nome da lista.
+  const nextRotationBarber = useMemo(() => {
+    const active = barbers.filter(barber => barber.active !== false);
+    if (!active.length) return undefined;
+    const countFor = (barberId: string) => appointments.filter(appointment =>
+      (appointment.date || getLocalDateKey()) === selectedDate
+      && appointment.barber_id === barberId
+      && !['canceled', 'no_show'].includes(appointment.status)
+    ).length;
+    const minimum = Math.min(...active.map(barber => countFor(barber.id)));
+    const candidates = active.filter(barber => countFor(barber.id) === minimum);
+    const lastIndex = candidates.findIndex(barber => barber.id === org.rotation_last_barber_id);
+    return candidates[(lastIndex + 1 + candidates.length) % candidates.length] || candidates[0];
+  }, [appointments, barbers, org.rotation_last_barber_id, selectedDate]);
 
   const activeDayAppointments = dayAppointments.filter(a => blocksAppointmentSlot(a.status));
   const completedDayAppointments = dayAppointments.filter(a => a.status === 'completed');
@@ -196,6 +370,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
     };
 
     setAppointments(prev => [created, ...prev]);
+    if (org.rotation_enabled && setOrg) setOrg(current => ({ ...current, rotation_last_barber_id: brb.id }));
     setClientName('');
     setClientPhone('');
     setSelectedServiceIds([]);
@@ -231,6 +406,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Seletor de Barbeiro */}
           <select
+            data-barber-filter
             aria-label="Filtrar agenda por profissional"
             value={selectedBarberId}
             onChange={(e) => setSelectedBarberId(e.target.value)}
@@ -246,13 +422,16 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
           <div className="flex items-center gap-1 bg-[#0B1120] p-1 rounded-xl border border-slate-800">
             <button
               onClick={() => changeDate(-1)}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors active:scale-95"
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors active:scale-95 min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
               title="Dia anterior"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setSelectedDate(getLocalDateKey())}
+              type="button"
+              onClick={openDatePicker}
+              aria-haspopup="dialog"
+              aria-label="Abrir calendário mensal"
               className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors active:scale-95 ${
                 selectedDate === getLocalDateKey()
                   ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20'
@@ -263,12 +442,39 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
             </button>
             <button
               onClick={() => changeDate(1)}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors active:scale-95"
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors active:scale-95 min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
               title="Próximo dia"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setShowWaitlistModal(true)}
+            className="px-3 py-2 bg-[#0B1120] hover:bg-slate-800 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0 shadow-sm"
+            title="Abrir Lista de Espera Relâmpago"
+          >
+            <Zap className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+            <span>Fila de Espera</span>
+            {waitlist.filter((w) => w.status === 'waiting').length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-black border border-amber-400/30">
+                {waitlist.filter((w) => w.status === 'waiting').length}
+              </span>
+            )}
+          </button>
+
+          {org.rotation_enabled && nextRotationBarber && (
+            <button
+              type="button"
+              onClick={() => openSlotForBarber('14:00', nextRotationBarber.id)}
+              className="px-3 py-2 bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 border border-violet-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0"
+              title="Criar encaixe para o próximo profissional do rodízio"
+            >
+              <HeartHandshake className="w-3.5 h-3.5" />
+              <span>Rodízio: {nextRotationBarber.full_name.split(' ')[0]}</span>
+            </button>
+          )}
 
           <button
             onClick={() => {
@@ -337,10 +543,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
               ];
 
               boardBarbers.forEach((barber) => {
-                const app = appointments.find(a => {
-                  const appDate = a.date || getLocalDateKey();
-                  return appDate === selectedDate && a.barber_id === barber.id && a.start_time === time && blocksAppointmentSlot(a.status);
-                });
+                const app = dayAppointments.find(a => a.barber_id === barber.id && a.start_time === time && blocksAppointmentSlot(a.status));
 
                 rows.push(
                   <div key={`${time}-${barber.id}`} className="min-h-[84px] border-b border-r last:border-r-0 border-slate-800/80 p-2">
@@ -392,6 +595,16 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                             >
                               <MessageSquare className="w-3 h-3" /> WhatsApp
                             </button>
+                            {isOpenAppointmentStatus(app.status) && (
+                              <button
+                                type="button"
+                                onClick={() => handleCancelAppointment(app)}
+                                title="Cancelar agendamento e verificar fila de espera"
+                                className="text-[9px] text-slate-400 hover:text-rose-300 inline-flex items-center justify-center w-6 h-6 rounded-lg bg-slate-800/80 border border-slate-700/60 hover:bg-rose-950/40 active:scale-95 transition-colors min-w-[44px] min-h-[44px]"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -416,6 +629,13 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 
       {/* GRADE HORÁRIA MOBILE - Otimizada para telas pequenas sem quebra */}
       <div className="lg:hidden bg-[#121B2E] border border-slate-800 rounded-3xl p-3 sm:p-5 shadow-xl space-y-3">
+        <div className="flex items-center justify-between gap-3 px-1">
+          <div>
+            <p className="text-sm font-black text-white">Horários do dia</p>
+            <p className="mt-0.5 text-[11px] text-slate-400">Toque em um horário disponível para agendar.</p>
+          </div>
+          <span className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-black font-mono text-emerald-300">{selectedDate.split('-').reverse().slice(0, 2).join('/')}</span>
+        </div>
         {org.break_enabled && (
           <div className="flex items-center justify-between gap-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 px-3 py-2">
             <span className="text-[11px] sm:text-xs text-amber-300 font-semibold">Descanso ativo</span>
@@ -427,11 +647,8 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
             const slotStartMin = timeToMinutes(time);
             const slotEndMin = slotStartMin + 30;
 
-            const matchingAppointments = appointments.filter(a => {
-              const appDate = a.date || getLocalDateKey();
-              if (appDate !== selectedDate) return false;
+            const matchingAppointments = dayAppointments.filter(a => {
               if (!blocksAppointmentSlot(a.status)) return false;
-              if (selectedBarberId !== 'all' && a.barber_id !== selectedBarberId) return false;
 
               const appStart = timeToMinutes(a.start_time);
               const appDuration = a.duration_minutes || (a.services?.reduce((sum, s) => sum + (s.duration_minutes || 30), 0)) || 30;
@@ -462,7 +679,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                         : new Date(`${appDate}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
                       return (
-                        <div key={app.id} className="space-y-2.5">
+                        <div key={app.id} data-appointment-id={app.id} className="space-y-2.5 scroll-mt-28 rounded-2xl">
                           {/* LINHA SUPERIOR: HORÁRIO, CLIENTE, SERVIÇO E STATUS */}
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-start gap-2.5 min-w-0 flex-1">
@@ -530,7 +747,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-2 border-t border-slate-800/80 w-full">
                               {app.status === 'scheduled' && (
                                 <button
-                                  onClick={() => setAppointments(prev => prev.map(a => a.id === app.id ? { ...a, status: 'confirmed' } : a))}
+                                  onClick={() => confirmAppointment(app)}
                                   className="w-full min-h-9 px-2 bg-sky-500/15 border border-sky-500/25 text-sky-300 rounded-lg text-[11px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap active:scale-95"
                                 ><CheckCheck className="w-3.5 h-3.5 shrink-0" /> <span>Confirmar</span></button>
                               )}
@@ -554,8 +771,8 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                               )}
                               {(app.status === 'scheduled' || app.status === 'confirmed') && (
                                 <button
-                                  onClick={() => {
-                                    if (window.confirm(`Marcar ${app.client_name} como não compareceu?`)) {
+                                  onClick={async () => {
+                                    if (await appConfirm(`Marcar ${app.client_name} como não compareceu?`, { danger: true })) {
                                       setAppointments(prev => prev.map(a => a.id === app.id ? { ...a, status: 'no_show' } : a));
                                     }
                                   }}
@@ -563,8 +780,8 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                                 ><UserX className="w-3.5 h-3.5 shrink-0" /> <span>Faltou</span></button>
                               )}
                               <button
-                                onClick={() => setAppointments(prev => prev.map(a => a.id === app.id ? { ...a, status: 'canceled' } : a))}
-                                className="w-full min-h-9 px-2 bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-300 rounded-lg text-[11px] font-bold transition-colors inline-flex items-center justify-center whitespace-nowrap active:scale-95"
+                                onClick={() => handleCancelAppointment(app)}
+                                className="col-span-2 xl:col-span-1 w-full min-h-9 px-2 bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-300 rounded-lg text-[11px] font-bold transition-colors inline-flex items-center justify-center whitespace-nowrap active:scale-95"
                               ><span>Cancelar</span></button>
                             </div>
                           )}
@@ -574,6 +791,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                   </div>
                 ) : (
                   <button
+                    type="button"
                     onClick={() => {
                       setModalTime(time);
                       setSelectedServiceIds(services[0] ? [services[0].id] : []);
@@ -581,10 +799,17 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                       setAddModalError('');
                       setShowAddModal(true);
                     }}
-                    className="w-full text-left text-[11px] sm:text-xs text-slate-400 hover:text-emerald-400 font-semibold flex items-center gap-1.5 transition-colors group cursor-pointer py-1"
+                    aria-label={'Agendar horário livre às ' + time}
+                    className="w-full min-h-[72px] rounded-xl px-1 text-left transition-colors group cursor-pointer"
                   >
-                    <span className="w-2 h-2 rounded-full bg-emerald-500/70 group-hover:bg-emerald-500 transition-colors shrink-0" />
-                    Disponível · Agendar
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="inline-flex items-center gap-2 text-xs font-semibold text-slate-300 group-hover:text-emerald-400">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500/70 group-hover:bg-emerald-500 transition-colors shrink-0" />
+                        Disponível
+                      </span>
+                      <span className="font-mono text-base font-black text-emerald-400">{time}</span>
+                    </span>
+                    <span className="mt-1 block text-[10px] text-slate-500 group-hover:text-emerald-400">Toque para agendar</span>
                   </button>
                 )}
               </div>
@@ -592,6 +817,83 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
           })}
         </div>
       </div>
+
+      {showDatePicker && (
+        <Modal
+          label="Selecionar data da agenda"
+          onClose={() => setShowDatePicker(false)}
+          className="fixed inset-0 z-[220] app-mobile-modal flex items-center justify-center bg-black/70 p-3 sm:p-4"
+        >
+          <section className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-4 shadow-2xl sm:p-5" aria-label="Calendário mensal">
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-slate-700 text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                aria-label="Mês anterior"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <h3 className="capitalize text-center text-base font-black text-white">{calendarMonthLabel}</h3>
+              <button
+                type="button"
+                onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-slate-700 text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                aria-label="Próximo mês"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-5 grid grid-cols-7 gap-1 text-center text-[10px] font-black uppercase tracking-wide text-slate-500">
+              {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => <span key={day} className="py-2">{day}</span>)}
+            </div>
+            <div className="grid grid-cols-7 gap-1" role="grid" aria-label={'Dias de ' + calendarMonthLabel}>
+              {calendarDays.map(({ date, key, isCurrentMonth }) => {
+                const isSelected = key === selectedDate;
+                const isToday = key === getLocalDateKey();
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDate(key);
+                      setShowDatePicker(false);
+                    }}
+                    aria-label={'Selecionar ' + date.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    aria-pressed={isSelected}
+                    className={isSelected
+                      ? 'min-h-11 rounded-xl bg-emerald-500 text-xs font-black text-slate-950 shadow-sm'
+                      : isToday
+                        ? 'min-h-11 rounded-xl border border-emerald-500/45 bg-emerald-500/10 text-xs font-bold text-emerald-300 transition hover:bg-emerald-500/20'
+                        : isCurrentMonth
+                          ? 'min-h-11 rounded-xl text-xs font-semibold text-slate-200 transition hover:bg-slate-800 hover:text-white'
+                          : 'min-h-11 rounded-xl text-xs font-medium text-slate-600 transition hover:bg-slate-800/60'}
+                  >
+                    {date.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2 border-t border-slate-800 pt-4">
+              <button type="button" onClick={() => setShowDatePicker(false)} className="min-h-11 rounded-xl px-4 text-xs font-semibold text-slate-300 transition hover:bg-slate-800">Cancelar</button>
+              <button
+                type="button"
+                onClick={() => {
+                  const today = new Date();
+                  setSelectedDate(getLocalDateKey(today));
+                  setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+                  setShowDatePicker(false);
+                }}
+                className="min-h-11 rounded-xl bg-emerald-500 px-4 text-xs font-black text-slate-950 transition hover:bg-emerald-400"
+              >
+                Ir para hoje
+              </button>
+            </div>
+          </section>
+        </Modal>
+      )}
 
       {/* MODAL CONCLUIR ATENDIMENTO */}
       <WhatsAppActionsModal
@@ -613,7 +915,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                 <CheckCircle className="w-5 h-5 text-emerald-400" />
                 Concluir Atendimento
               </h3>
-              <button aria-label="Fechar janela" onClick={() => setCompletingApp(null)} className="text-slate-400 hover:text-white p-1 rounded-lg">
+              <button aria-label="Fechar janela" onClick={() => setCompletingApp(null)} className="text-slate-400 hover:text-white p-1 rounded-lg min-w-[44px] min-h-[44px] inline-flex items-center justify-center">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -700,7 +1002,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                 <Plus className="w-5 h-5 text-emerald-400" />
                 Agendar ({modalTime})
               </h3>
-              <button aria-label="Fechar janela" onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white p-1 rounded-lg">
+              <button aria-label="Fechar janela" onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white p-1 rounded-lg min-w-[44px] min-h-[44px] inline-flex items-center justify-center">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -825,6 +1127,30 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
             </form>
           </div>
         </Modal>
+      )}
+
+      <WaitlistModal
+        open={showWaitlistModal || Boolean(releasedSlotAlert)}
+        onClose={() => {
+          setShowWaitlistModal(false);
+          setReleasedSlotAlert(null);
+        }}
+        waitlist={waitlist}
+        setWaitlist={setWaitlist || (() => {})}
+        org={org}
+        barbers={barbers}
+        services={services}
+        releasedSlot={releasedSlotAlert}
+        onClaimSlot={handleClaimWaitlistSlot}
+      />
+      {confirmedFeedback && createPortal(
+        <div role="status" className="agendai-confirm-toast pointer-events-none fixed right-3 top-4 z-[260] w-[min(24rem,calc(100vw-1.5rem))] rounded-2xl border border-emerald-400/40 bg-[#0B1424] p-4 text-white shadow-[0_20px_60px_rgba(0,0,0,.45)] sm:right-6 sm:top-6">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-400/15 text-emerald-300"><CheckCheck className="h-5 w-5" /></span>
+            <div className="min-w-0 flex-1"><strong className="block text-sm">Horário confirmado</strong><p className="mt-1 text-xs text-slate-300">{confirmedFeedback.client_name} · {confirmedFeedback.service_name}</p><p className="mt-1 text-xs font-semibold text-emerald-300">{confirmedFeedback.date} às {confirmedFeedback.start_time}</p></div>
+            <button type="button" onClick={() => setConfirmedFeedback(null)} aria-label="Fechar confirmação" className="pointer-events-auto rounded-lg p-1 text-slate-400 hover:bg-white/10 hover:text-white min-w-[44px] min-h-[44px] inline-flex items-center justify-center"><X className="h-4 w-4" /></button>
+          </div>
+        </div>, document.body,
       )}
     </div>
   );

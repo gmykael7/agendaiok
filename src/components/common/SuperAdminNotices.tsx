@@ -57,7 +57,13 @@ export function SuperAdminNotices({ tenants }: { tenants: SuperAdminTenant[] }) 
           <span className="block text-right text-slate-500 mt-1">{draft.message.length}/4000</span>
         </label>
         <label className="block text-xs text-slate-300">Imagem (URL pública HTTPS, opcional)<input type="url" maxLength={1200} value={draft.image_url} onChange={e => change({ image_url: e.target.value })} className={input} placeholder="https://.../imagem.jpg" /></label>
-        <label className="flex items-center gap-2 text-sm text-slate-200"><input type="checkbox" checked={draft.support} onChange={e => change({ support: e.target.checked, pix: e.target.checked ? draft.pix : '' })} />Pedido de apoio voluntário</label>
+        <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-900/60 px-3 py-2.5 text-sm text-slate-200">
+          <span>Pedido de apoio voluntário</span>
+          <span className="flex items-center gap-2">
+            <span className={`rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${draft.support ? 'border-emerald-400/35 bg-emerald-400/10 text-emerald-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`}>{draft.support ? 'Ativado' : 'Desativado'}</span>
+            <input aria-label="Ativar pedido de apoio voluntário" type="checkbox" checked={draft.support} onChange={e => change({ support: e.target.checked, pix: e.target.checked ? draft.pix : '' })} className="h-5 w-5 accent-emerald-400" />
+          </span>
+        </label>
         {draft.support && <label className="block text-xs text-slate-300">Chave PIX (opcional)<input maxLength={140} value={draft.pix} onChange={e => change({ pix: e.target.value })} className={input} placeholder="Sua chave PIX" /></label>}
         <label className="block text-xs text-slate-300">{draft.support ? 'Link de contribuição' : 'Link'} (opcional)<input type="url" maxLength={1200} value={draft.link} onChange={e => change({ link: e.target.value })} className={input} placeholder="https://..." /></label>
       </fieldset>

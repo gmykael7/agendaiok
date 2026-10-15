@@ -21,7 +21,7 @@ import { BrandLogo } from '../components/common/BrandLogo';
 import { AgencyCredit } from '../components/common/AgencyCredit';
 import { Organization } from '../types';
 import { getClientBookingUrl } from '../config/urls';
-import { getReadableTextColor } from '../utils/color';
+import { applyAppTheme } from '../config/theme';
 import { gsap, MOTION_ALLOWED_QUERY, useGSAP } from '../utils/motion';
 
 type TvAppointment = {
@@ -266,6 +266,7 @@ export const TvDisplayView: React.FC<TvDisplayViewProps> = ({ slug }) => {
   const statusTimerRef = useRef<number | null>(null);
   const tvRootRef = useRef<HTMLDivElement | null>(null);
   const wakeLockRef = useRef<any>(null);
+  const lastSuccessRef = useRef<number>(Date.now());
 
   const requestTvWakeLock = useCallback(async () => {
     try {
@@ -333,6 +334,7 @@ export const TvDisplayView: React.FC<TvDisplayViewProps> = ({ slug }) => {
         }
       }
 
+      lastSuccessRef.current = Date.now();
       setPayload(data);
       setOnline(true);
     } catch {
@@ -344,8 +346,21 @@ export const TvDisplayView: React.FC<TvDisplayViewProps> = ({ slug }) => {
 
   useEffect(() => {
     void fetchTv();
-    const poll = window.setInterval(() => void fetchTv(), 15_000);
-    return () => window.clearInterval(poll);
+    const poll = window.setInterval(() => void fetchTv(), 6_000);
+    // Watchdog de TV parada: se os dados não chegam há 2 minutos, ou a página
+    // já está aberta há 6 horas, recarrega para voltar a um estado limpo.
+    const openedAt = Date.now();
+    const watchdog = window.setInterval(() => {
+      const staleFor = Date.now() - lastSuccessRef.current;
+      const uptime = Date.now() - openedAt;
+      if (staleFor > 120_000 || uptime > 6 * 60 * 60 * 1000) {
+        window.location.reload();
+      }
+    }, 15_000);
+    return () => {
+      window.clearInterval(poll);
+      window.clearInterval(watchdog);
+    };
   }, [fetchTv]);
 
   useEffect(() => {
@@ -428,7 +443,7 @@ export const TvDisplayView: React.FC<TvDisplayViewProps> = ({ slug }) => {
   }, [requestTvWakeLock]);
 
   useEffect(() => {
-    const clock = window.setInterval(() => setNow(new Date()), 1000);
+    const clock = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(clock);
   }, []);
 
@@ -444,12 +459,7 @@ export const TvDisplayView: React.FC<TvDisplayViewProps> = ({ slug }) => {
   }, []);
 
   useEffect(() => {
-    const root = document.documentElement;
-    const primaryColor = payload?.org?.primary_color || '#18d4c8';
-    root.style.setProperty('--brand-color', primaryColor);
-    root.style.setProperty('--brand-contrast-color', getReadableTextColor(primaryColor));
-    root.style.setProperty('--app-bg-color', payload?.org?.background_color || '#061120');
-    root.style.setProperty('--app-surface-color', payload?.org?.surface_color || '#0d1930');
+    applyAppTheme('dark', payload?.org?.primary_color || '#10B981');
   }, [payload]);
 
   const activeAppointments = useMemo(() => {
@@ -713,7 +723,7 @@ export const TvDisplayView: React.FC<TvDisplayViewProps> = ({ slug }) => {
 
       <header data-tv-shell-section className="h-[10.2vh] shrink-0 rounded-[1.15vw] border border-white/10 bg-[#0d1118] px-[1.15vw] flex items-center justify-between shadow-[0_10px_35px_rgba(0,0,0,.24)]">
         <div className="flex items-center gap-[0.85vw] min-w-0">
-          <div className="w-[4.15vw] h-[4.15vw] min-w-[58px] min-h-[58px] rounded-full border border-white/10 bg-white/5 p-[0.28vw] overflow-hidden flex items-center justify-center shadow-lg">
+          <div className="organization-avatar w-[4.15vw] h-[4.15vw] min-w-[58px] min-h-[58px] rounded-full border border-white/10 bg-white/5 p-[0.28vw] flex items-center justify-center shadow-lg">
             {org.logo_image_url ? (
               <img src={org.logo_image_url} alt={`Logo ${org.name}`} className="w-full h-full rounded-full object-cover object-center" />
             ) : (
@@ -741,7 +751,7 @@ export const TvDisplayView: React.FC<TvDisplayViewProps> = ({ slug }) => {
           )}
           <p className="text-[clamp(.88rem,1vw,1.3rem)] font-black tracking-[.02em] text-slate-200 whitespace-nowrap">{dateLabel}</p>
           <div className="h-[4.1vh] w-px bg-white/10" />
-          <p className="text-[clamp(2rem,2.75vw,3.8rem)] leading-none font-black tracking-[-.055em] tabular-nums text-white">{now.toLocaleTimeString('pt-BR')}</p>
+          <p className="text-[clamp(2rem,2.75vw,3.8rem)] leading-none font-black tracking-[-.055em] tabular-nums text-white"><TvLiveTime /></p>
         </div>
       </header>
 
@@ -1084,3 +1094,13 @@ export const TvDisplayView: React.FC<TvDisplayViewProps> = ({ slug }) => {
     </div>
   );
 };
+
+/** Hora com segundos: atualiza sozinha a cada segundo, sem redesenhar o painel inteiro. */
+function TvLiveTime() {
+  const [time, setTime] = React.useState(() => new Date());
+  React.useEffect(() => {
+    const id = window.setInterval(() => setTime(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  return <>{time.toLocaleTimeString('pt-BR')}</>;
+}

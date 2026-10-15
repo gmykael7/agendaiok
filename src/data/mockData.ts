@@ -34,6 +34,9 @@ export const INITIAL_SERVICES: Service[] = [
   { id: '2', org_id: 'org-1', name: 'Barba Completa com Toalha Quente', price: 40.00, duration_minutes: 30, category: 'Barba', active: true },
   { id: '3', org_id: 'org-1', name: 'Combo Cabelo + Barba Premium', price: 80.00, duration_minutes: 60, category: 'Combos', active: true },
   { id: '4', org_id: 'org-1', name: 'Design de Sobrancelha Navalhada', price: 25.00, duration_minutes: 15, category: 'Estética', active: true },
+  { id: '5', org_id: 'org-1', name: 'Plano Pai & Filho', description: 'Dois cortes, ritual de boas-vindas e registro da evolução dos cortes.', badge: 'Experiência em família', price: 110.00, duration_minutes: 75, category: 'Experiências', active: true },
+  { id: '6', org_id: 'org-1', name: 'Day Spa Masculino 60', description: 'Corte, barba e cuidado facial express para sair renovado.', badge: 'Presente perfeito', price: 145.00, duration_minutes: 60, category: 'Day Spa', active: true },
+  { id: '7', org_id: 'org-1', name: 'Day Spa Masculino 120', description: 'Ritual completo com corte, barba, pele, massagem express e mãos.', badge: 'Experiência completa', price: 235.00, duration_minutes: 120, category: 'Day Spa', active: true },
 ];
 
 export const INITIAL_BARBERS: Barber[] = [
@@ -58,7 +61,7 @@ export const INITIAL_BARBERS: Barber[] = [
 ];
 
 export const INITIAL_CLIENTS: Client[] = [
-  { id: 'c1', org_id: 'org-1', name: 'Carlos Oliveira', phone: '(84) 99111-2222', total_visits: 5, total_spent: 250.00, last_visit: 'Hoje' },
+  { id: 'c1', org_id: 'org-1', name: 'Carlos Oliveira', phone: '(84) 99111-2222', total_visits: 5, total_spent: 250.00, last_visit: 'Hoje', loyalty_points: 70 },
   { id: 'c2', org_id: 'org-1', name: 'Roberto Mendes', phone: '(84) 99222-3333', total_visits: 3, total_spent: 240.00, last_visit: 'Hoje' },
   { id: 'c3', org_id: 'org-1', name: 'Eduardo Lima', phone: '(84) 99333-4444', total_visits: 2, total_spent: 80.00, last_visit: 'Ontem' },
   { id: 'c4', org_id: 'org-1', name: 'Marcos Vinicius', phone: '(84) 99444-5555', total_visits: 1, total_spent: 50.00, last_visit: '12/08/2026' },

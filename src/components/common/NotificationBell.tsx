@@ -67,7 +67,7 @@ export function NotificationBell({ notifications, open }: { notifications: reado
         </g>
       </g>
     </svg>
-    {unreadCount > 0 && <span ref={badge} className="notification-count-badge absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-5 px-1 rounded-full bg-rose-600 text-white text-[10px] leading-5 text-center font-black ring-2 ring-[#08101f] shadow-[0_3px_10px_rgba(225,29,72,0.65)]">
+    {unreadCount > 0 && <span ref={badge} className="notification-count-badge absolute -top-1 -right-0.5 min-w-[1.25rem] h-5 px-1 rounded-full bg-rose-600 text-white text-[10px] leading-5 text-center font-black ring-2 ring-[#08101f] shadow-[0_3px_10px_rgba(225,29,72,0.65)]">
       {unreadCount > 9 ? '9+' : unreadCount}
     </span>}
   </span>;

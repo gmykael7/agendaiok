@@ -1,3 +1,4 @@
+import { appConfirm } from '../components/common/ConfirmDialog';
 import { Modal } from "../components/common/Modal";
 import React, { useState } from 'react';
 import { 
@@ -25,8 +26,11 @@ export const TeamView: React.FC<TeamViewProps> = ({
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState('');
   const [commissionRate, setCommissionRate] = useState(50);
+  const [soloOwner, setSoloOwner] = useState(false);
   const [phone, setPhone] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [bio, setBio] = useState('');
+  const [specialties, setSpecialties] = useState('');
 
   const openAddModal = () => {
     setEditingBarber(null);
@@ -35,6 +39,8 @@ export const TeamView: React.FC<TeamViewProps> = ({
     setCommissionRate(50);
     setPhone('');
     setAvatarUrl('');
+    setBio('');
+    setSpecialties('');
     setShowModal(true);
   };
 
@@ -43,8 +49,11 @@ export const TeamView: React.FC<TeamViewProps> = ({
     setFullName(barber.full_name);
     setRole(barber.role);
     setCommissionRate(barber.commission_rate);
+    setSoloOwner(!!barber.solo_owner);
     setPhone(barber.phone);
     setAvatarUrl(barber.avatar_url || '');
+    setBio(barber.bio || '');
+    setSpecialties((barber.specialties || []).join(', '));
     setShowModal(true);
   };
 
@@ -58,9 +67,12 @@ export const TeamView: React.FC<TeamViewProps> = ({
         ...b,
         full_name: fullName.trim(),
         role: role.trim() || 'Barbeiro',
-        commission_rate: commissionRate,
+        commission_rate: soloOwner ? 0 : commissionRate,
+        solo_owner: soloOwner,
         phone: phone.trim(),
         avatar_url: avatarUrl.trim() || undefined,
+        bio: bio.trim().slice(0, 400),
+        specialties: [...new Set(specialties.split(',').map(value => value.trim().slice(0, 60)).filter(Boolean))].slice(0, 8),
       } : b));
     } else {
       // Criar novo barbeiro (sem foto humana por padrão)
@@ -68,9 +80,12 @@ export const TeamView: React.FC<TeamViewProps> = ({
         id: 'b-' + Date.now(),
         full_name: fullName.trim(),
         role: role.trim() || 'Barbeiro',
-        commission_rate: commissionRate,
+        commission_rate: soloOwner ? 0 : commissionRate,
+        solo_owner: soloOwner,
         phone: phone.trim(),
         avatar_url: avatarUrl.trim() || undefined,
+        bio: bio.trim().slice(0, 400),
+        specialties: [...new Set(specialties.split(',').map(value => value.trim().slice(0, 60)).filter(Boolean))].slice(0, 8),
         active: true,
       };
       setBarbers(prev => [...prev, newBarber]);
@@ -79,8 +94,8 @@ export const TeamView: React.FC<TeamViewProps> = ({
     setShowModal(false);
   };
 
-  const handleDeleteBarber = (id: string) => {
-    if (window.confirm('Tem certeza que deseja remover este profissional?')) {
+  const handleDeleteBarber = async (id: string) => {
+    if (await appConfirm('Tem certeza que deseja remover este profissional?', { danger: true })) {
       setBarbers(prev => prev.filter(b => b.id !== id));
     }
   };
@@ -170,20 +185,23 @@ export const TeamView: React.FC<TeamViewProps> = ({
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => openEditModal(barber)}
-                      className="p-2 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-xl transition-colors"
+                      className="p-2 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-xl transition-colors min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
                       title="Editar barbeiro"
                     >
                       <Edit3 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDeleteBarber(barber.id)}
-                      className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-950/20 rounded-xl transition-colors"
+                      className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-950/20 rounded-xl transition-colors min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
                       title="Remover barbeiro"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
+
+                {barber.bio && <p className="text-sm text-slate-300 break-words">{barber.bio}</p>}
+                {!!barber.specialties?.length && <div className="flex flex-wrap gap-2">{barber.specialties.map(specialty => <span key={specialty} className="rounded-full bg-cyan-400/10 border border-cyan-400/20 px-3 py-1 text-xs text-cyan-300">{specialty}</span>)}</div>}
 
                 {/* CONTROLE DE COMISSÃO */}
                 <div className="bg-[#0B1120] p-4 rounded-xl border border-slate-800/80 space-y-2.5">
@@ -254,7 +272,7 @@ export const TeamView: React.FC<TeamViewProps> = ({
               </h3>
               <button aria-label="Fechar janela" 
                 onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-white p-1 rounded-lg min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -276,6 +294,14 @@ export const TeamView: React.FC<TeamViewProps> = ({
                   />
                 </div>
 
+                <div>
+                  <label htmlFor="team-bio" className="block text-xs font-semibold text-slate-300 mb-1">Apresentação pública</label>
+                  <textarea id="team-bio" value={bio} onChange={event => setBio(event.target.value)} maxLength={400} rows={3} placeholder="Conte sua experiência e seu estilo de atendimento." className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white" />
+                  <label htmlFor="team-specialties" className="block text-xs font-semibold text-slate-300 mt-3 mb-1">Especialidades (separadas por vírgula)</label>
+                  <input id="team-specialties" value={specialties} onChange={event => setSpecialties(event.target.value)} maxLength={480} placeholder="Degradê, barba, corte infantil" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white" />
+                  <p className="mt-2 text-xs text-slate-400">Até 8 especialidades. Estas informações aparecem para os clientes; não alteram preços nem restringem serviços.</p>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="team-field-2" className="block text-xs font-semibold text-slate-300 mb-1">
@@ -294,21 +320,28 @@ export const TeamView: React.FC<TeamViewProps> = ({
                     <label className="block text-xs font-semibold text-slate-300 mb-1">
                       Comissão Inicial (%)
                     </label>
+                    <label className="mb-2 flex items-start gap-2.5 rounded-xl border border-slate-800 bg-slate-950 p-3 cursor-pointer">
+                      <input type="checkbox" checked={soloOwner} onChange={(e) => { setSoloOwner(e.target.checked); if (e.target.checked) setCommissionRate(0); }} className="mt-0.5 h-5 w-5 accent-emerald-500 cursor-pointer" />
+                      <span><strong className="block text-xs text-white">Atende sozinho</strong><span className="block text-[11px] text-slate-400">O dono é o barbeiro. Sem comissão: o líquido do caixa é o valor que ele recebe.</span></span>
+                    </label>
                     <div className="flex gap-2">
                       <input
                         type="number"
                         min="0"
                         max="100"
-                        value={commissionRate}
+                        disabled={soloOwner}
+                        value={soloOwner ? 0 : commissionRate}
                         onChange={(e) => setCommissionRate(Math.min(100, Math.max(0, parseInt(e.target.value, 10) || 0)))}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none font-mono"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none font-mono disabled:opacity-40 disabled:cursor-not-allowed"
                       />
                       <button
                         type="button"
                         onClick={() => setCommissionRate(100)}
-                        className="px-3 rounded-xl bg-emerald-500 text-slate-950 text-xs font-black hover:bg-emerald-400 transition-colors shadow-sm active:scale-95"
+                        disabled={soloOwner}
+                        title="Definir comissão em 100%"
+                        className="px-3 rounded-xl border border-emerald-400/60 bg-emerald-500/10 text-emerald-300 text-xs font-bold hover:bg-emerald-500/20 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
                       >
-                        100%
+                        Usar 100%
                       </button>
                     </div>
                   </div>

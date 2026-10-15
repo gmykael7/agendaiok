@@ -1,3 +1,4 @@
+import { appConfirm } from '../common/ConfirmDialog';
 import React from 'react';
 import {
   Building2,
@@ -13,6 +14,9 @@ import {
   LogOut,
   BarChart3,
   Boxes,
+  ReceiptText,
+  BadgeCheck,
+  Megaphone,
 } from 'lucide-react';
 import { Organization, StaffPermissions, TabType } from '../../types';
 import { BrandLogo } from '../common/BrandLogo';
@@ -45,8 +49,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const menuItems: { id: TabType; label: string; icon: React.FC<{ className?: string }>; permission: keyof StaffPermissions }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: House, permission: 'dashboard' },
-    { id: 'atendimentos', label: 'Atendimentos', icon: ClipboardCheck, permission: 'atendimentos' },
+    { id: 'atendimentos', label: 'Atender', icon: ClipboardCheck, permission: 'atendimentos' },
     { id: 'agenda', label: 'Agenda', icon: CalendarDays, permission: 'agenda' },
+    { id: 'comandas', label: 'Comandas', icon: ReceiptText, permission: 'caixa' },
+    { id: 'assinaturas', label: 'Assinaturas', icon: BadgeCheck, permission: 'ajustes' },
+    { id: 'campanhas', label: 'Campanhas', icon: Megaphone, permission: 'clientes' },
     { id: 'caixa', label: 'Caixa', icon: WalletCards, permission: 'caixa' },
     { id: 'produtos', label: 'Produtos', icon: Boxes, permission: 'products' },
     { id: 'relatorios', label: 'Relatórios', icon: BarChart3, permission: 'relatorios' },
@@ -80,7 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <p className="text-[11px] text-cyan-300 font-medium mt-1">Gestão de Barbearia</p>
               </div>
             </div>
-            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white p-1 rounded-lg" aria-label="Fechar menu">
+            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white p-1 rounded-lg min-w-[44px] min-h-[44px] inline-flex items-center justify-center" aria-label="Fechar menu">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -152,8 +159,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
 
           <button
-            onClick={() => {
-              if (window.confirm('Deseja realmente sair do sistema?')) {
+            onClick={async () => {
+              if (await appConfirm('Deseja realmente sair do sistema?')) {
                 onLogout();
               }
             }}
