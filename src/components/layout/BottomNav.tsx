@@ -82,6 +82,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   const heroIconColor = isYellowBrand ? '#0B1120' : '#FFFFFF';
 
   const handleCenterClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (currentTab === 'agenda') return;
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
@@ -90,14 +92,22 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       Math.max(y, window.innerHeight - y)
     );
 
-    setRippleWave({ x, y, radius: maxRadius });
-    window.setTimeout(() => setRippleWave(null), 580);
+    // Detecção de aparelhos de entrada (≤ 4GB RAM ou ≤ 4 núcleos) para garantir 60fps
+    const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { deviceMemory?: number }) : null;
+    const isLowEnd =
+      nav &&
+      ((typeof nav.deviceMemory === 'number' && nav.deviceMemory <= 4) ||
+        (typeof nav.hardwareConcurrency === 'number' && nav.hardwareConcurrency <= 4));
 
     const doc = document as Document & {
       startViewTransition?: (cb: () => Promise<void> | void) => { ready: Promise<void> };
     };
 
-    if (doc.startViewTransition && motionAllowed()) {
+    // Em celulares mais modestos, não captura textura de tela cheia (ViewTransition) para não engasgar a GPU
+    if (!isLowEnd && doc.startViewTransition && motionAllowed()) {
+      setRippleWave({ x, y, radius: Math.min(maxRadius, 500) });
+      window.setTimeout(() => setRippleWave(null), 520);
+
       const transition = doc.startViewTransition(() => {
         setCurrentTab('agenda');
       });
@@ -112,7 +122,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               ],
             },
             {
-              duration: 520,
+              duration: 480,
               easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
               pseudoElement: '::view-transition-new(root)',
             }
@@ -120,6 +130,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         })
         .catch(() => undefined);
     } else {
+      // Transição ultra-leve acelerada 100% por GPU
+      setRippleWave({ x, y, radius: Math.min(maxRadius, 360) });
+      window.setTimeout(() => setRippleWave(null), 420);
       setCurrentTab('agenda');
     }
   };
