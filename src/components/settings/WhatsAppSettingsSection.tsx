@@ -558,9 +558,9 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
 
       {/* MODAL DE CONEXÃO COM AJUDA INTEGRADA */}
       {isManualModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#121B2E] border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-6 animate-scaleUp max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
+        <div className="fixed inset-0 z-[250] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 pb-28 sm:pb-4 safe-screen">
+          <div className="bg-[#121B2E] border border-slate-800 rounded-3xl p-5 sm:p-7 max-w-lg w-full shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-scaleUp">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800/80 shrink-0">
               <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
                 <Smartphone className="w-5 h-5 text-emerald-400" />
                 Vincular Número de WhatsApp
@@ -574,103 +574,107 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
               </button>
             </div>
 
-            {/* BOX DE AJUDA COM LINKS DIRETOS */}
-            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 text-xs text-slate-300 space-y-2.5">
-              <div className="flex items-center justify-between font-bold text-emerald-400">
-                <span className="flex items-center gap-1.5">
-                  <HelpCircle className="w-4 h-4" /> Onde encontrar no Meta Business Suite?
-                </span>
-                <a
-                  href="https://business.facebook.com/wa/manage/phone-numbers/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold underline flex items-center gap-1"
-                >
-                  Abrir Meta Business <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Acesse o <b>Gerenciador do WhatsApp</b> da sua empresa. Na lista de telefones, copie a coluna <b>Identificação do número de telefone</b> (Phone number ID com 15 a 16 dígitos).
-              </p>
-              <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-2 text-emerald-300 text-[11px]">
-                <Info className="w-4 h-4 shrink-0 text-emerald-400" />
-                <span>Copie a Identificação do Número (Phone Number ID) correspondente ao chip da sua barbearia.</span>
-              </div>
-            </div>
+            <form onSubmit={handleConnectManual} className="flex flex-col flex-1 min-h-0">
+              {/* Conteúdo com scroll */}
+              <div className="flex-1 overflow-y-auto pr-1 py-4 space-y-4">
+                {/* BOX DE AJUDA COM LINKS DIRETOS */}
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 text-xs text-slate-300 space-y-2.5">
+                  <div className="flex items-center justify-between font-bold text-emerald-400">
+                    <span className="flex items-center gap-1.5">
+                      <HelpCircle className="w-4 h-4" /> Onde encontrar no Meta Business Suite?
+                    </span>
+                    <a
+                      href="https://business.facebook.com/wa/manage/phone-numbers/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold underline flex items-center gap-1"
+                    >
+                      Abrir Meta Business <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Acesse o <b>Gerenciador do WhatsApp</b> da sua empresa. Na lista de telefones, copie a coluna <b>Identificação do número de telefone</b> (Phone number ID com 15 a 16 dígitos).
+                  </p>
+                  <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-2 text-emerald-300 text-[11px]">
+                    <Info className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>Copie a Identificação do Número (Phone Number ID) correspondente ao chip da sua barbearia.</span>
+                  </div>
+                </div>
 
-            <form onSubmit={handleConnectManual} className="space-y-4 text-left">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Identificação do número de telefone (Phone Number ID) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: 105492348572910"
-                  value={phoneNumberId}
-                  onChange={(e) => setPhoneNumberId(e.target.value.replace(/\D/g, ''))}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 font-mono tracking-wider"
-                />
-                <div className="mt-1 flex items-center justify-between text-[10px]">
-                  {phoneNumberId.length >= 15 && phoneNumberId.length <= 17 ? (
-                    <span className="text-emerald-400 flex items-center gap-1 font-semibold">
-                      <CheckCircle2 className="w-3 h-3" /> Código válido ({phoneNumberId.length} dígitos)
-                    </span>
-                  ) : phoneNumberId.length > 0 ? (
-                    <span className="text-amber-400 flex items-center gap-1">
-                      <Info className="w-3 h-3" /> Geralmente possui 15 a 16 dígitos (digitado: {phoneNumberId.length})
-                    </span>
-                  ) : (
-                    <span className="text-slate-500">
-                      Código numérico de 15 a 16 dígitos exibido no painel da Meta.
-                    </span>
-                  )}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Identificação do número de telefone (Phone Number ID) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: 105492348572910"
+                    value={phoneNumberId}
+                    onChange={(e) => setPhoneNumberId(e.target.value.replace(/\D/g, ''))}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 font-mono tracking-wider"
+                  />
+                  <div className="mt-1 flex items-center justify-between text-[10px]">
+                    {phoneNumberId.length >= 15 && phoneNumberId.length <= 17 ? (
+                      <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+                        <CheckCircle2 className="w-3 h-3" /> Código válido ({phoneNumberId.length} dígitos)
+                      </span>
+                    ) : phoneNumberId.length > 0 ? (
+                      <span className="text-amber-400 flex items-center gap-1">
+                        <Info className="w-3 h-3" /> Geralmente possui 15 a 16 dígitos (digitado: {phoneNumberId.length})
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">
+                        Código numérico de 15 a 16 dígitos exibido no painel da Meta.
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Identificação da conta do WhatsApp Business (WABA ID)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 2381235335736494"
+                    value={businessAccountId}
+                    onChange={(e) => setBusinessAccountId(e.target.value.replace(/\D/g, ''))}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 font-mono tracking-wider"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    Opcional. Exibido logo abaixo do Phone Number ID na tela da Meta.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Número Exibido (com DDD)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: (84) 98193-7580"
+                    value={displayPhoneNumber}
+                    onChange={(e) => setDisplayPhoneNumber(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Nome da Barbearia / Empresa
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Barbearia Vanguarda"
+                    value={verifiedName}
+                    onChange={(e) => setVerifiedName(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Identificação da conta do WhatsApp Business (WABA ID)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: 2381235335736494"
-                  value={businessAccountId}
-                  onChange={(e) => setBusinessAccountId(e.target.value.replace(/\D/g, ''))}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 font-mono tracking-wider"
-                />
-                <span className="text-[10px] text-slate-500 mt-1 block">
-                  Opcional. Exibido logo abaixo do Phone Number ID na tela da Meta.
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Número Exibido (com DDD)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: (84) 98193-7580"
-                  value={displayPhoneNumber}
-                  onChange={(e) => setDisplayPhoneNumber(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Nome da Barbearia / Empresa
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: Barbearia Vanguarda"
-                  value={verifiedName}
-                  onChange={(e) => setVerifiedName(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div className="pt-4 flex items-center justify-end gap-3">
+              {/* Footer fixo do modal: SEMPRE visível acima de qualquer barra */}
+              <div className="pt-3 border-t border-slate-800/80 flex items-center justify-end gap-3 shrink-0 bg-[#121B2E]">
                 <button
                   type="button"
                   onClick={() => setIsManualModalOpen(false)}
@@ -681,7 +685,7 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-50"
+                  className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-emerald-500/20"
                 >
                   {isLoading ? 'Salvando...' : 'Salvar e Conectar'}
                 </button>
