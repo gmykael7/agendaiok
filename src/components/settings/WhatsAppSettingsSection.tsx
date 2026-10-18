@@ -28,27 +28,19 @@ interface WhatsAppSettingsSectionProps {
   setOrg: React.Dispatch<React.SetStateAction<Organization>>;
 }
 
-const GUIDE_TEXT_FOR_BARBER = `💈 *Como pegar o Phone Number ID na Meta para ativar o WhatsApp do Salão:*
-
-⚠️ *ATENÇÃO PARA NÃO ERRAR:*
-Não copie o "ID do Aplicativo" que fica lá em cima no topo do site! O número correto fica dentro da aba do WhatsApp.
+const GUIDE_TEXT_FOR_BARBER = `💈 *Como pegar a Identificação do Número no WhatsApp Business da Barbearia:*
 
 👉 *PASSO A PASSO:*
-1️⃣ Entre no site de desenvolvedores da Meta:
-🔗 https://developers.facebook.com/apps/
+1️⃣ Acesse o Gerenciador de Telefones do WhatsApp no Meta Business Suite:
+🔗 https://business.facebook.com/wa/manage/phone-numbers/
 
-2️⃣ Clique no seu aplicativo.
+2️⃣ Na tabela de números, localize o telefone da sua barbearia.
 
-3️⃣ No menu lateral esquerdo, clique em:
-   *WhatsApp* ➡️ *Configuração da API* (ou *API Setup*)
+3️⃣ Na coluna *Identificação do número de telefone* (Phone number ID):
+   ✅ Copie o código de 15 a 16 dígitos exibido ao lado do seu número comercial.
+   (Se solicitado, você também pode copiar a *Identificação da conta do WhatsApp Business* - WABA ID)
 
-4️⃣ Na tela, procure o quadro *"Enviar e receber mensagens"*:
-   ✅ Copie o número do campo: *Identificação do número de telefone* (Phone number ID)
-   (É um código com 15 a 16 dígitos numéricos)
-
-   ✅ Se quiser, copie também a: *Identificação da conta do WhatsApp Business* (WABA ID)
-
-5️⃣ Agora basta colar no painel do AgendAI e clicar em *Salvar e Conectar*! 🚀`;
+4️⃣ Agora basta colar no painel do AgendAI e clicar em *Salvar e Conectar*! 🚀`;
 
 export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = ({ org, setOrg }) => {
   const connection: WhatsAppConnection = org.whatsapp_connection || {
@@ -59,7 +51,7 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
   const isConnected = connection.status === 'connected';
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(!isConnected);
-  const [guideMode, setGuideMode] = useState<'test' | 'production'>('test');
+  const [guideMode, setGuideMode] = useState<'production' | 'test'>('production');
   const [phoneNumberId, setPhoneNumberId] = useState(connection.phoneNumberId || '');
   const [businessAccountId, setBusinessAccountId] = useState(connection.businessAccountId || '');
   const [displayPhoneNumber, setDisplayPhoneNumber] = useState(connection.displayPhoneNumber || org.phone || '');
@@ -388,23 +380,19 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
                     1
                   </span>
                   <a
-                    href={guideMode === 'test' ? 'https://developers.facebook.com/apps/' : 'https://business.facebook.com/wa/manage/phone-numbers/'}
+                    href="https://business.facebook.com/wa/manage/phone-numbers/"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1"
                   >
-                    Abrir Meta <ExternalLink className="w-3 h-3" />
+                    Abrir Gerenciador <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
                 <h5 className="text-sm font-bold text-white">
-                  {guideMode === 'test' ? 'Acesse o Meta for Developers' : 'Abra o Gerenciador de Telefones'}
+                  Abra o Gerenciador do WhatsApp
                 </h5>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  {guideMode === 'test' ? (
-                    <>Entre em <b>developers.facebook.com</b> com a conta do Facebook e clique no aplicativo do AgendAI.</>
-                  ) : (
-                    <>Acesse o <b>Gerenciador do WhatsApp</b> no Meta Business Suite onde os chips aprovados estão cadastrados.</>
-                  )}
+                  Acesse o <b>Gerenciador do WhatsApp</b> no Meta Business Suite onde os números comerciais da sua empresa estão cadastrados.
                 </p>
               </div>
 
@@ -415,18 +403,14 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
                     2
                   </span>
                   <span className="text-[10px] text-slate-400 font-mono">
-                    {guideMode === 'test' ? 'WhatsApp > Configuração da API' : 'Tabela de Números'}
+                    Tabela de Números
                   </span>
                 </div>
                 <h5 className="text-sm font-bold text-white">
-                  {guideMode === 'test' ? 'Abra a Configuração da API' : 'Localize o Número do Salão'}
+                  Localize o Número do Salão
                 </h5>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  {guideMode === 'test' ? (
-                    <>No menu lateral esquerdo, clique em <b>WhatsApp</b> e depois em <b>Configuração da API</b>.</>
-                  ) : (
-                    <>Na lista de números de telefone, encontre o chip verificado da sua barbearia.</>
-                  )}
+                  Na lista de números de telefone comerciais, encontre o chip verificado da sua barbearia.
                 </p>
               </div>
 
@@ -440,7 +424,7 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
                 </div>
                 <h5 className="text-sm font-bold text-white">Copie a Identificação</h5>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Clique no botão de cópia ao lado de <b>Identificação do número de telefone</b> (15 a 16 dígitos) e cole no modal abaixo.
+                  Copie o código numérico da coluna <b>Identificação do número de telefone</b> (Phone Number ID com 15 a 16 dígitos) e cole no modal abaixo.
                 </p>
               </div>
             </div>
@@ -590,27 +574,27 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
               </button>
             </div>
 
-            {/* BOX DE AJUDA COM LINKS DIRETOS E ALERTA CONTRA O APP ID */}
+            {/* BOX DE AJUDA COM LINKS DIRETOS */}
             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 text-xs text-slate-300 space-y-2.5">
               <div className="flex items-center justify-between font-bold text-emerald-400">
                 <span className="flex items-center gap-1.5">
-                  <HelpCircle className="w-4 h-4" /> Onde pegar esses números na Meta?
+                  <HelpCircle className="w-4 h-4" /> Onde encontrar no Meta Business Suite?
                 </span>
                 <a
-                  href="https://developers.facebook.com/apps/"
+                  href="https://business.facebook.com/wa/manage/phone-numbers/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold underline flex items-center gap-1"
                 >
-                  Abrir Meta <ExternalLink className="w-3 h-3" />
+                  Abrir Meta Business <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Na Meta, abra seu App e vá no menu: <b>WhatsApp &gt; Configuração da API</b>. No centro da tela, copie o código do campo <b>Identificação do número de telefone</b>.
+                Acesse o <b>Gerenciador do WhatsApp</b> da sua empresa. Na lista de telefones, copie a coluna <b>Identificação do número de telefone</b> (Phone number ID com 15 a 16 dígitos).
               </p>
-              <div className="p-2 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center gap-2 text-rose-300 text-[11px]">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
-                <span><b>Cuidado:</b> NÃO use o "ID do Aplicativo" do topo da tela! Use a Identificação do Número.</span>
+              <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-2 text-emerald-300 text-[11px]">
+                <Info className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>Copie a Identificação do Número (Phone Number ID) correspondente ao chip da sua barbearia.</span>
               </div>
             </div>
 
