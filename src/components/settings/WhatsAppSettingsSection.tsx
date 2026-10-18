@@ -1,5 +1,6 @@
 import { appConfirm } from '../common/ConfirmDialog';
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   MessageSquare,
   CheckCircle2,
@@ -557,9 +558,9 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
       )}
 
       {/* MODAL DE CONEXÃO COM AJUDA INTEGRADA */}
-      {isManualModalOpen && (
-        <div className="fixed inset-0 z-[250] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 pb-28 sm:pb-4 safe-screen">
-          <div className="bg-[#121B2E] border border-slate-800 rounded-3xl p-5 sm:p-7 max-w-lg w-full shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-scaleUp">
+      {isManualModalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 pb-[max(6rem,calc(env(safe-area-inset-bottom,0px)+5.5rem))] safe-screen">
+          <div className="bg-[#121B2E] border border-slate-800 rounded-3xl p-5 sm:p-7 max-w-lg w-full shadow-2xl flex flex-col max-h-[80vh] overflow-hidden animate-scaleUp">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800/80 shrink-0">
               <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
                 <Smartphone className="w-5 h-5 text-emerald-400" />
@@ -692,7 +693,8 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
