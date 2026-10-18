@@ -1962,3 +1962,237 @@ export default {
     }
   }
 };
+
+
+export async function processIncomingWhatsAppMessage(
+  payload: any,
+  env: Env
+): Promise<void> {
+  try {
+    const entry = payload?.entry?.[0];
+    const change = entry?.changes?.[0];
+    const value = change?.value;
+
+    if (!value?.messages || value.messages.length === 0) {
+      return;
+    }
+
+    const message = value.messages[0];
+    const senderPhoneRaw = message.from;
+    const messageType = message.type;
+    const clientName = value.contacts?.[0]?.profile?.name || 'Cliente';
+    const phoneNumberId = value.metadata?.phone_number_id;
+
+    // 1. Localiza a organização dona do número conectado
+    if (!phoneNumberId) {
+      console.error('[WhatsApp] Evento sem phone_number_id');
+      return;
+    }
+
+    const organization = await env.DB.prepare(`
+      SELECT id, name, slug
+      FROM organizations
+      WHERE whatsapp_phone_number_id = ?
+        AND whatsapp_status = 'connected'
+      LIMIT 1
+    `).bind(phoneNumberId).first<{
+      id: string;
+      name: string;
+      slug: string;
+    }>();
+
+    if (!organization) {
+      console.error('[WhatsApp] Número sem organização conectada');
+      return;
+    }
+
+    let incomingText = '';
+    if (messageType === 'text') {
+      incomingText = message.text?.body || '';
+    } else if (messageType === 'interactive') {
+      incomingText =
+        message.interactive?.button_reply?.title ||
+        message.interactive?.list_reply?.title ||
+        '';
+    } else if (messageType === 'button') {
+      incomingText = message.button?.text || '';
+    }
+
+    const normalizedText = incomingText
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '');
+
+    if (!normalizedText || !senderPhoneRaw) return;
+
+    const cleanPhone = senderPhoneRaw.replace(/\D/g, '');
+    const nationalPhone = cleanPhone.startsWith('55') ? cleanPhone.slice(2) : cleanPhone;
+    const phoneDDD = nationalPhone.slice(0, 2);
+    const phoneDigits = nationalPhone.slice(2);
+
+    // 2. Consulta de agendamentos limitada à organização correta
+    const appointmentQuery = `
+      SELECT a.*, b.full_name as barber_name, s.name as service_name
+      FROM appointments a
+      JOIN barbers b ON a.barber_id = b.id
+      JOIN services s ON a.service_id = s.id
+      WHERE a.org_id = ?
+      AND (
+        REPLACE(REPLACE(REPLACE(a.client_phone, '-', ''), ' ', ''), '(', '') LIKE ?
+        OR REPLACE(REPLACE(REPLACE(a.client_phone, '-', ''), ' ', ''), '(', '') LIKE ?
+      )
+      AND a.status IN ('scheduled', 'confirmed')
+      AND a.date >= DATE('now', '-1 day')
+      ORDER BY a.date ASC, a.start_time ASC
+      LIMIT 1
+    `;
+
+    const targetAppointment = await env.DB.prepare(appointmentQuery)
+      .bind(
+        organization.id,
+        `%${phoneDDD}%${phoneDigits.slice(-8)}%`,
+        `%${nationalPhone}%`
+      )
+      .first<any>();
+
+    // 3. Sem agendamento pendente: envia boas-vindas com link oficial do AgendAi
+    if (!targetAppointment) {
+      const bookingUrl = `https://meuagendai.fun/${organization.slug}`;
+
+      const sent = await sendWhatsAppTextMessage(
+        senderPhoneRaw,
+        `Olá, *${clientName}*! 👋 Bem-vindo à *${organization.name}*.
+
+Para conferir os horários e fazer seu agendamento, acesse:
+${bookingUrl}`,
+        phoneNumberId,
+        env
+      );
+
+      if (!sent) {
+        console.error('[WhatsApp] Falha ao enviar boas-vindas');
+      }
+
+      return;
+    }
+
+    // 4. Fluxo de Confirmação e Cancelamento
+    const isConfirmAction = [
+      'sim', '1', 'confirmo', 'confirmar', 'confirmado', 'ok', 'positivo', 'pode confirmar'
+    ].includes(normalizedText);
+
+    const isCancelAction = [
+      'nao', '2', 'cancelar', 'cancela', 'desmarcar', 'nao vou', 'nao posso'
+    ].includes(normalizedText);
+
+    if (isConfirmAction) {
+      await env.DB.prepare(
+        `UPDATE appointments 
+         SET status = 'confirmed', updated_at = datetime('now') 
+         WHERE id = ?`
+      ).bind(targetAppointment.id).run();
+
+      await env.DB.prepare(
+        `INSERT INTO notifications (id, org_id, type, title, message, appointment_id, created_at)
+         VALUES (?, ?, 'appointment_confirmed', ?, ?, ?, datetime('now'))`
+      ).bind(
+        `notif-${Date.now()}`,
+        organization.id,
+        'Agendamento Confirmado via WhatsApp',
+        `${targetAppointment.client_name} confirmou o horário das ${targetAppointment.start_time} com ${targetAppointment.barber_name}.`,
+        targetAppointment.id
+      ).run();
+
+      const dateFormatted = targetAppointment.date ? targetAppointment.date.split('-').reverse().join('/') : '';
+      const confirmResponseText = `Perfeito, *${clientName}*! Seu agendamento para o dia *${dateFormatted}* às *${targetAppointment.start_time}* com *${targetAppointment.barber_name}* está *confirmado* ✅.
+
+Te esperamos na barbearia!`;
+      await sendWhatsAppTextMessage(senderPhoneRaw, confirmResponseText, phoneNumberId, env);
+      return;
+    }
+
+    if (isCancelAction) {
+      await env.DB.prepare(
+        `UPDATE appointments 
+         SET status = 'canceled', updated_at = datetime('now') 
+         WHERE id = ?`
+      ).bind(targetAppointment.id).run();
+
+      await env.DB.prepare(
+        `INSERT INTO notifications (id, org_id, type, title, message, appointment_id, created_at)
+         VALUES (?, ?, 'appointment_canceled', ?, ?, ?, datetime('now'))`
+      ).bind(
+        `notif-${Date.now()}`,
+        organization.id,
+        'Agendamento Cancelado via WhatsApp',
+        `${targetAppointment.client_name} cancelou o horário das ${targetAppointment.start_time} com ${targetAppointment.barber_name}.`,
+        targetAppointment.id
+      ).run();
+
+      const cancelResponseText = `Tudo bem, *${clientName}*. Seu agendamento das ${targetAppointment.start_time} foi cancelado com sucesso.
+
+Para remarcar: https://meuagendai.fun/${organization.slug}`;
+      await sendWhatsAppTextMessage(senderPhoneRaw, cancelResponseText, phoneNumberId, env);
+      return;
+    }
+  } catch (error) {
+    console.error('[WhatsApp Webhook Processor Error]:', error);
+  }
+}
+// =========================================================================
+// ENVIO COM OBSERVABILIDADE DE ERROS DA META
+// =========================================================================
+
+async function sendWhatsAppTextMessage(
+  to: string,
+  body: string,
+  phoneNumberId: string,
+  env: Env
+): Promise<boolean> {
+  const targetPhoneId = phoneNumberId || env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = env.WHATSAPP_ACCESS_TOKEN;
+
+  if (!targetPhoneId || !accessToken) {
+    console.error('[WhatsApp] Configuração de envio incompleta', {
+      hasPhoneNumberId: Boolean(targetPhoneId),
+      hasAccessToken: Boolean(accessToken),
+    });
+    return false;
+  }
+
+  try {
+    const res = await fetch(`https://graph.facebook.com/v19.0/${targetPhoneId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: to,
+        type: 'text',
+        text: { preview_url: false, body: body },
+      }),
+    });
+
+    if (!res.ok) {
+      const result = (await res.json().catch(() => null)) as any;
+
+      console.error('[WhatsApp] Meta rejeitou o envio', {
+        status: res.status,
+        code: result?.error?.code,
+        subcode: result?.error?.error_subcode,
+        traceId: result?.error?.fbtrace_id,
+      });
+
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error('[WhatsApp Send Message Error]:', err);
+    return false;
+  }
+}
