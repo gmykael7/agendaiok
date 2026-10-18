@@ -7,6 +7,8 @@ export class WhatsAppSendError extends Error {
   }
 }
 
+const maskPhone = (phone?: string): string => (phone ? `***${String(phone).replace(/\D/g, '').slice(-4)}` : '');
+
 export async function sendWhatsAppText(
   env: Env,
   to: string,
@@ -17,11 +19,29 @@ export async function sendWhatsAppText(
   const phoneNumberId = phoneNumberIdOverride || env.WHATSAPP_PHONE_NUMBER_ID;
 
   if (!token || !phoneNumberId) {
+    console.error(
+      JSON.stringify({
+        event: 'whatsapp_send_aborted',
+        reason: 'missing_credentials',
+        hasToken: Boolean(token),
+        hasPhoneNumberId: Boolean(phoneNumberId),
+        ts: new Date().toISOString(),
+      })
+    );
     throw new WhatsAppSendError('WhatsApp credentials (token or phone number ID) missing in environment');
   }
 
   const cleanTo = to.replace(/\D/g, '');
   const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
+
+  console.log(
+    JSON.stringify({
+      event: 'whatsapp_send_attempt',
+      phoneNumberId,
+      recipientMasked: maskPhone(cleanTo),
+      ts: new Date().toISOString(),
+    })
+  );
 
   const response = await fetch(url, {
     method: 'POST',
@@ -42,9 +62,47 @@ export async function sendWhatsAppText(
   });
 
   if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    throw new WhatsAppSendError(`Failed to send WhatsApp message: ${response.status} ${errorText}`, response.status);
+    const errorData = (await response.json().catch(() => null)) as any;
+    const metaError = errorData?.error;
+    const code = metaError?.code;
+    const subcode = metaError?.error_subcode;
+    const errorType = metaError?.type;
+    const fbtraceId = metaError?.fbtrace_id;
+
+    console.error(
+      JSON.stringify({
+        event: 'whatsapp_send_error',
+        httpStatus: response.status,
+        code: code !== undefined ? Number(code) : undefined,
+        subcode: subcode !== undefined ? Number(subcode) : undefined,
+        errorType: errorType ? String(errorType) : undefined,
+        fbtraceId: fbtraceId ? String(fbtraceId) : undefined,
+        phoneNumberId,
+        recipientMasked: maskPhone(cleanTo),
+        ts: new Date().toISOString(),
+      })
+    );
+
+    const errorDetails = code !== undefined ? ` (code: ${code}, subcode: ${subcode})` : '';
+    throw new WhatsAppSendError(
+      `Failed to send WhatsApp message: ${response.status}${errorDetails}`,
+      response.status
+    );
   }
+
+  const data = (await response.json().catch(() => null)) as any;
+  const sentMessageId = data?.messages?.[0]?.id;
+
+  console.log(
+    JSON.stringify({
+      event: 'whatsapp_send_success',
+      httpStatus: response.status,
+      sentMessageId: sentMessageId || undefined,
+      phoneNumberId,
+      recipientMasked: maskPhone(cleanTo),
+      ts: new Date().toISOString(),
+    })
+  );
 }
 
 export interface WhatsAppFlowParameters {

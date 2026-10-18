@@ -71,9 +71,18 @@ export async function handleWhatsAppWebhook(request: Request, env: Env): Promise
     });
   }
 
+  const maskPhone = (phone?: string): string => (phone ? `***${String(phone).replace(/\D/g, '').slice(-4)}` : '');
+
   const entry = body?.entry?.[0];
   const change = entry?.changes?.[0]?.value;
   if (!change) {
+    console.log(
+      JSON.stringify({
+        event: 'whatsapp_webhook_ignored',
+        reason: 'no_change_value',
+        ts: new Date().toISOString(),
+      })
+    );
     return new Response(JSON.stringify({ status: 'ignored' }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -85,14 +94,45 @@ export async function handleWhatsAppWebhook(request: Request, env: Env): Promise
   const statuses = change?.statuses;
 
   if (Array.isArray(messages) && messages.length > 0) {
+    console.log(
+      JSON.stringify({
+        event: 'whatsapp_webhook_event_kind',
+        kind: 'message',
+        isMessage: true,
+        isStatusOnly: false,
+        messageCount: messages.length,
+        phoneNumberId,
+        ts: new Date().toISOString(),
+      })
+    );
+
     const contact = change?.contacts?.[0];
     const profileName = contact?.profile?.name ? String(contact.profile.name).trim() : undefined;
 
     for (const msg of messages) {
       const messageId = String(msg?.id || '');
-      if (!messageId) continue;
+      if (!messageId) {
+        console.log(
+          JSON.stringify({
+            event: 'whatsapp_message_ignored',
+            reason: 'missing_message_id',
+            phoneNumberId,
+            ts: new Date().toISOString(),
+          })
+        );
+        continue;
+      }
 
       if (await isEventProcessed(env, messageId)) {
+        console.log(
+          JSON.stringify({
+            event: 'whatsapp_message_ignored',
+            reason: 'already_processed',
+            messageId,
+            phoneNumberId,
+            ts: new Date().toISOString(),
+          })
+        );
         continue;
       }
       await markEventProcessed(env, messageId);
@@ -147,15 +187,54 @@ export async function handleWhatsAppWebhook(request: Request, env: Env): Promise
       }
     }
   } else if (Array.isArray(statuses) && statuses.length > 0) {
+    console.log(
+      JSON.stringify({
+        event: 'whatsapp_webhook_event_kind',
+        kind: 'status',
+        isMessage: false,
+        isStatusOnly: true,
+        statusCount: statuses.length,
+        phoneNumberId,
+        ts: new Date().toISOString(),
+      })
+    );
+
     for (const st of statuses) {
       const messageId = String(st?.id || '');
       const status = String(st?.status || '');
+      const errorCode = st?.errors?.[0]?.code;
+      const errorSubcode = st?.errors?.[0]?.error_subcode;
+      const errorMessage = st?.errors?.[0]?.title || st?.errors?.[0]?.message;
+
+      console.log(
+        JSON.stringify({
+          event: 'whatsapp_webhook_status_received',
+          status,
+          messageId,
+          phoneNumberId,
+          recipientMasked: maskPhone(st?.recipient_id),
+          errorCode: errorCode !== undefined ? Number(errorCode) : undefined,
+          errorSubcode: errorSubcode !== undefined ? Number(errorSubcode) : undefined,
+          errorMessage: errorMessage ? String(errorMessage).slice(0, 150) : undefined,
+          ts: new Date().toISOString(),
+        })
+      );
+
       const event: WhatsAppEvent =
         status === 'delivered'
           ? { type: 'message.delivered', phoneNumberId, messageId }
           : status === 'read'
           ? { type: 'message.read', phoneNumberId, messageId }
-          : { type: 'message.failed', phoneNumberId, messageId, error: st?.errors?.[0]?.message };
+          : status === 'sent'
+          ? { type: 'message.sent', phoneNumberId, messageId }
+          : {
+              type: 'message.failed',
+              phoneNumberId,
+              messageId,
+              error: errorMessage,
+              errorCode: errorCode !== undefined ? Number(errorCode) : undefined,
+              errorSubcode: errorSubcode !== undefined ? Number(errorSubcode) : undefined,
+            };
 
       if (env.WHATSAPP_QUEUE) {
         await env.WHATSAPP_QUEUE.send(event);
@@ -163,6 +242,17 @@ export async function handleWhatsAppWebhook(request: Request, env: Env): Promise
         await processWhatsAppEvent(env, event);
       }
     }
+  } else {
+    console.log(
+      JSON.stringify({
+        event: 'whatsapp_webhook_event_kind',
+        kind: 'other',
+        isMessage: false,
+        isStatusOnly: false,
+        phoneNumberId,
+        ts: new Date().toISOString(),
+      })
+    );
   }
 
   return new Response(JSON.stringify({ status: 'ok' }), {

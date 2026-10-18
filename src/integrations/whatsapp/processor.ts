@@ -55,24 +55,69 @@ export function parseTimeFromText(text: string): string | null {
 }
 
 export async function processWhatsAppEvent(env: Env, evt: WhatsAppEvent): Promise<void> {
-  if (evt.type !== 'message.received') {
-    logEvent('whatsapp_message_status_processed', { type: evt.type, messageId: evt.messageId });
+  const isMessage = evt.type === 'message.received';
+  logEvent('whatsapp_event_received', {
+    eventType: evt.type,
+    isMessage,
+    isStatusOnly: !isMessage,
+    messageId: evt.messageId,
+    phoneNumberId: evt.phoneNumberId,
+  });
+
+  if (!isMessage) {
+    if (evt.type === 'message.delivered') {
+      logEvent('whatsapp_status_delivered', {
+        messageId: evt.messageId,
+        phoneNumberId: evt.phoneNumberId,
+      });
+    } else if (evt.type === 'message.failed') {
+      logEvent('whatsapp_status_failed', {
+        messageId: evt.messageId,
+        phoneNumberId: evt.phoneNumberId,
+        error: (evt as any).error,
+        errorCode: (evt as any).errorCode,
+        errorSubcode: (evt as any).errorSubcode,
+      });
+    } else {
+      logEvent('whatsapp_message_status_processed', {
+        type: evt.type,
+        messageId: evt.messageId,
+        phoneNumberId: evt.phoneNumberId,
+      });
+    }
     return;
   }
 
   const tenantSlug = await resolveTenantSlug(env, evt.phoneNumberId);
   if (!tenantSlug) {
-    logEvent('whatsapp_message_processing_skipped', { reason: 'tenant_not_found', phoneNumberId: evt.phoneNumberId });
+    logEvent('whatsapp_message_ignored', {
+      reason: 'tenant_not_found',
+      organizationFound: false,
+      phoneNumberId: evt.phoneNumberId,
+      messageId: evt.messageId,
+    });
     return;
   }
 
   let replyText: string;
   try {
     const payload = await loadPayloadBySlug(env, tenantSlug);
-    if (!payload) {
-      logEvent('whatsapp_message_processing_skipped', { reason: 'tenant_payload_not_found', tenantSlug });
+    if (!payload || !payload.org) {
+      logEvent('whatsapp_message_ignored', {
+        reason: 'tenant_payload_not_found',
+        organizationFound: false,
+        tenantSlug,
+        messageId: evt.messageId,
+      });
       replyText = FALLBACK_REPLY;
     } else {
+      logEvent('whatsapp_organization_found', {
+        organizationFound: true,
+        tenantSlug,
+        orgId: payload.org.id || undefined,
+        orgName: payload.org.name || undefined,
+        messageId: evt.messageId,
+      });
       const data: AssistantData = {
         org: payload.org,
         services: Array.isArray(payload.services) ? payload.services : [],

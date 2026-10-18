@@ -1,5 +1,6 @@
 export type WhatsAppEventType =
   | 'message.received'
+  | 'message.sent'
   | 'message.delivered'
   | 'message.read'
   | 'message.failed';
@@ -36,6 +37,11 @@ export type WhatsAppEvent =
       interactive?: WhatsAppInteractiveData;
     }
   | {
+      type: 'message.sent';
+      phoneNumberId: string;
+      messageId: string;
+    }
+  | {
       type: 'message.delivered';
       phoneNumberId: string;
       messageId: string;
@@ -50,4 +56,6 @@ export type WhatsAppEvent =
       phoneNumberId: string;
       messageId: string;
       error?: string;
+      errorCode?: number;
+      errorSubcode?: number;
     };

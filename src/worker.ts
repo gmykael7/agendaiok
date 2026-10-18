@@ -2152,14 +2152,29 @@ async function sendWhatsAppTextMessage(
 ): Promise<boolean> {
   const targetPhoneId = phoneNumberId || env.WHATSAPP_PHONE_NUMBER_ID;
   const accessToken = env.WHATSAPP_ACCESS_TOKEN;
+  const maskPhone = (p?: string) => (p ? `***${String(p).replace(/\D/g, '').slice(-4)}` : '');
 
   if (!targetPhoneId || !accessToken) {
-    console.error('[WhatsApp] Configuração de envio incompleta', {
-      hasPhoneNumberId: Boolean(targetPhoneId),
-      hasAccessToken: Boolean(accessToken),
-    });
+    console.error(
+      JSON.stringify({
+        event: 'whatsapp_send_aborted',
+        reason: 'missing_credentials',
+        hasPhoneNumberId: Boolean(targetPhoneId),
+        hasAccessToken: Boolean(accessToken),
+        ts: new Date().toISOString(),
+      })
+    );
     return false;
   }
+
+  console.log(
+    JSON.stringify({
+      event: 'whatsapp_send_attempt',
+      phoneNumberId: targetPhoneId,
+      recipientMasked: maskPhone(to),
+      ts: new Date().toISOString(),
+    })
+  );
 
   try {
     const res = await fetch(`https://graph.facebook.com/v19.0/${targetPhoneId}/messages`, {
@@ -2179,16 +2194,39 @@ async function sendWhatsAppTextMessage(
 
     if (!res.ok) {
       const result = (await res.json().catch(() => null)) as any;
+      const code = result?.error?.code;
+      const subcode = result?.error?.error_subcode;
+      const fbtraceId = result?.error?.fbtrace_id;
 
-      console.error('[WhatsApp] Meta rejeitou o envio', {
-        status: res.status,
-        code: result?.error?.code,
-        subcode: result?.error?.error_subcode,
-        traceId: result?.error?.fbtrace_id,
-      });
+      console.error(
+        JSON.stringify({
+          event: 'whatsapp_send_error',
+          httpStatus: res.status,
+          code: code !== undefined ? Number(code) : undefined,
+          subcode: subcode !== undefined ? Number(subcode) : undefined,
+          fbtraceId: fbtraceId ? String(fbtraceId) : undefined,
+          phoneNumberId: targetPhoneId,
+          recipientMasked: maskPhone(to),
+          ts: new Date().toISOString(),
+        })
+      );
 
       return false;
     }
+
+    const resData = (await res.json().catch(() => null)) as any;
+    const sentMessageId = resData?.messages?.[0]?.id;
+
+    console.log(
+      JSON.stringify({
+        event: 'whatsapp_send_success',
+        httpStatus: res.status,
+        sentMessageId: sentMessageId || undefined,
+        phoneNumberId: targetPhoneId,
+        recipientMasked: maskPhone(to),
+        ts: new Date().toISOString(),
+      })
+    );
 
     return true;
   } catch (err) {
