@@ -1,6 +1,7 @@
 import type { Env } from '../../worker';
 import { dbGet, dbPut } from '../../worker';
 import type { AssistantSelection } from '../../services/bookingAssistant';
+import type { ConversationMenu } from './conversation';
 
 // Sessão de conversa expira após 30 minutos de inatividade
 const SESSION_TTL_SECONDS = 30 * 60;
@@ -18,6 +19,7 @@ export interface WhatsAppSessionState {
   pendingBarberName?: string;
   mode?: 'booking' | 'rescheduling' | 'canceling';
   reschedulingAppointmentId?: string;
+  menu?: ConversationMenu;
 }
 
 export async function getSession(env: Env, phone: string): Promise<WhatsAppSessionState> {
@@ -34,6 +36,8 @@ export async function getSession(env: Env, phone: string): Promise<WhatsAppSessi
       pendingBarberName: typeof parsed.pendingBarberName === 'string' ? parsed.pendingBarberName : undefined,
       mode: parsed.mode,
       reschedulingAppointmentId: parsed.reschedulingAppointmentId,
+      menu: parsed.menu && typeof parsed.menu.token === 'string' && Array.isArray(parsed.menu.choices)
+        ? parsed.menu : undefined,
     };
   } catch {
     return { ...EMPTY_SELECTION };

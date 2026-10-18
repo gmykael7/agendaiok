@@ -71,6 +71,64 @@ function getStoredPayload(DB, email) {
   return JSON.parse(row.value);
 }
 
+const productionServices = [
+  { id: 'executivo', name: 'Corte Cabelo Executivo', price: 50, duration_minutes: 30, active: true },
+  { id: 'barba', name: 'Barba Completa com Toalha Quente', price: 40, duration_minutes: 30, active: true },
+  { id: 'combo', name: 'Combo Cabelo + Barba Premium', price: 80, duration_minutes: 60, active: true },
+];
+
+test('conversa mantém o dia e entende Corte de cabelo sem repetir as boas-vindas', async (t) => {
+  const calls = withMockedFetch(t, () => new Response('{}', { status: 200 }));
+  const { DB, slug, email } = setupDbWithTenant(t, { services: productionServices });
+  const env = { DB, WHATSAPP_ACCESS_TOKEN: 'test', WHATSAPP_DEFAULT_TENANT_SLUG: slug };
+  const from = '5584999990001';
+  const send = async (text) => {
+    await processWhatsAppEvent(env, {
+      type: 'message.received', phoneNumberId: '123', from,
+      messageId: `wamid.conversation-${calls.length}`, text, timestamp: '1726000000',
+    });
+    const body = JSON.parse(calls.at(-1).init.body);
+    return body.text?.body ?? body.interactive.body.text;
+  };
+
+  assert.match(await send('oi'), /Bem-vindo/);
+  assert.match(await send('Agendar'), /Para qual dia/);
+  const chooseService = await send('amanhã');
+  assert.match(await send('não sei'), /Qual serviço/);
+  const chooseTime = await send('Corte de cabelo');
+  assert.match(chooseTime, /horários livres para \*Corte Cabelo Executivo\*/);
+  assert.doesNotMatch(chooseTime, /Bem-vindo/);
+  const session = JSON.parse(DB.prepare('SELECT value FROM app_store WHERE key = ?').bind(`wa_session:${from}`).first().value);
+  assert.equal(session.serviceId, 'executivo');
+  assert.ok(chooseService.includes(session.date.split('-').reverse().join('/')));
+  assert.match(await send('não entendi'), /horários livres/);
+  assert.match(await send('Rafael Barbeiro'), /horários livres/);
+  assert.equal(getStoredPayload(DB, email).appointments.length, 0);
+  assert.match(await send('10:00'), /Agendamento confirmado/);
+  assert.equal(getStoredPayload(DB, email).appointments[0].service_id, 'executivo');
+});
+
+test('nome parcial ambíguo pede o serviço completo sem reservar nem voltar ao início', async (t) => {
+  const calls = withMockedFetch(t, () => new Response('{}', { status: 200 }));
+  const { DB, slug, email } = setupDbWithTenant(t, { services: productionServices });
+  const env = { DB, WHATSAPP_ACCESS_TOKEN: 'test', WHATSAPP_DEFAULT_TENANT_SLUG: slug };
+  const send = async (text) => {
+    await processWhatsAppEvent(env, {
+      type: 'message.received', phoneNumberId: '123', from: '5584999990002',
+      messageId: `wamid.ambiguous-${calls.length}`, text, timestamp: '1726000000',
+    });
+    const body = JSON.parse(calls.at(-1).init.body);
+    return body.text?.body ?? body.interactive.body.text;
+  };
+  await send('Corte Cabelo Executivo amanhã');
+  const reply = await send('Barba às 10:00');
+  assert.match(reply, /Barba Completa com Toalha Quente/);
+  assert.match(reply, /Combo Cabelo \+ Barba Premium/);
+  assert.doesNotMatch(reply, /Bem-vindo|Agendamento confirmado/);
+  assert.equal(getStoredPayload(DB, email).appointments.length, 0);
+  assert.match(await send('Barba Completa com Toalha Quente'), /horários livres para \*Barba Completa/);
+});
+
 test('Fase 4: processWhatsAppEvent cria agendamento real com metadados corretos', async (t) => {
   const calls = withMockedFetch(t, () => new Response('{}', { status: 200 }));
   const { DB, slug, email } = setupDbWithTenant(t);
@@ -239,4 +297,102 @@ test('Fase 4: recusa horário inválido fora do expediente', async (t) => {
 
   const stored = getStoredPayload(DB, email);
   assert.equal(stored.appointments.length, 0);
+});
+
+function conversationHarness(t, options = {}) {
+  const calls = withMockedFetch(t, () => new Response('{}', { status: 200 }));
+  const fixture = setupDbWithTenant(t, { services: productionServices, ...options });
+  const env = { DB: fixture.DB, WHATSAPP_ACCESS_TOKEN: 'test', WHATSAPP_DEFAULT_TENANT_SLUG: fixture.slug };
+  const from = '5584999990003';
+  return {
+    ...fixture,
+    async send(text, interactive) {
+      await processWhatsAppEvent(env, {
+        type: 'message.received', phoneNumberId: 'tenant-phone', from,
+        messageId: `wamid.menu-${calls.length}`, text, interactive, timestamp: '1726000000',
+      });
+      return JSON.parse(calls.at(-1).init.body);
+    },
+    session() {
+      return JSON.parse(fixture.DB.prepare('SELECT value FROM app_store WHERE key = ?').bind(`wa_session:${from}`).first().value);
+    },
+  };
+}
+
+const menuRows = body => body.interactive.action.sections[0].rows;
+const replyText = body => body.text?.body ?? body.interactive.body.text;
+
+test('menu premium aceita números de menu, dia, serviço e horário com contexto', async t => {
+  const chat = conversationHarness(t);
+  const welcome = await chat.send('menu');
+  assert.equal(welcome.interactive.type, 'list');
+  assert.equal(menuRows(welcome).length, 4);
+  assert.match(replyText(welcome), /\*1 · Agendar um horário\*\n\n\*2/);
+  const day = await chat.send('1');
+  assert.equal(day.interactive.type, 'button');
+  assert.equal(day.interactive.action.buttons.length, 3);
+  const services = await chat.send('2');
+  assert.ok(menuRows(services)[0].title.length <= 24);
+  assert.match(menuRows(services)[0].description, /Corte Cabelo Executivo/);
+  assert.match(replyText(services), /\*2 · Barba Completa com Toalha Quente\*\nR\$/);
+  const slots = await chat.send('2');
+  assert.equal(chat.session().serviceId, 'barba');
+  assert.equal(slots.interactive.type, 'list');
+  assert.equal(getStoredPayload(chat.DB, chat.email).appointments.length, 0);
+  const selected = chat.session().menu.choices[0].selection;
+  const confirmed = await chat.send('1');
+  assert.match(replyText(confirmed), /Agendamento confirmado/);
+  const appointment = getStoredPayload(chat.DB, chat.email).appointments[0];
+  assert.equal(appointment.service_id, 'barba');
+  assert.equal(appointment.date, selected.date);
+  assert.equal(appointment.barber_id, selected.barberId);
+});
+
+test('botões e listas usam ID da opção; cliques antigos e números inválidos não reservam', async t => {
+  const chat = conversationHarness(t);
+  const welcome = await chat.send('menu');
+  const staleId = menuRows(welcome)[0].id;
+  const day = await chat.send('', { type: 'list_reply', listId: staleId, listTitle: 'Título ignorado' });
+  const tomorrow = day.interactive.action.buttons[1].reply.id;
+  const services = await chat.send('', { type: 'button_reply', buttonId: tomorrow, buttonTitle: 'Cancelar' });
+  const firstService = menuRows(services)[0].id;
+  const slots = await chat.send('', { type: 'list_reply', listId: firstService, listTitle: 'Qualquer texto' });
+  assert.equal(chat.session().serviceId, 'executivo');
+  const date = chat.session().date;
+  assert.match(replyText(await chat.send('99')), /Essa opção não está disponível/);
+  assert.equal(chat.session().date, date);
+  assert.equal(getStoredPayload(chat.DB, chat.email).appointments.length, 0);
+  assert.match(replyText(await chat.send('', { type: 'list_reply', listId: staleId })), /Essa opção não está disponível/);
+  const back = await chat.send('menu');
+  assert.match(replyText(back), /Bem-vindo/);
+  assert.equal(chat.session().serviceId, '');
+  assert.equal(chat.session().date, '');
+  assert.notEqual(menuRows(back)[0].id, staleId);
+  assert.ok(slots.interactive);
+});
+
+test('catálogos longos têm paginação e a seleção numérica usa o serviço da página exibida', async t => {
+  const services = Array.from({ length: 17 }, (_, i) => ({
+    id: `s${i}`, name: `Serviço Especial ${i + 1}`, price: 50, duration_minutes: 30, active: true,
+  }));
+  const chat = conversationHarness(t, { services });
+  const first = await chat.send('Serviços');
+  assert.equal(menuRows(first).length, 9);
+  const second = await chat.send('9');
+  assert.ok(menuRows(second).length <= 10);
+  assert.match(replyText(second), /1 · Serviço Especial 9/);
+  await chat.send('1');
+  assert.equal(chat.session().serviceId, 's8');
+  assert.equal(getStoredPayload(chat.DB, chat.email).appointments.length, 0);
+});
+
+test('Outra data pede uma data escrita e conserva o serviço escolhido', async t => {
+  const chat = conversationHarness(t);
+  await chat.send('Serviços');
+  await chat.send('1');
+  const manualDate = await chat.send('3');
+  assert.match(replyText(manualDate), /Escreva o dia e o mês/);
+  assert.equal(chat.session().serviceId, 'executivo');
+  assert.equal(chat.session().date, '');
+  assert.equal(chat.session().menu, undefined);
 });
