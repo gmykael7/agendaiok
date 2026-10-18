@@ -16,9 +16,13 @@ import {
   answerBookingAssistant,
   assistantSlots,
   inferGuidedIntent,
+  validAssistantDate,
+  sanitizeAssistantSelection,
   type AssistantData,
   type AssistantSlot,
+  type AssistantSelection,
 } from '../../services/bookingAssistant';
+import type { Service } from '../../types';
 
 function logEvent(event: string, fields: Record<string, unknown> = {}): void {
   console.log(JSON.stringify({ event, ...fields, ts: new Date().toISOString() }));
@@ -33,8 +37,207 @@ function formatSlotsForWhatsApp(slots: AssistantSlot[]): string {
   const uniqueBarbers = new Set(slots.map((s) => s.barberId)).size > 1;
   return slots
     .slice(0, MAX_SLOTS_IN_REPLY)
-    .map((slot) => (uniqueBarbers ? `• ${slot.time} — ${slot.barberName}` : `• ${slot.time}`))
+    .map((slot) => (uniqueBarbers ? `• *${slot.time}* — ${slot.barberName}` : `• *${slot.time}*`))
     .join('\n');
+}
+
+function buildWhatsAppServicesList(services: Service[]): string {
+  const active = services.filter((s) => s.active !== false);
+  if (!active.length) return 'Não há serviços disponíveis no momento.';
+  return active
+    .map((s) => {
+      const price = Number(s.price || 0).toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      });
+      const duration = s.duration_minutes ? ` (${s.duration_minutes} min)` : '';
+      return `• *${s.name}* — ${price}${duration}`;
+    })
+    .join('\n');
+}
+
+function buildWhatsAppAssistantReply(
+  data: AssistantData,
+  userText: string,
+  session: Partial<AssistantSelection & { clientName?: string }>,
+  now: Date,
+  profileName?: string
+): { reply: string; selection: AssistantSelection; slots: AssistantSlot[] } {
+  const guided = inferGuidedIntent(userText, data, now);
+  const selection = sanitizeAssistantSelection(
+    { ...sanitizeAssistantSelection(session, data, now), ...guided },
+    data,
+    now
+  );
+  const clientName = profileName || session.clientName || '';
+  const greeting = clientName ? `Olá, *${clientName}*! 👋` : 'Olá! 👋';
+  const orgName = data.org?.name || 'nossa barbearia';
+  const servicesList = buildWhatsAppServicesList(data.services);
+
+  // 1. Tópico: Serviços e Preços
+  if (
+    guided.topic === 'services' ||
+    /^(servi[cç]os?|pre[cç]os?|tabela|valores?|quanto custa|cardapio|menu)\b/i.test(userText.trim())
+  ) {
+    return {
+      reply: [
+        `💈 *Serviços e Valores — ${orgName}:*`,
+        '',
+        servicesList,
+        '',
+        '💬 *Qual serviço você gostaria de agendar?*',
+        'Basta responder com o nome do serviço e o dia (ex: *"Corte amanhã"*).',
+      ].join('\n'),
+      selection,
+      slots: [],
+    };
+  }
+
+  // 2. Tópico: Horário de Funcionamento
+  if (
+    guided.topic === 'hours' ||
+    /^(hor[aá]rios? de atendimento|expediente|que horas abre|que horas fecha|funcionamento)\b/i.test(
+      userText.trim()
+    )
+  ) {
+    const hours = `Das *${data.org.open_hour || '08:00'}* às *${data.org.close_hour || '20:00'}*`;
+    const interval = data.org.break_enabled
+      ? `\n• *Intervalo:* ${data.org.break_start} às ${data.org.break_end}`
+      : '';
+    return {
+      reply: [
+        `🕒 *Horário de Funcionamento — ${orgName}:*`,
+        `• *Atendimento:* ${hours}${interval}`,
+        '',
+        'Gostaria de agendar um horário para hoje ou amanhã?',
+      ].join('\n'),
+      selection,
+      slots: [],
+    };
+  }
+
+  // 3. Tópico: Contato / Endereço
+  if (
+    guided.topic === 'contact' ||
+    /^(onde fica|endere[cç]o|localiza[cç][aã]o|telefone|contato)\b/i.test(userText.trim())
+  ) {
+    const address = data.org.address ? `• *Endereço:* ${data.org.address}` : '';
+    const phone = data.org.phone ? `• *Telefone:* ${data.org.phone}` : '';
+    const bookingLink = data.org.slug
+      ? `• *Agendamento online:* https://meuagendai.fun/${data.org.slug}`
+      : '';
+    return {
+      reply: [`📍 *${orgName}:*`, address, phone, bookingLink].filter(Boolean).join('\n'),
+      selection,
+      slots: [],
+    };
+  }
+
+  // 4. Fluxo de Disponibilidade / Agendamento
+  if (
+    guided.topic === 'availability' ||
+    /^(agendar|marcar|quero agendar|quero marcar|marcar horario|agendamento)\b/i.test(userText.trim())
+  ) {
+    // Caso A: Tem data e tem serviço selecionado -> busca horários livres!
+    if (selection.serviceId && selection.date && validAssistantDate(selection.date, now)) {
+      const slots = assistantSlots(data, selection, now);
+      const service = data.services.find((s) => s.id === selection.serviceId);
+      const formattedDate = selection.date.split('-').reverse().join('/');
+
+      if (slots.length) {
+        return {
+          reply: [
+            `Encontrei estes horários livres para *${service?.name || 'Atendimento'}* em *${formattedDate}*:`,
+            '',
+            formatSlotsForWhatsApp(slots),
+            '',
+            '👉 *Qual horário fica melhor para você?* Basta responder com o horário (ex: *"14:00"*).',
+          ].join('\n'),
+          selection,
+          slots,
+        };
+      } else {
+        return {
+          reply: [
+            `Não encontrei horários livres para *${service?.name || 'Atendimento'}* em *${formattedDate}*.`,
+            '',
+            'Deseja consultar outra data? Basta me dizer (ex: *"Amanhã"* ou *"depois de amanhã"*).',
+          ].join('\n'),
+          selection,
+          slots: [],
+        };
+      }
+    }
+
+    // Caso B: Tem data, mas falta o serviço (ex: cliente disse "Amanhã" ou "Hoje")
+    if (selection.date && validAssistantDate(selection.date, now) && !selection.serviceId) {
+      const formattedDate = selection.date.split('-').reverse().join('/');
+      return {
+        reply: [
+          `Perfeito para *${formattedDate}*! ✂️`,
+          '',
+          `Qual serviço você gostaria de realizar?`,
+          '',
+          servicesList,
+          '',
+          '💬 Responda com o nome do serviço desejado (ex: *"Corte de Cabelo"*).',
+        ].join('\n'),
+        selection,
+        slots: [],
+      };
+    }
+
+    // Caso C: Tem serviço, mas falta a data (ex: cliente disse "Quero corte")
+    if (selection.serviceId && (!selection.date || !validAssistantDate(selection.date, now))) {
+      const service = data.services.find((s) => s.id === selection.serviceId);
+      return {
+        reply: [
+          `Ótima escolha! *${service?.name || 'Atendimento'}* 💈`,
+          '',
+          'Para qual dia você prefere o agendamento?',
+          '• *"Hoje"*',
+          '• *"Amanhã"*',
+          '• Ou informe uma data (ex: *"sexta-feira"* ou *"20/10"*)',
+        ].join('\n'),
+        selection,
+        slots: [],
+      };
+    }
+
+    // Caso D: Apenas "Agendar", sem serviço e sem data
+    return {
+      reply: [
+        `📅 *Agendamento na ${orgName}*`,
+        '',
+        'Para qual dia você gostaria de marcar?',
+        '• *"Hoje"*',
+        '• *"Amanhã"*',
+        '• Ou informe uma data específica (ex: *"quinta-feira"* ou *"20/10"*)',
+        '',
+        '💡 Se preferir, pode falar tudo junto, por exemplo: *"Quero corte amanhã às 15:00"*.',
+      ].join('\n'),
+      selection,
+      slots: [],
+    };
+  }
+
+  // 5. Boas-vindas padrão / Menu principal
+  return {
+    reply: [
+      `${greeting} Bem-vindo à *${orgName}*!`,
+      '',
+      'Como posso te ajudar hoje?',
+      '',
+      '1️⃣ *Agendar um horário* (ex: "Quero corte amanhã às 15:00")',
+      '2️⃣ *Ver serviços e preços* (responda "Serviços")',
+      '3️⃣ *Consultar agendamentos* (responda "Meus agendamentos")',
+      '4️⃣ *Endereço e expediente* (responda "Endereço")',
+      '',
+      'Basta responder por aqui com o que você precisa!',
+    ].join('\n'),
+    selection,
+    slots: [],
+  };
 }
 
 export function parseTimeFromText(text: string): string | null {
@@ -583,7 +786,13 @@ export async function processWhatsAppEvent(env: Env, evt: WhatsAppEvent): Promis
             ].join('\n');
           }
         } else {
-          const assistantReply = answerBookingAssistant(data, userText, previousSession, now);
+          const assistantReply = buildWhatsAppAssistantReply(
+            data,
+            userText,
+            previousSession,
+            now,
+            evt.profileName
+          );
           await saveSession(env, evt.from, {
             date: assistantReply.selection.date,
             serviceId: assistantReply.selection.serviceId,
@@ -591,9 +800,7 @@ export async function processWhatsAppEvent(env: Env, evt: WhatsAppEvent): Promis
             clientName: previousSession.clientName || evt.profileName,
           });
 
-          replyText = assistantReply.slots.length
-            ? `${assistantReply.reply}\n\n${formatSlotsForWhatsApp(assistantReply.slots)}`
-            : assistantReply.reply;
+          replyText = assistantReply.reply;
 
           logEvent('whatsapp_message_answered', {
             tenantSlug,
