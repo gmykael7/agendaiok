@@ -2860,4 +2860,77 @@ html[data-app-theme="dark"] { --agl-ink: #ffffff; }
   animation: iconlyDotPulse 550ms ease-out 220ms;
 }
 
+/* ============================================================
+   Blindagem de Contraste do WhatsApp para Tema Claro e Escuro
+   ============================================================ */
+
+/* MODO CLARO */
+html[data-app-theme="light"] .whatsapp-card-theme {
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+html[data-app-theme="light"] .whatsapp-card-theme h3,
+html[data-app-theme="light"] .whatsapp-card-theme h4,
+html[data-app-theme="light"] .whatsapp-card-theme .whatsapp-val {
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .whatsapp-card-theme .whatsapp-desc {
+  color: #64748b !important;
+}
+
+html[data-app-theme="light"] .whatsapp-subcard-theme {
+  background-color: #f8fafc !important;
+  background-image: none !important;
+  border-color: #e2e8f0 !important;
+}
+
+html[data-app-theme="light"] .whatsapp-subcard-theme .whatsapp-label {
+  color: #64748b !important;
+}
+
+html[data-app-theme="light"] .whatsapp-subcard-theme .whatsapp-val {
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .whatsapp-divider {
+  border-color: #e2e8f0 !important;
+}
+
+/* MODO ESCURO */
+html:not([data-app-theme="light"]) .whatsapp-card-theme {
+  background-color: #121B2E !important;
+  border-color: #1e293b !important;
+}
+
+html:not([data-app-theme="light"]) .whatsapp-card-theme h3,
+html:not([data-app-theme="light"]) .whatsapp-card-theme h4,
+html:not([data-app-theme="light"]) .whatsapp-card-theme .whatsapp-val {
+  color: #ffffff !important;
+}
+
+html:not([data-app-theme="light"]) .whatsapp-card-theme .whatsapp-desc {
+  color: #94a3b8 !important;
+}
+
+html:not([data-app-theme="light"]) .whatsapp-subcard-theme {
+  background-color: rgba(15, 23, 42, 0.6) !important;
+  border-color: rgba(51, 65, 85, 0.8) !important;
+}
+
+html:not([data-app-theme="light"]) .whatsapp-subcard-theme .whatsapp-label {
+  color: #94a3b8 !important;
+}
+
+html:not([data-app-theme="light"]) .whatsapp-subcard-theme .whatsapp-val {
+  color: #ffffff !important;
+}
+
+html:not([data-app-theme="light"]) .whatsapp-divider {
+  border-color: rgba(51, 65, 85, 0.8) !important;
+}
+
 

@@ -145,17 +145,17 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
   return (
     <div className="space-y-6">
       {/* HEADER CARD */}
-      <div className="bg-white dark:bg-[#121B2E] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-xl relative overflow-hidden">
+      <div className="whatsapp-card-theme p-6 rounded-3xl border shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4 min-w-0 flex-1">
             <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-              <MessageSquare className="w-6 h-6 text-emerald-500 dark:text-emerald-400" />
+              <MessageSquare className="w-6 h-6 text-emerald-500" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-3">
-                <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white tracking-tight">
+                <h3 className="text-lg sm:text-xl font-bold tracking-tight">
                   WhatsApp Oficial
                 </h3>
                 <span
@@ -165,11 +165,11 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
                   }`}
                 >
-                  <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 dark:bg-emerald-400 animate-pulse' : 'bg-slate-400 dark:bg-slate-500'}`} />
+                  <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
                   {isConnected ? 'Conectado' : 'Desconectado'}
                 </span>
               </div>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="whatsapp-desc text-xs sm:text-sm mt-0.5">
                 Atendimento e agendamentos automáticos pelo WhatsApp 24 horas por dia.
               </p>
             </div>
@@ -197,38 +197,38 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
       {/* ESTADO CONECTADO OU DESCONECTADO */}
       {isConnected ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white dark:bg-[#121B2E] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-xl space-y-5">
-            <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <Smartphone className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+          <div className="lg:col-span-2 whatsapp-card-theme p-6 rounded-3xl border shadow-sm space-y-5">
+            <h4 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+              <Smartphone className="w-4 h-4 text-emerald-500" />
               Número Conectado
             </h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800/80">
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Número</span>
-                <span className="text-sm font-bold text-slate-900 dark:text-white mt-0.5 block">
+              <div className="whatsapp-subcard-theme p-3.5 rounded-xl border">
+                <span className="whatsapp-label text-[11px] block">Número</span>
+                <span className="whatsapp-val text-sm font-bold mt-0.5 block">
                   {connection.displayPhoneNumber || 'Não informado'}
                 </span>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800/80">
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Empresa</span>
-                <span className="text-sm font-bold text-slate-900 dark:text-white mt-0.5 block">
+              <div className="whatsapp-subcard-theme p-3.5 rounded-xl border">
+                <span className="whatsapp-label text-[11px] block">Empresa</span>
+                <span className="whatsapp-val text-sm font-bold mt-0.5 block">
                   {connection.verifiedName || org.name}
                 </span>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800/80 sm:col-span-2">
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Phone Number ID</span>
-                <span className="text-xs font-mono text-slate-700 dark:text-slate-300 mt-0.5 block">
+              <div className="whatsapp-subcard-theme p-3.5 rounded-xl border sm:col-span-2">
+                <span className="whatsapp-label text-[11px] block">Phone Number ID</span>
+                <span className="whatsapp-val text-xs font-mono mt-0.5 block">
                   {connection.phoneNumberId}
                 </span>
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between">
-              <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+            <div className="whatsapp-divider pt-3 border-t flex items-center justify-between">
+              <span className="whatsapp-desc text-xs flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-emerald-500" />
                 Conectado em {connection.connectedAt ? new Date(connection.connectedAt).toLocaleDateString('pt-BR') : 'Hoje'}
               </span>
               <button
@@ -243,36 +243,36 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
             </div>
           </div>
 
-          <div className="bg-white dark:bg-[#121B2E] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-xl space-y-3.5">
-            <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+          <div className="whatsapp-card-theme p-6 rounded-3xl border shadow-sm space-y-3.5">
+            <h4 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-500" />
               Recursos Ativos
             </h4>
-            <ul className="space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
+            <ul className="space-y-2.5 text-xs">
               <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                 Atendimento automático 24/7
               </li>
               <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                 Consulta de agenda em tempo real
               </li>
               <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                 Agendamento, cancelamento e confirmação
               </li>
             </ul>
           </div>
         </div>
       ) : (
-        <div className="bg-white dark:bg-[#121B2E] p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-xl text-center max-w-xl mx-auto space-y-5">
+        <div className="whatsapp-card-theme p-8 rounded-3xl border shadow-sm text-center max-w-xl mx-auto space-y-5">
           <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto">
-            <Sparkles className="w-8 h-8 text-emerald-500 dark:text-emerald-400" />
+            <Sparkles className="w-8 h-8 text-emerald-500" />
           </div>
 
           <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Conectar WhatsApp da Barbearia</h3>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+            <h3 className="text-lg font-bold">Conectar WhatsApp da Barbearia</h3>
+            <p className="whatsapp-desc text-xs sm:text-sm mt-1 max-w-md mx-auto">
               Permita que seus clientes agendem e tirem dúvidas direto pelo WhatsApp.
             </p>
           </div>
