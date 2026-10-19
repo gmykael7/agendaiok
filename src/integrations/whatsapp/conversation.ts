@@ -7,6 +7,7 @@ export interface ConversationChoice {
   text: string;
   selection?: Partial<AssistantSelection>;
   page?: { kind: 'services' | 'slots'; offset: number };
+  action?: 'continue_to_slots' | 'add_more_services' | 'clear_services';
 }
 
 export interface ConversationMenu {

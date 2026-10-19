@@ -95,7 +95,11 @@ test('conversa mantém o dia e entende Corte de cabelo sem repetir as boas-vinda
   assert.match(await send('Agendar'), /Para qual dia/);
   const chooseService = await send('amanhã');
   assert.match(await send('não sei'), /Qual serviço/);
-  const chooseTime = await send('Corte de cabelo');
+  const serviceSelection = await send('Corte de cabelo');
+  assert.match(serviceSelection, /Corte Cabelo Executivo/);
+  assert.match(serviceSelection, /adicionar mais algum serviço|Escolher horário/i);
+  assert.doesNotMatch(serviceSelection, /Bem-vindo/);
+  const chooseTime = await send('1');
   assert.match(chooseTime, /horários livres para \*Corte Cabelo Executivo\*/);
   assert.doesNotMatch(chooseTime, /Bem-vindo/);
   const session = JSON.parse(DB.prepare('SELECT value FROM app_store WHERE key = ?').bind(`wa_session:${from}`).first().value);
@@ -125,8 +129,11 @@ test('nome parcial ambíguo pede o serviço completo sem reservar nem voltar ao 
   assert.match(reply, /Barba Completa com Toalha Quente/);
   assert.match(reply, /Combo Cabelo \+ Barba Premium/);
   assert.doesNotMatch(reply, /Bem-vindo|Agendamento confirmado/);
-  assert.equal(getStoredPayload(DB, email).appointments.length, 0);
-  assert.match(await send('Barba Completa com Toalha Quente'), /horários livres para \*Barba Completa/);
+  const barbaPrompt = await send('Barba Completa com Toalha Quente');
+  assert.match(barbaPrompt, /Barba Completa com Toalha Quente/);
+  assert.match(barbaPrompt, /adicionar mais algum serviço|Escolher horário/i);
+  const barbaSlots = await send('1');
+  assert.match(barbaSlots, /horários livres para \*(?:Corte Cabelo Executivo \+ )?Barba Completa/);
 });
 
 test('Fase 4: processWhatsAppEvent cria agendamento real com metadados corretos', async (t) => {
@@ -335,8 +342,11 @@ test('menu premium aceita números de menu, dia, serviço e horário com context
   assert.ok(menuRows(services)[0].title.length <= 24);
   assert.match(menuRows(services)[0].description, /Corte Cabelo Executivo/);
   assert.match(replyText(services), /\*2 · Barba Completa com Toalha Quente\*\nR\$/);
-  const slots = await chat.send('2');
+  const addServicePrompt = await chat.send('2');
   assert.equal(chat.session().serviceId, 'barba');
+  assert.equal(addServicePrompt.interactive.type, 'button');
+  assert.match(replyText(addServicePrompt), /adicionar mais algum serviço/i);
+  const slots = await chat.send('1');
   assert.equal(slots.interactive.type, 'list');
   assert.equal(getStoredPayload(chat.DB, chat.email).appointments.length, 0);
   const selected = chat.session().menu.choices[0].selection;
@@ -395,4 +405,34 @@ test('Outra data pede uma data escrita e conserva o serviço escolhido', async t
   assert.equal(chat.session().serviceId, 'executivo');
   assert.equal(chat.session().date, '');
   assert.equal(chat.session().menu, undefined);
+});
+
+test('fluxo passo a passo permite adicionar múltiplos serviços e soma tempo e valor', async t => {
+  const chat = conversationHarness(t);
+  await chat.send('menu');
+  await chat.send('1');
+  await chat.send('2');
+  const prompt1 = await chat.send('2');
+  assert.match(replyText(prompt1), /Barba Completa com Toalha Quente/);
+  assert.match(replyText(prompt1), /adicionar mais algum serviço/i);
+  const serviceList2 = await chat.send('2');
+  assert.match(replyText(serviceList2), /Adicionar outro serviço/);
+  const prompt2 = await chat.send('1');
+  assert.match(replyText(prompt2), /Barba Completa com Toalha Quente/);
+  assert.match(replyText(prompt2), /Corte Cabelo Executivo/);
+  assert.match(replyText(prompt2), /90,00/);
+  assert.match(replyText(prompt2), /60 min|1h/);
+  const slots = await chat.send('1');
+  assert.equal(slots.interactive.type, 'list');
+  assert.match(replyText(slots), /horários livres/);
+  assert.match(replyText(slots), /60 min/);
+  const confirmed = await chat.send('1');
+  assert.match(replyText(confirmed), /Agendamento confirmado/);
+  assert.match(replyText(confirmed), /Barba Completa com Toalha Quente \+ Corte Cabelo Executivo/);
+  assert.match(replyText(confirmed), /90,00/);
+  assert.match(replyText(confirmed), /60 min/);
+  const appt = getStoredPayload(chat.DB, chat.email).appointments[0];
+  assert.equal(appt.price, 90);
+  assert.equal(appt.duration_minutes, 60);
+  assert.equal(appt.services.length, 2);
 });

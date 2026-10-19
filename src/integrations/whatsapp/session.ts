@@ -13,6 +13,7 @@ const EMPTY_SELECTION: AssistantSelection = { date: '', serviceId: '', barberId:
 export interface WhatsAppSessionState {
   date: string;
   serviceId: string;
+  serviceIds?: string[];
   barberId: string;
   clientName?: string;
   pendingTime?: string;
@@ -30,6 +31,9 @@ export async function getSession(env: Env, phone: string): Promise<WhatsAppSessi
     return {
       date: typeof parsed.date === 'string' ? parsed.date : '',
       serviceId: typeof parsed.serviceId === 'string' ? parsed.serviceId : '',
+      serviceIds: Array.isArray(parsed.serviceIds)
+        ? (parsed.serviceIds as unknown[]).map(String).filter(Boolean)
+        : (typeof parsed.serviceId === 'string' && parsed.serviceId ? [parsed.serviceId] : []),
       barberId: typeof parsed.barberId === 'string' ? parsed.barberId : '',
       clientName: typeof parsed.clientName === 'string' ? parsed.clientName : undefined,
       pendingTime: typeof parsed.pendingTime === 'string' ? parsed.pendingTime : undefined,
@@ -55,7 +59,7 @@ export async function clearSession(env: Env, phone: string): Promise<void> {
 // Compatibilidade com as Fases 3 e 4
 export async function getSelection(env: Env, phone: string): Promise<AssistantSelection> {
   const state = await getSession(env, phone);
-  return { date: state.date, serviceId: state.serviceId, barberId: state.barberId };
+  return { date: state.date, serviceId: state.serviceId, serviceIds: state.serviceIds, barberId: state.barberId };
 }
 
 export async function saveSelection(env: Env, phone: string, selection: AssistantSelection): Promise<void> {
@@ -64,6 +68,7 @@ export async function saveSelection(env: Env, phone: string, selection: Assistan
     ...existing,
     date: selection.date,
     serviceId: selection.serviceId,
+    serviceIds: selection.serviceIds,
     barberId: selection.barberId,
   });
 }

@@ -44,7 +44,10 @@ function resolveWhatsAppIntent(text: string, data: AssistantData, now: Date): {
   const intent = inferGuidedIntent(text, data, now);
   const activeServices = data.services.filter(service => service.active !== false);
   // O nome completo tem prioridade; nomes abreviados só selecionam uma opção única.
-  if (intent.serviceId) return { intent, serviceMatches: [] };
+  if (intent.serviceId) {
+    if (!intent.serviceIds?.length) intent.serviceIds = [intent.serviceId];
+    return { intent, serviceMatches: [] };
+  }
   const vocabulary = new Set(activeServices.flatMap(service => serviceWords(service.name)));
   const words = serviceWords(text).filter(word => vocabulary.has(word));
   const serviceMatches = words.length ? activeServices.filter(service => {
@@ -53,6 +56,7 @@ function resolveWhatsAppIntent(text: string, data: AssistantData, now: Date): {
   }) : [];
   if (serviceMatches.length) {
     intent.serviceId = serviceMatches.length === 1 ? serviceMatches[0].id : '';
+    intent.serviceIds = serviceMatches.length === 1 ? [serviceMatches[0].id] : [];
     if (intent.topic === 'help') intent.topic = 'availability';
   }
   return { intent, serviceMatches };
@@ -73,13 +77,59 @@ function buildWhatsAppAssistantReply(
   now: Date,
   profileName?: string,
   explicitSelection: Partial<AssistantSelection> = {},
-  page?: ConversationChoice['page']
+  page?: ConversationChoice['page'],
+  choiceAction?: ConversationChoice['action']
 ): { reply: string; selection: AssistantSelection; slots: AssistantSlot[]; menu?: ConversationMenu } {
   const resolved = resolveWhatsAppIntent(userText, data, now);
-  const guided = { ...resolved.intent, ...explicitSelection };
-  const selection = sanitizeAssistantSelection(
-    { ...sanitizeAssistantSelection(session, data, now), ...guided }, data, now
-  );
+  const normalizedText = userText.toLowerCase().trim();
+  const isContinueToSlots = choiceAction === 'continue_to_slots' ||
+    /^(escolher hor[aá]rio|ver hor[aá]rios?|hor[aá]rios?|continuar|avan[cç]ar|pr[oó]ximo|proximo)\b/i.test(normalizedText);
+  const isAddMoreServices = choiceAction === 'add_more_services' ||
+    /^(adicionar|mais um|outro servi[cç]o|adicionar servi[cç]o|\+)\b/i.test(normalizedText);
+  const isClearServices = choiceAction === 'clear_services' ||
+    /^(trocar servi[cç]os?|limpar|recome[cç]ar)\b/i.test(normalizedText);
+
+  let currentServiceIds: string[] = isClearServices
+    ? []
+    : (Array.isArray(session.serviceIds) && session.serviceIds.length
+        ? [...session.serviceIds]
+        : (session.serviceId ? [session.serviceId] : []));
+
+  const incomingServiceId = explicitSelection.serviceId || resolved.intent.serviceId;
+  if (!isClearServices && incomingServiceId && !currentServiceIds.includes(incomingServiceId)) {
+    currentServiceIds.push(incomingServiceId);
+  }
+  if (!isClearServices && Array.isArray(explicitSelection.serviceIds)) {
+    for (const id of explicitSelection.serviceIds) {
+      if (id && !currentServiceIds.includes(id)) currentServiceIds.push(id);
+    }
+  }
+  if (!isClearServices && Array.isArray(resolved.intent.serviceIds)) {
+    for (const id of resolved.intent.serviceIds) {
+      if (id && !currentServiceIds.includes(id)) currentServiceIds.push(id);
+    }
+  }
+
+  currentServiceIds = currentServiceIds.filter(id => data.services.some(s => s.active !== false && s.id === id));
+  const primaryServiceId = currentServiceIds[0] || '';
+
+  const effectiveDate = explicitSelection.date !== undefined
+    ? explicitSelection.date
+    : (resolved.intent.date !== undefined
+        ? resolved.intent.date
+        : (typeof session.date === 'string' ? session.date : assistantToday(now)));
+
+  const selection: AssistantSelection = {
+    date: effectiveDate,
+    serviceId: primaryServiceId,
+    serviceIds: currentServiceIds,
+    barberId: explicitSelection.barberId || resolved.intent.barberId || session.barberId || '',
+  };
+
+  const selectedServices = currentServiceIds
+    .map(id => data.services.find(s => s.id === id && s.active !== false))
+    .filter(Boolean) as Service[];
+
   const orgName = (data.org.name || 'nossa barbearia').slice(0, 100);
   const clientName = (profileName || session.clientName || '').slice(0, 80);
   const money = (price: number) => Number(price || 0).toLocaleString('pt-BR', {
@@ -88,6 +138,7 @@ function buildWhatsAppAssistantReply(
   const answer = (menu: ConversationMenu, slots: AssistantSlot[] = []) => ({
     reply: menu.text, selection, slots, menu,
   });
+
   const serviceMenu = (services: Service[], heading: string, intro: string) => {
     const offset = page?.kind === 'services' ? Math.max(0, Math.min(page.offset, Math.max(services.length - 1, 0))) : 0;
     const choices: ConversationChoice[] = services.slice(offset, offset + 8).map(service => ({
@@ -107,6 +158,7 @@ function buildWhatsAppAssistantReply(
       choices.length ? 'Toque em *Escolher serviço* ou envie o *número* da opção.' : '', MENU_HINT,
     ].filter(Boolean).join('\n\n'), choices, 'list', 'Escolher serviço'));
   };
+
   const dayMenu = (heading: string) => {
     if (explicitSelection.date === '') return {
       reply: ['*Qual data você prefere?*', heading,
@@ -126,11 +178,17 @@ function buildWhatsAppAssistantReply(
   if (/^(menu|in[ií]cio|come[cç]ar|voltar|oi|ol[aá]|bom dia|boa tarde|boa noite)[!. ]*$/i.test(userText.trim())) {
     return answer(welcomeMenu(orgName, clientName));
   }
-  if (guided.topic === 'services' || /^(servi[cç]os?|pre[cç]os?|tabela|valores?|quanto custa|cardapio)\b/i.test(userText.trim())) {
+  if (isAddMoreServices) {
+    const remainingServices = data.services.filter(s => s.active !== false && !currentServiceIds.includes(s.id));
+    if (remainingServices.length > 0) {
+      return serviceMenu(remainingServices, '*Adicionar outro serviço*', 'Escolha mais um serviço para adicionar ao seu atendimento:');
+    }
+  }
+  if (resolved.intent.topic === 'services' || isClearServices || /^(servi[cç]os?|pre[cç]os?|tabela|valores?|quanto custa|cardapio)\b/i.test(userText.trim())) {
     return serviceMenu(data.services.filter(s => s.active !== false), '*Serviços e valores*',
       `Escolha seu atendimento na *${orgName}*.`);
   }
-  if (guided.topic === 'hours' || guided.topic === 'contact') {
+  if (resolved.intent.topic === 'hours' || resolved.intent.topic === 'contact') {
     const choices: ConversationChoice[] = [
       { title: 'Agendar', text: 'Agendar' }, { title: 'Menu inicial', text: 'menu' },
     ];
@@ -145,40 +203,115 @@ function buildWhatsAppAssistantReply(
     ].filter(Boolean).join('\n\n');
     return answer(createConversationMenu(info, choices, 'buttons'));
   }
-  if (guided.topic === 'availability' || selection.serviceId || selection.date || selection.barberId ||
+
+  if (resolved.intent.topic === 'availability' || selectedServices.length > 0 || selection.date || selection.barberId ||
       /^(agendar|marcar|quero agendar|quero marcar|agendamento)\b/i.test(userText.trim())) {
     if (!explicitSelection.serviceId && resolved.serviceMatches.length > 1) {
       return serviceMenu(resolved.serviceMatches, '*Qual serviço você prefere?*',
         'Encontrei mais de uma opção. Escolha abaixo para continuarmos.');
     }
-    if (selection.serviceId && validAssistantDate(selection.date, now)) {
-      const slots = assistantSlots(data, selection, now);
-      const service = data.services.find(s => s.id === selection.serviceId);
-      const date = selection.date.split('-').reverse().join('/');
-      if (!slots.length) return dayMenu(`*Vamos escolher outro dia?*\n\nNão encontrei horários livres para *${service?.name || 'Atendimento'}* em *${date}*.`);
-      const offset = page?.kind === 'slots' ? Math.max(0, Math.min(page.offset, slots.length - 1)) : 0;
-      const multipleBarbers = new Set(slots.map(slot => slot.barberId)).size > 1;
-      const choices: ConversationChoice[] = slots.slice(offset, offset + 8).map(slot => ({
-        title: multipleBarbers ? `${slot.time} · ${slot.barberName}` : slot.time,
-        text: slot.time,
-        selection: { serviceId: slot.serviceId, date: slot.date, barberId: slot.barberId },
-      }));
-      if (offset + 8 < slots.length) choices.push({ title: 'Mais horários', text: 'Agendar', page: { kind: 'slots', offset: offset + 8 } });
-      if (offset > 0) choices.push({ title: 'Horários anteriores', text: 'Agendar', page: { kind: 'slots', offset: Math.max(0, offset - 8) } });
-      return answer(createConversationMenu([
-        '*Escolha seu horário*',
-        `Encontrei estes horários livres para *${service?.name || 'Atendimento'}* em *${date}*:`,
+
+    if (selectedServices.length > 0 && validAssistantDate(selection.date, now)) {
+      if (isContinueToSlots) {
+        const slots = assistantSlots(data, selection, now);
+        const serviceNames = selectedServices.map(s => s.name).join(' + ');
+        const totalDuration = selectedServices.reduce((sum, s) => sum + (Number(s.duration_minutes) || 30), 0);
+        const date = selection.date.split('-').reverse().join('/');
+        if (!slots.length) return dayMenu(`*Vamos escolher outro dia?*\n\nNão encontrei horários livres para *${serviceNames}* em *${date}*.`);
+        const offset = page?.kind === 'slots' ? Math.max(0, Math.min(page.offset, slots.length - 1)) : 0;
+        const multipleBarbers = new Set(slots.map(slot => slot.barberId)).size > 1;
+        const choices: ConversationChoice[] = slots.slice(offset, offset + 8).map(slot => ({
+          title: multipleBarbers ? `${slot.time} · ${slot.barberName}` : slot.time,
+          text: slot.time,
+          selection: { serviceId: slot.serviceId, serviceIds: currentServiceIds, date: slot.date, barberId: slot.barberId },
+        }));
+        if (offset + 8 < slots.length) choices.push({ title: 'Mais horários', text: 'Agendar', page: { kind: 'slots', offset: offset + 8 } });
+        if (offset > 0) choices.push({ title: 'Horários anteriores', text: 'Agendar', page: { kind: 'slots', offset: Math.max(0, offset - 8) } });
+        return answer(createConversationMenu([
+          '*Escolha seu horário*',
+          `Encontrei estes horários livres para *${serviceNames}* (${totalDuration} min) em *${date}*:`,
+          numberedChoices(choices),
+          'Toque em *Escolher horário* ou envie o *número* da opção. Você também pode escrever o horário.',
+          'Ao escolher um horário, seu agendamento será confirmado.', MENU_HINT,
+        ].join('\n\n'), choices, 'list', 'Escolher horário'), slots);
+      }
+
+      // Mostra o resumo dos serviços selecionados com opção de adicionar mais ou continuar
+      const totalPrice = selectedServices.reduce((sum, s) => sum + Number(s.price || 0), 0);
+      const totalDuration = selectedServices.reduce((sum, s) => sum + (Number(s.duration_minutes) || 30), 0);
+      const durationStr = totalDuration >= 60
+        ? `${Math.floor(totalDuration / 60)}h${totalDuration % 60 ? ` ${totalDuration % 60}min` : ''}`
+        : `${totalDuration} min`;
+      const formattedDate = selection.date.split('-').reverse().join('/');
+
+      const serviceList = selectedServices.map(s =>
+        `• *${s.name}* — ${money(s.price)} (${s.duration_minutes || 30} min)`
+      ).join('\n');
+
+      const remainingServices = data.services.filter(s => s.active !== false && !currentServiceIds.includes(s.id));
+
+      const choices: ConversationChoice[] = [
+        {
+          title: 'Escolher horário',
+          description: `Ver horários livres (${durationStr})`,
+          text: 'Escolher horário',
+          action: 'continue_to_slots',
+          selection: { date: selection.date, serviceId: selectedServices[0].id, serviceIds: currentServiceIds },
+        },
+      ];
+
+      if (remainingServices.length > 0) {
+        choices.push({
+          title: 'Adicionar serviço',
+          description: 'Incluir outro serviço no agendamento',
+          text: 'Adicionar outro serviço',
+          action: 'add_more_services',
+          selection: { date: selection.date, serviceId: selectedServices[0].id, serviceIds: currentServiceIds },
+        });
+      }
+
+      if (selectedServices.length > 1) {
+        choices.push({
+          title: 'Trocar serviços',
+          description: 'Recomeçar a escolha de serviços',
+          text: 'Trocar serviços',
+          action: 'clear_services',
+          selection: { date: selection.date, serviceId: '', serviceIds: [] },
+        });
+      }
+
+      const heading = selectedServices.length > 1
+        ? `*Atendimentos selecionados (${selectedServices.length}):*`
+        : `*Atendimento selecionado:*`;
+
+      const promptLines = [
+        heading,
+        serviceList,
+        '',
+        `*Total:* ${money(totalPrice)} · ${durationStr}`,
+        `*Data:* ${formattedDate}`,
+        '',
+        'Deseja adicionar mais algum serviço ou já prefere escolher o horário?',
         numberedChoices(choices),
-        'Toque em *Escolher horário* ou envie o *número* da opção. Você também pode escrever o horário.',
-        'Ao escolher um horário, seu agendamento será confirmado.', MENU_HINT,
-      ].join('\n\n'), choices, 'list', 'Escolher horário'), slots);
+        'Toque em uma opção ou envie o número.',
+        MENU_HINT,
+      ];
+
+      return answer(createConversationMenu(
+        promptLines.join('\n\n'),
+        choices,
+        choices.length <= 3 ? 'buttons' : 'list',
+        'Escolher opção'
+      ));
     }
-    if (!selection.serviceId && validAssistantDate(selection.date, now)) {
+
+    if (!selectedServices.length && validAssistantDate(selection.date, now)) {
       return serviceMenu(data.services.filter(s => s.active !== false), '*Escolha seu serviço*',
         `Perfeito para *${selection.date.split('-').reverse().join('/')}*!\nQual serviço você gostaria de realizar?`);
     }
-    const service = data.services.find(s => s.id === selection.serviceId);
-    return dayMenu(service ? `*Seu atendimento*\n\n${service.name} · ${money(service.price)}` : `*Agendamento na ${orgName}*`);
+
+    const firstService = selectedServices[0];
+    return dayMenu(firstService ? `*Seu atendimento*\n\n${firstService.name} · ${money(firstService.price)}` : `*Agendamento na ${orgName}*`);
   }
   return answer(welcomeMenu(orgName, clientName));
 }
@@ -665,6 +798,7 @@ export async function processWhatsAppEvent(env: Env, evt: WhatsAppEvent): Promis
               clientPhone: evt.from,
               clientName,
               serviceId: targetServiceId,
+              serviceIds: target.serviceIds?.length ? target.serviceIds : [targetServiceId],
               barberId: matchingSlot.barberId,
               date: targetDate,
               startTime: matchingSlot.time,
@@ -673,9 +807,11 @@ export async function processWhatsAppEvent(env: Env, evt: WhatsAppEvent): Promis
 
             if (bookingResult.success) {
               await clearSession(env, evt.from);
-              const service = data.services.find((s) => s.id === targetServiceId);
+              const appt = bookingResult.appointment;
+              const serviceLabel = appt.service_name || 'Atendimento';
+              const durationLabel = appt.duration_minutes ? `${appt.duration_minutes} min` : undefined;
               const formattedDate = targetDate.split('-').reverse().join('/');
-              const priceFormatted = Number(service?.price || 0).toLocaleString('pt-BR', {
+              const priceFormatted = Number(appt.price || 0).toLocaleString('pt-BR', {
                 style: 'currency',
                 currency: 'BRL',
               });
@@ -683,14 +819,15 @@ export async function processWhatsAppEvent(env: Env, evt: WhatsAppEvent): Promis
               replyText = [
                 '*Agendamento confirmado!*',
                 '',
-                `• *Serviço:* ${service?.name || 'Atendimento'}`,
+                `• *Serviço${appt.services && appt.services.length > 1 ? 's' : ''}:* ${serviceLabel}`,
                 `• *Profissional:* ${matchingSlot.barberName}`,
                 `• *Data:* ${formattedDate}`,
                 `• *Horário:* ${matchingSlot.time}`,
-                `• *Valor:* ${priceFormatted}`,
+                durationLabel ? `• *Duração:* ${durationLabel}` : '',
+                `• *Valor Total:* ${priceFormatted}`,
                 '',
                 'Para confirmar sua presença, responda *CONFIRMAR*. Se precisar reagendar ou cancelar, avise por aqui!',
-              ].join('\n');
+              ].filter(Boolean).join('\n');
 
               logEvent('whatsapp_booking_created', {
                 tenantSlug,
@@ -749,11 +886,13 @@ export async function processWhatsAppEvent(env: Env, evt: WhatsAppEvent): Promis
             now,
             evt.profileName,
             explicitSelection,
-            input.choice?.page
+            input.choice?.page,
+            input.choice?.action
           );
           await saveSession(env, evt.from, {
             date: assistantReply.selection.date,
             serviceId: assistantReply.selection.serviceId,
+            serviceIds: assistantReply.selection.serviceIds,
             barberId: assistantReply.selection.barberId,
             clientName: previousSession.clientName || evt.profileName,
             menu: assistantReply.menu,

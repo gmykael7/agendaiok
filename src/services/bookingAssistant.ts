@@ -3,7 +3,12 @@ import { generateBusinessSlots, isBookableBusinessDateTime, timeToMinutes } from
 
 // O projeto ainda não tem fuso por estabelecimento. Este piloto usa Brasília/Fortaleza.
 export const ASSISTANT_TIME_ZONE = 'America/Fortaleza';
-export type AssistantSelection = { date: string; serviceId: string; barberId: string };
+export type AssistantSelection = {
+  date: string;
+  serviceId: string;
+  serviceIds?: string[];
+  barberId: string;
+};
 export type AssistantSlot = AssistantSelection & { time: string; barberName: string };
 export type AssistantTopic = 'services' | 'availability' | 'hours' | 'contact' | 'help';
 export type AssistantIntent = Partial<AssistantSelection> & { topic?: AssistantTopic };
@@ -56,9 +61,20 @@ export const validAssistantDate = (date: string, now = new Date()): boolean => {
 
 export function sanitizeAssistantSelection(value: unknown, data: AssistantData, now = new Date()): AssistantSelection {
   const input = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const rawServiceIds: string[] = Array.isArray(input.serviceIds)
+    ? (input.serviceIds as unknown[]).map(String)
+    : (typeof input.serviceId === 'string' && input.serviceId ? [String(input.serviceId)] : []);
+  const validServiceIds = Array.from(new Set(
+    rawServiceIds.filter(id => data.services.some(s => s.active !== false && s.id === id))
+  ));
+  const primaryServiceId = validServiceIds[0] || (data.services.some(s => s.active !== false && s.id === input.serviceId) ? String(input.serviceId) : '');
+  if (primaryServiceId && !validServiceIds.includes(primaryServiceId)) {
+    validServiceIds.unshift(primaryServiceId);
+  }
   return {
     date: typeof input.date === 'string' ? input.date : assistantToday(now),
-    serviceId: data.services.some(s => s.active !== false && s.id === input.serviceId) ? String(input.serviceId) : '',
+    serviceId: primaryServiceId,
+    serviceIds: validServiceIds,
     barberId: data.barbers.some(b => b.active !== false && b.id === input.barberId) ? String(input.barberId) : '',
   };
 }
@@ -98,17 +114,22 @@ export function inferGuidedIntent(message: string, data: AssistantData, now = ne
 
 export function assistantSlots(data: AssistantData, selection: AssistantSelection, now = new Date()): AssistantSlot[] {
   if (!validAssistantDate(selection.date, now)) return [];
-  const service = data.services.find(s => s.id === selection.serviceId && s.active !== false);
-  if (!service || !Number.isFinite(service.duration_minutes) || service.duration_minutes <= 0) return [];
+  const selectedIds = selection.serviceIds?.length ? selection.serviceIds : (selection.serviceId ? [selection.serviceId] : []);
+  const activeServices = selectedIds
+    .map(id => data.services.find(s => s.id === id && s.active !== false))
+    .filter(Boolean) as Service[];
+  if (!activeServices.length) return [];
+  const totalDuration = activeServices.reduce((sum, s) => sum + (Number(s.duration_minutes) || 30), 0);
+  if (!Number.isFinite(totalDuration) || totalDuration <= 0) return [];
   const nowTime = new Intl.DateTimeFormat('en-GB', { timeZone: ASSISTANT_TIME_ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(now);
   const today = assistantToday(now);
   const slots: AssistantSlot[] = [];
-  for (const time of generateBusinessSlots(data.org, service.duration_minutes, 30)) {
+  for (const time of generateBusinessSlots(data.org, totalDuration, 30)) {
     if (selection.date === today && timeToMinutes(time) <= timeToMinutes(nowTime)) continue;
-    if (!isBookableBusinessDateTime(time, service.duration_minutes, selection.date, data.org)) continue;
+    if (!isBookableBusinessDateTime(time, totalDuration, selection.date, data.org)) continue;
     for (const barber of data.barbers.filter(b => b.active !== false && (!selection.barberId || b.id === selection.barberId))) {
       const start = timeToMinutes(time);
-      const end = start + service.duration_minutes;
+      const end = start + totalDuration;
       const occupied = data.appointments.some(a => {
         if (a.barber_id !== barber.id || (a.date || today) !== selection.date || a.status === 'canceled' || a.status === 'no_show') return false;
         const otherStart = timeToMinutes(a.start_time);

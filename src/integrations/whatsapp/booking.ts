@@ -15,6 +15,7 @@ export interface CreateWhatsAppBookingParams {
   clientPhone: string;
   clientName: string;
   serviceId: string;
+  serviceIds?: string[];
   barberId: string;
   date: string;
   startTime: string;
@@ -151,7 +152,7 @@ export async function createWhatsAppBooking(
       };
     }
 
-    const appointmentInput = {
+    const appointmentInput: any = {
       id: `wa-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       client_name: params.clientName,
       client_phone: params.clientPhone,
@@ -160,6 +161,9 @@ export async function createWhatsAppBooking(
       barber_id: params.barberId,
       service_id: params.serviceId,
     };
+    if (Array.isArray(params.serviceIds) && params.serviceIds.length) {
+      appointmentInput.services = params.serviceIds.map(id => ({ id }));
+    }
 
     let cleanAppointment: any;
     try {
