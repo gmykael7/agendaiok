@@ -1,7 +1,8 @@
 import { getAuthToken, loginBarbershop } from './cloudSync';
 
 export type TenantStatus = 'active' | 'trial' | 'suspended';
-export type TenantPlan = 'trial' | 'basic' | 'professional' | 'premium';
+export type { TenantPlan } from '../utils/tenantPlan';
+import type { TenantPlan } from '../utils/tenantPlan';
 
 export interface SuperAdminStatus {
   configured: boolean;

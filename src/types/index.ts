@@ -160,6 +160,9 @@ export interface Appointment {
   payment_method?: 'pix' | 'credit' | 'debit' | 'cash';
   date?: string;
   created_at?: string;
+  reminder_sent_at?: string;
+  loyalty_reward_applied?: boolean;
+  notes?: string;
 }
 
 export type WaitlistPeriod = 'morning' | 'afternoon' | 'evening' | 'any';
@@ -193,8 +196,20 @@ export interface Client {
   total_spent: number;
   last_visit?: string;
   notes?: string;
+  /** Ficha técnica do corte: pentes utilizados, estilo de degradê, acabamento */
+  haircut_notes?: string;
+  /** Data de aniversário (AAAA-MM-DD ou DD/MM) para alertas de aniversariante */
+  birth_date?: string;
+  /** Preferências de atendimento: café, silêncio, produtos favoritos */
+  preferences?: string;
   /** Saldo do programa de fidelidade. Pontos são controlados pela equipe no CRM. */
   loyalty_points?: number;
+  /** Carimbos/selos acumulados no cartão fidelidade atual (0 até meta). */
+  loyalty_stamps?: number;
+  /** Quantidade de cortes/recompensas gratuitas acumuladas para resgatar. */
+  loyalty_rewards_available?: number;
+  /** Total histórico de recompensas resgatadas pelo cliente. */
+  loyalty_total_redeemed?: number;
   subscription_plan_id?: string;
   subscription_started_at?: string;
   subscription_cycle_start?: string;
@@ -318,6 +333,8 @@ export interface Organization {
   directory_latitude?: number;
   directory_longitude?: number;
   primary_color: string;
+  theme_palette?: string;
+  timezone?: string;
   open_hour?: string;
   close_hour?: string;
   break_enabled?: boolean;
@@ -326,6 +343,10 @@ export interface Organization {
   /** Distribui novos encaixes entre os profissionais ativos. */
   rotation_enabled?: boolean;
   rotation_last_barber_id?: string;
+  /** Programa de Cartão Fidelidade Digital da Barbearia */
+  loyalty_enabled?: boolean;
+  loyalty_target_stamps?: number;
+  loyalty_reward_description?: string;
   subscription_plans?: SubscriptionPlan[];
   closed_periods?: BusinessClosurePeriod[];
   cover_image_url?: string;
@@ -350,7 +371,7 @@ export interface Organization {
   tv_sound_style?: 'bell' | 'soft' | 'attention';
   crm_inactive_days?: 30 | 45 | 60;
   account_status?: 'active' | 'trial' | 'suspended';
-  plan?: 'trial' | 'basic' | 'professional' | 'premium';
+  plan?: import('../utils/tenantPlan').TenantPlan;
   subscription_due_date?: string;
   created_at?: string;
   last_login_at?: string;

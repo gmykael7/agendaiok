@@ -247,6 +247,108 @@ test('rota de API desconhecida nunca responde com a página HTML do app', async 
   assert.equal(response.status, 404); assert.match(response.headers.get('content-type'), /application\/json/);
 });
 
+test('cadastro é gratuito e sem vencimento, mesmo se o navegador pedir plano pago', async t => {
+  const { call } = setup(t);
+  for (const count of [0, 1]) {
+    const payload = snapshot();
+    payload.org = { ...payload.org, email: `novo-${count}@teste.invalid`, slug: `novo-${count}`, plan: 'premium', account_status: 'suspended', subscription_due_date: '2020-01-01' };
+    payload.barbers = payload.barbers.slice(0, count);
+    const response = await call('/api/auth/register', { payload, password: 'senha-segura' });
+    assert.equal(response.status, 201);
+    const { data } = await response.json();
+    assert.equal(data.org.plan, 'free');
+    assert.equal(data.org.account_status, 'active');
+    assert.equal(data.org.subscription_due_date, undefined);
+  }
+});
+
+test('cadastro com dois barbeiros ativos não cria conta nem credencial', async t => {
+  const { call, sql } = setup(t);
+  const payload = snapshot();
+  payload.org = { ...payload.org, email: 'dois@teste.invalid', slug: 'dois', plan: 'premium' };
+  payload.barbers[1].active = true;
+  const response = await call('/api/auth/register', { payload, password: 'senha-segura' });
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).code, 'TEAM_PLAN_REQUIRED');
+  for (const key of ['user:dois@teste.invalid', 'auth:dois@teste.invalid', 'slug:dois']) {
+    assert.equal(sql.prepare('SELECT value FROM app_store WHERE key = ?').get(key), undefined);
+  }
+});
+
+test('plano grátis aceita o primeiro barbeiro e mantém profissionais inativos no histórico', async t => {
+  const data = snapshot(); data.org.plan = 'free'; data.barbers = [];
+  const { call, stored } = setup(t, data);
+  const next = { ...data, barbers: snapshot().barbers };
+  assert.equal((await call('/api/sync', next, 'owner')).status, 200);
+  assert.equal(stored().barbers.length, 2);
+  assert.equal(stored().barbers.filter(b => b.active !== false).length, 1);
+});
+
+test('navegador não pode incluir ou reativar segundo barbeiro nem forjar upgrade', async t => {
+  const data = snapshot(); data.org.plan = 'free';
+  const { call, stored } = setup(t, data);
+  for (const barbers of [
+    [...data.barbers, { id: 'second', full_name: 'Segundo', active: true }],
+    data.barbers.map(b => ({ ...b, active: true })),
+  ]) {
+    const response = await call('/api/sync', { ...data, barbers, org: { ...data.org, plan: 'premium' } }, 'owner');
+    assert.equal(response.status, 403);
+    assert.equal((await response.json()).code, 'TEAM_PLAN_REQUIRED');
+    assert.deepEqual(stored(), data);
+  }
+});
+
+test('somente plano pago liberado pelo Super Admin permite ampliar a equipe', async t => {
+  const data = snapshot(); data.org.plan = 'free';
+  const { call, put, stored } = setup(t, data);
+  put('superadmin:email', EMAIL, true);
+  for (const plan of ['team', 'basic', 'professional', 'premium']) {
+    assert.equal((await call('/api/superadmin/tenant', { email: EMAIL, status: 'active', plan }, 'owner')).status, 200);
+    const next = stored();
+    next.barbers.push({ id: plan, full_name: plan, active: true });
+    assert.equal((await call('/api/sync', next, 'owner')).status, 200);
+    assert.ok(stored().barbers.some(b => b.id === plan));
+  }
+});
+
+test('equipe antiga sem plano pago continua operando, mas não pode crescer', async t => {
+  const data = snapshot(); data.org.plan = 'trial'; data.barbers[1].active = true;
+  const { call, stored } = setup(t, data);
+  const edited = structuredClone(data);
+  edited.barbers[0].full_name = 'Nome atualizado';
+  edited.barbers[1].id = 'replacement';
+  assert.equal((await call('/api/sync', edited, 'owner')).status, 200);
+  const next = stored(); next.barbers.push({ id: 'third', active: true });
+  assert.equal((await call('/api/sync', next, 'owner')).status, 403);
+  assert.equal(stored().barbers.length, 2);
+  assert.equal(stored().barbers[0].full_name, 'Nome atualizado');
+});
+
+test('restaurar backup não recupera plano pago revogado nem ultrapassa limite gratuito', async t => {
+  const data = snapshot(); data.org.plan = 'free';
+  const { call, put, stored } = setup(t, data);
+  const backup = structuredClone(data); backup.org.plan = 'premium'; backup.barbers[1].active = true;
+  put(`backup:last:${EMAIL}`, backup);
+  assert.equal((await call('/api/sync/restore-last', {}, 'owner')).status, 403);
+  assert.deepEqual(stored(), data);
+  backup.barbers[1].active = false;
+  put(`backup:last:${EMAIL}`, backup);
+  assert.equal((await call('/api/sync/restore-last', {}, 'owner')).status, 200);
+  assert.equal(stored().org.plan, 'free');
+});
+
+test('Super Admin libera gratuito sem vencimento e impede downgrade de equipe com dois ativos', async t => {
+  const data = snapshot(); data.org.plan = 'premium'; data.org.subscription_due_date = '2026-12-01';
+  const { call, put, stored } = setup(t, data);
+  put('superadmin:email', EMAIL, true);
+  assert.equal((await call('/api/superadmin/tenant', { email: EMAIL, status: 'active', plan: 'free', due_date: '2026-12-01' }, 'owner')).status, 200);
+  assert.equal(stored().org.plan, 'free'); assert.equal(stored().org.subscription_due_date, undefined);
+  const team = stored(); team.org.plan = 'premium'; team.barbers[1].active = true;
+  put(`user:${EMAIL}`, team);
+  assert.equal((await call('/api/superadmin/tenant', { email: EMAIL, status: 'active', plan: 'free' }, 'owner')).status, 409);
+  assert.deepEqual(stored(), team);
+});
+
 test('salvamento do barbeiro preserva outros profissionais, seus avisos e campos omitidos da leitura', async t => {
   const data = snapshot();
   data.appointments = [booking({ id: 'mine', barber_id: 'barber', payment_method: 'pix', status: 'completed' }), booking({ id: 'other', barber_id: 'other-barber' })];
@@ -296,4 +398,36 @@ test('salvar e reservar exigem confirmação JSON explícita; HTML 200 não é s
   t.mock.method(globalThis, 'fetch', async () => Response.json({ success: true, updated_at: 'revision' }));
   assert.equal((await helpers.saveBarbershopToCloudDetailed(snapshot())).ok, true);
   assert.equal((await helpers.pushAppointmentToCloud(booking(), 'auditoria', 'booking-valid')).ok, true);
+});
+
+test('payload público expurga whatsapp_connection e agendamentos passados', async t => {
+  const data = snapshot();
+  data.org.whatsapp_connection = { tenantId: 'qa-org', status: 'connected', phoneNumberId: 'secret-phone-123' };
+  data.appointments = [
+    { id: 'past-1', barber_id: 'barber', date: '2020-01-01', start_time: '10:00', duration_minutes: 30, status: 'completed', client_name: 'Privado', client_phone: '84999999999' },
+    { id: 'canceled-1', barber_id: 'barber', date: DATE, start_time: '11:00', duration_minutes: 30, status: 'canceled', client_name: 'Privado', client_phone: '84999999999' },
+    { id: 'future-1', barber_id: 'barber', date: DATE, start_time: '14:00', duration_minutes: 30, status: 'scheduled', client_name: 'Privado', client_phone: '84999999999' },
+  ];
+  const { call } = setup(t, data);
+  const response = await call('/api/sync?slug=auditoria');
+  assert.equal(response.status, 200);
+  const publicData = await response.json();
+
+  // Garante que whatsapp_connection não vaza
+  assert.equal(publicData.org.whatsapp_connection, undefined);
+
+  // Garante que agendamento passado e cancelado não vazam
+  assert.equal(publicData.appointments.length, 1);
+  assert.equal(publicData.appointments[0].id, 'future-1');
+  assert.equal(publicData.appointments[0].client_name, 'Reservado');
+  assert.equal(publicData.appointments[0].client_phone, '');
+});
+
+test('localDateKey respeita fusos horários brasileiros e faz fallback gracioso', async () => {
+  const { localDateKey } = await compile("export { localDateKey } from './src/utils/localDate';");
+  const dt = new Date('2026-10-27T02:30:00Z');
+  assert.equal(localDateKey(dt, 'America/Noronha'), '2026-10-27');
+  assert.equal(localDateKey(dt, 'America/Fortaleza'), '2026-10-26');
+  assert.equal(localDateKey(dt, 'America/Manaus'), '2026-10-26');
+  assert.match(localDateKey(dt, 'Invalido/Fuso'), /^\d{4}-\d{2}-\d{2}$/);
 });

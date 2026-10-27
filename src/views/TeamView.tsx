@@ -5,21 +5,29 @@ import {
   Users, Plus, Trash2, Edit3, Phone, DollarSign, 
   UserCheck, AlertCircle, Percent, Sparkles, X, Check
 } from 'lucide-react';
-import { Barber, Appointment } from '../types';
+import { Barber, Appointment, Organization } from '../types';
 import { BarberAvatar } from '../components/common/BarberAvatar';
+import { activeProfessionals, hasPaidTeamPlan, FREE_TEAM_LIMIT_MESSAGE, TEAM_PLAN_PRICE_LABEL } from '../utils/tenantPlan';
+import { TEAM_UPGRADE_URL } from '../config/urls';
 
 interface TeamViewProps {
+  org: Organization;
   barbers: Barber[];
   setBarbers: React.Dispatch<React.SetStateAction<Barber[]>>;
   appointments: Appointment[];
 }
 
 export const TeamView: React.FC<TeamViewProps> = ({
+  org,
   barbers,
   setBarbers,
   appointments,
 }) => {
   const [showModal, setShowModal] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const paidTeam = hasPaidTeamPlan(org);
+  const activeCount = activeProfessionals(barbers).length;
+  const requiresUpgrade = !paidTeam && activeCount >= 1;
   const [editingBarber, setEditingBarber] = useState<Barber | null>(null);
 
   // Form State
@@ -33,10 +41,12 @@ export const TeamView: React.FC<TeamViewProps> = ({
   const [specialties, setSpecialties] = useState('');
 
   const openAddModal = () => {
+    if (requiresUpgrade) { setShowUpgrade(true); return; }
     setEditingBarber(null);
     setFullName('');
     setRole('Barbeiro Especialista');
     setCommissionRate(50);
+    setSoloOwner(false);
     setPhone('');
     setAvatarUrl('');
     setBio('');
@@ -60,6 +70,7 @@ export const TeamView: React.FC<TeamViewProps> = ({
   const handleSaveBarber = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim()) return;
+    if (!editingBarber && requiresUpgrade) { setShowModal(false); setShowUpgrade(true); return; }
 
     if (editingBarber) {
       // Atualizar barbeiro existente
@@ -126,6 +137,13 @@ export const TeamView: React.FC<TeamViewProps> = ({
           <span>Adicionar Barbeiro</span>
         </button>
       </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-700 bg-[#121B2E] p-4">
+        <div><p className="text-sm font-bold text-white">{paidTeam ? 'Plano de equipe ativo' : 'Grátis para 1 barbeiro'}</p><p className="mt-1 text-xs text-slate-400">{paidTeam ? `${activeCount} profissional(is) ativo(s). Sua equipe está liberada.${org.plan === 'team' ? ` Plano Equipe: ${TEAM_PLAN_PRICE_LABEL}.` : ''}` : activeCount > 1 ? `Sua equipe atual foi mantida. Para ampliar, plano Equipe por ${TEAM_PLAN_PRICE_LABEL}.` : `${activeCount}/1 barbeiro ativo · Sem prazo de teste. Equipe: ${TEAM_PLAN_PRICE_LABEL}.`}</p></div>
+        {!paidTeam && <a href={TEAM_UPGRADE_URL} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-emerald-400/30 px-4 text-xs font-bold text-emerald-300 hover:bg-emerald-400/10"><Sparkles className="h-4 w-4" />Conhecer plano para equipe</a>}
+      </div>
+
+      {showUpgrade && <Modal label="Plano para equipe" onClose={() => setShowUpgrade(false)} className="fixed inset-0 z-[220] app-mobile-modal flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-3xl border border-slate-700 bg-[#121B2E] p-6 text-white shadow-2xl"><div className="flex items-start justify-between gap-4"><Sparkles className="h-8 w-8 text-emerald-400" /><button type="button" aria-label="Fechar" onClick={() => setShowUpgrade(false)} className="flex h-11 w-11 items-center justify-center rounded-xl hover:bg-white/10"><X className="h-5 w-5" /></button></div><h3 className="mt-3 text-xl font-bold">Sua equipe está crescendo</h3><p className="mt-3 text-sm leading-relaxed text-slate-300">{FREE_TEAM_LIMIT_MESSAGE}</p><a href={TEAM_UPGRADE_URL} target="_blank" rel="noreferrer" className="mt-6 flex min-h-12 items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-bold text-slate-950 hover:bg-emerald-300">Consultar plano pelo WhatsApp</a><button type="button" onClick={() => setShowUpgrade(false)} className="mt-2 min-h-11 w-full rounded-xl text-xs font-semibold text-slate-300 hover:bg-white/5">Continuar com a equipe atual</button></div></Modal>}
 
       {/* LISTA DE BARBEIROS OU EMPTY STATE */}
       {barbers.length === 0 ? (

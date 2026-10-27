@@ -1,4 +1,7 @@
+import { TEAM_PLAN_PRICE_LABEL } from '../utils/tenantPlan';
+
 export const CANONICAL_APP_ORIGIN = 'https://meuagendai.fun';
+export const TEAM_UPGRADE_URL = 'https://wa.me/5584981937580?text=' + encodeURIComponent(`Olá! Quero ativar o plano Equipe do AgendAI por ${TEAM_PLAN_PRICE_LABEL} para toda a equipe.`);
 
 const isLocalDevelopmentHost = (hostname: string) =>
   hostname === 'localhost' ||

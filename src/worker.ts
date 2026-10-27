@@ -7,6 +7,7 @@ import { handleDirectory, handleSitemap } from './services/directoryApi';
 import { handlePlatformNotices } from './services/platformNoticesApi';
 import { sanitizePublicGallery, sanitizeSocialLinks } from './utils/publicShowcase';
 import { BookingInputError, normalizePublicAppointment } from './utils/publicAppointment';
+import { activeProfessionals, exceedsFreeTeamLimit, FREE_TEAM_LIMIT_MESSAGE } from './utils/tenantPlan';
 import { verifyWhatsAppWebhook, handleWhatsAppWebhook } from './integrations/whatsapp/webhook';
 import { processWhatsAppEvent } from './integrations/whatsapp/processor';
 import { handleAvailabilityRequest, handleWhatsAppFlowRequest } from './integrations/whatsapp/flow';
@@ -342,6 +343,7 @@ const stripSecretsFromOrg = (org: any, publicView = false) => {
   clean.social_links = sanitizeSocialLinks(clean.social_links);
   if (publicView) {
     delete clean.email;
+    delete clean.whatsapp_connection;
     delete clean.whatsapp_confirm_template;
     delete clean.whatsapp_reminder_template;
     delete clean.whatsapp_thanks_template;
@@ -468,13 +470,26 @@ const sanitizePublicPayload = (input: StoredPayload): StoredPayload => {
   const barbers = Array.isArray(input.barbers)
     ? input.barbers.map((barber: any) => ({ ...barber, phone: '', commission_rate: 0 }))
     : [];
+  const businessNow = getBusinessNow(input.org);
   const appointments = Array.isArray(input.appointments)
-    ? input.appointments.map((appointment: any) => ({
-        ...appointment,
-        client_name: 'Reservado',
-        client_phone: '',
-        payment_method: undefined,
-      }))
+    ? input.appointments
+        .filter((appointment: any) => {
+          if (!appointment || typeof appointment !== 'object') return false;
+          if (appointment.status === 'canceled' || appointment.status === 'no_show') return false;
+          const appDate = String(appointment.date || '');
+          return !appDate || appDate >= businessNow.date;
+        })
+        .map((appointment: any) => ({
+          id: String(appointment.id || ''),
+          barber_id: String(appointment.barber_id || ''),
+          date: String(appointment.date || ''),
+          start_time: String(appointment.start_time || ''),
+          duration_minutes: Math.max(5, Number(appointment.duration_minutes || 30)),
+          status: appointment.status || 'scheduled',
+          client_name: 'Reservado',
+          client_phone: '',
+          payment_method: undefined,
+        }))
     : [];
 
   return {
@@ -1097,6 +1112,24 @@ export default {
       }
     }
 
+    // Consulta de status dos lembretes de hoje
+    if (url.pathname === '/api/whatsapp/reminders' && (request.method === 'GET' || request.method === 'OPTIONS')) {
+      if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+      const session = await getSessionContext(request, env);
+      if (!session) return jsonResponse({ error: 'Sessão inválida ou expirada.' }, 401);
+      const status = await getWhatsAppRemindersStatus(env, session.owner_email);
+      return jsonResponse(status);
+    }
+
+    // Disparo manual/sob demanda de lembretes da barbearia
+    if (url.pathname === '/api/whatsapp/reminders/trigger' && (request.method === 'POST' || request.method === 'OPTIONS')) {
+      if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+      const session = await getSessionContext(request, env);
+      if (!session) return jsonResponse({ error: 'Sessão inválida ou expirada.' }, 401);
+      const result = await runScheduledWhatsAppReminders(env, { specificOwnerEmail: session.owner_email });
+      return jsonResponse({ success: true, ...result });
+    }
+
     // Avisos privados e direcionados, fora dos snapshots administrativos.
     if (url.pathname === '/api/notices' || url.pathname === '/api/superadmin/notices') {
       return handlePlatformNotices(request, {
@@ -1171,6 +1204,7 @@ export default {
 
         if (!email || !email.includes('@') || !slug) return jsonResponse({ error: 'Informe um e-mail válido e um slug.' }, 400);
         if (password.length < 6) return jsonResponse({ error: 'A senha deve ter no mínimo 6 caracteres.' }, 400);
+        if (exceedsFreeTeamLimit({ plan: 'free' }, payload.barbers)) return jsonResponse({ error: FREE_TEAM_LIMIT_MESSAGE, code: 'TEAM_PLAN_REQUIRED' }, 403);
         if (await dbGet(env, `user:${email}`) || await dbGet(env, `staff:${email}`)) return jsonResponse({ error: 'Este e-mail já possui cadastro ou acesso de equipe.' }, 409);
         if (await dbGet(env, `slug:${slug}`)) return jsonResponse({ error: 'Este link/slug já está em uso.' }, 409);
 
@@ -1178,8 +1212,9 @@ export default {
         await dbPut(env, `auth:${email}`, JSON.stringify(credential));
         payload.org = {
           ...payload.org,
-          account_status: ['active', 'trial', 'suspended'].includes(String(payload.org?.account_status || '')) ? payload.org.account_status : 'trial',
-          plan: ['trial', 'basic', 'professional', 'premium'].includes(String(payload.org?.plan || '')) ? payload.org.plan : 'trial',
+          account_status: 'active',
+          plan: 'free',
+          subscription_due_date: undefined,
           created_at: payload.org?.created_at || new Date().toISOString(),
           last_login_at: new Date().toISOString(),
         };
@@ -1316,7 +1351,7 @@ export default {
           slug: String(org.slug || ''),
           phone: org.phone ? String(org.phone) : undefined,
           status: accountStatus(payload),
-          plan: ['trial', 'basic', 'professional', 'premium'].includes(String(org.plan || '')) ? org.plan : 'trial',
+          plan: ['free', 'team', 'trial', 'basic', 'professional', 'premium'].includes(String(org.plan || '')) ? org.plan : 'free',
           due_date: org.subscription_due_date || undefined,
           created_at: org.created_at || undefined,
           last_login_at: org.last_login_at || undefined,
@@ -1337,25 +1372,27 @@ export default {
         const body = await request.json() as any;
         const email = normalizeEmail(body.email);
         const status = String(body.status || 'active');
-        const plan = String(body.plan || 'trial');
+        const plan = String(body.plan || 'free');
         const dueDate = String(body.due_date || '').trim();
         if (!email) return jsonResponse({ error: 'Conta inválida.' }, 400);
         if (!['active', 'trial', 'suspended'].includes(status)) return jsonResponse({ error: 'Status inválido.' }, 400);
-        if (!['trial', 'basic', 'professional', 'premium'].includes(plan)) return jsonResponse({ error: 'Plano inválido.' }, 400);
+        if (!['free', 'team', 'trial', 'basic', 'professional', 'premium'].includes(plan)) return jsonResponse({ error: 'Plano inválido.' }, 400);
         if (email === adminEmail && status === 'suspended') return jsonResponse({ error: 'A conta do Super Admin não pode suspender a si própria.' }, 400);
         if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return jsonResponse({ error: 'Vencimento inválido.' }, 400);
         const raw = await dbGet(env, `user:${email}`);
         if (!raw) return jsonResponse({ error: 'Estabelecimento não encontrado.' }, 404);
         const payload = JSON.parse(raw) as StoredPayload;
+        if (plan === 'free' && activeProfessionals(payload.barbers).length > 1) return jsonResponse({ error: 'Para mudar para o plano gratuito, mantenha apenas 1 barbeiro ativo na equipe.' }, 409);
         payload.org = {
           ...payload.org,
           account_status: status,
           plan,
-          subscription_due_date: dueDate || undefined,
+          subscription_due_date: plan === 'free' ? undefined : dueDate || undefined,
         };
-        const stored = await storePayload(env, payload, normalizeSlug(payload.org?.slug));
+        const stored = await storePayload(env, payload, normalizeSlug(payload.org?.slug), String(payload.updated_at || ''));
         return jsonResponse({ success: true, updated_at: stored.updated_at });
       } catch (error: any) {
+        if (error instanceof SnapshotConflictError) return jsonResponse({ error: error.message }, 409);
         return jsonResponse({ error: error?.message || 'Falha ao atualizar estabelecimento.' }, 500);
       }
     }
@@ -1577,16 +1614,15 @@ export default {
           body.productSales = current.productSales;
         }
         if (current && session.role !== 'owner' && !session.permissions.caixa) body.commands = current.commands;
-        if (current?.org) {
-          body.org = {
-            ...body.org,
-            account_status: current.org.account_status || 'active',
-            plan: current.org.plan || 'trial',
-            subscription_due_date: current.org.subscription_due_date,
-            created_at: current.org.created_at,
-            last_login_at: current.org.last_login_at,
-          };
-        }
+        body.org = {
+          ...body.org,
+          account_status: current?.org?.account_status || 'active',
+          plan: current?.org?.plan || 'free',
+          subscription_due_date: current?.org?.subscription_due_date,
+          created_at: current?.org?.created_at,
+          last_login_at: current?.org?.last_login_at,
+        };
+        if (exceedsFreeTeamLimit(current?.org, body.barbers, current?.barbers)) return jsonResponse({ error: FREE_TEAM_LIMIT_MESSAGE, code: 'TEAM_PLAN_REQUIRED' }, 403);
         if (current && payloadDataCount(current) > 0 && payloadDataCount(body) === 0 && body.__allow_empty !== true) {
           return jsonResponse({
             error: 'Proteção de dados: este aparelho está com listas vazias e não pode apagar uma conta que possui dados na nuvem. Recarregue a página para sincronizar.'
@@ -1622,10 +1658,14 @@ export default {
         const current = currentRaw ? JSON.parse(currentRaw) as StoredPayload : null;
         if (accountStatus(current) === 'suspended') return jsonResponse({ error: 'Conta temporariamente indisponível.' }, 403);
         const backup = JSON.parse(backupRaw) as StoredPayload;
-        const restored = await storePayload(env, backup, current ? normalizeSlug(current.org?.slug) : undefined);
+        // Restaurar dados antigos não restaura um plano pago já revogado.
+        backup.org = { ...backup.org, plan: current?.org?.plan || 'free', account_status: current?.org?.account_status || 'active', subscription_due_date: current?.org?.subscription_due_date };
+        if (exceedsFreeTeamLimit(current?.org, backup.barbers, current?.barbers)) return jsonResponse({ error: FREE_TEAM_LIMIT_MESSAGE, code: 'TEAM_PLAN_REQUIRED' }, 403);
+        const restored = await storePayload(env, backup, current ? normalizeSlug(current.org?.slug) : undefined, current ? String(current.updated_at || '') : undefined);
         if (currentRaw) await dbPut(env, `backup:last:${email}`, currentRaw);
         return jsonResponse({ success: true, data: restored });
       } catch (error: any) {
+        if (error instanceof SnapshotConflictError) return jsonResponse({ error: error.message }, 409);
         return jsonResponse({ error: error?.message || 'Falha ao restaurar backup.' }, 500);
       }
     }
@@ -1960,6 +2000,13 @@ export default {
         message.retry();
       }
     }
+  },
+
+  // Cron Trigger da Cloudflare (executa a cada 15 min): dispara lembretes de WhatsApp ~2h antes (Anti No-Show)
+  async scheduled(event: any, env: Env, ctx?: ExecutionContextLike): Promise<void> {
+    if (env.DB) {
+      await runScheduledWhatsAppReminders(env);
+    }
   }
 };
 
@@ -1984,8 +2031,8 @@ export async function processIncomingWhatsAppMessage(
     const phoneNumberId = value.metadata?.phone_number_id;
 
     // 1. Localiza a organização dona do número conectado
-    if (!phoneNumberId) {
-      console.error('[WhatsApp] Evento sem phone_number_id');
+    if (!phoneNumberId || !env.DB) {
+      console.error('[WhatsApp] Evento sem phone_number_id ou DB não configurado');
       return;
     }
 
@@ -2233,4 +2280,224 @@ async function sendWhatsAppTextMessage(
     console.error('[WhatsApp Send Message Error]:', err);
     return false;
   }
+}
+
+// =========================================================================
+// LEMBRETES AUTOMÁTICOS DE AGENDAMENTO (ANTI NO-SHOW)
+// =========================================================================
+
+async function getWhatsAppRemindersStatus(env: Env, ownerEmail: string) {
+  if (!env.DB) return { connected: false, sentToday: 0, pendingInWindow: 0, todayAppointmentsCount: 0 };
+  const raw = await dbGet(env, `user:${ownerEmail}`);
+  if (!raw) return { connected: false, sentToday: 0, pendingInWindow: 0, todayAppointmentsCount: 0 };
+  const payload = JSON.parse(raw) as StoredPayload;
+  const org = payload.org;
+  if (!org) return { connected: false, sentToday: 0, pendingInWindow: 0, todayAppointmentsCount: 0 };
+
+  const slug = normalizeSlug(org.slug);
+  const connection = await getTenantWhatsAppConnection(env, slug);
+  const isConnected = connection.status === 'connected' && Boolean(connection.phoneNumberId);
+
+  const timeZone = org.timezone || 'America/Sao_Paulo';
+  const now = new Date();
+  let todayDate = '';
+  let currentMinutes = 0;
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(now);
+    const map = Object.fromEntries(parts.map(p => [p.type, p.value]));
+    todayDate = `${map.year}-${map.month}-${map.day}`;
+    currentMinutes = Number(map.hour) * 60 + Number(map.minute);
+  } catch {
+    todayDate = now.toISOString().slice(0, 10);
+    currentMinutes = now.getHours() * 60 + now.getMinutes();
+  }
+
+  const appointments = Array.isArray(payload.appointments) ? payload.appointments : [];
+  const todayAppts = appointments.filter((a: any) => a.date === todayDate && a.status !== 'canceled');
+  const sentToday = todayAppts.filter((a: any) => Boolean(a.reminder_sent_at)).length;
+
+  let pendingInWindow = 0;
+  for (const app of todayAppts) {
+    if (app.status !== 'scheduled' && app.status !== 'confirmed') continue;
+    if (app.reminder_sent_at) continue;
+    const [h, m] = String(app.start_time || '').split(':').map(Number);
+    const startMinutes = (h || 0) * 60 + (m || 0);
+    const diffMinutes = startMinutes - currentMinutes;
+    if (diffMinutes >= 15 && diffMinutes <= 150) {
+      pendingInWindow++;
+    }
+  }
+
+  return {
+    connected: isConnected,
+    sentToday,
+    pendingInWindow,
+    todayAppointmentsCount: todayAppts.length,
+    todayDate,
+  };
+}
+
+async function runScheduledWhatsAppReminders(
+  env: Env,
+  options?: { specificOwnerEmail?: string }
+): Promise<{ sentCount: number; errorsCount: number; sentAppointmentIds: string[] }> {
+  let sentCount = 0;
+  let errorsCount = 0;
+  const sentAppointmentIds: string[] = [];
+  if (!env.DB) return { sentCount: 0, errorsCount: 0, sentAppointmentIds };
+
+  try {
+    let rows: any[] = [];
+    if (options?.specificOwnerEmail) {
+      const res = await env.DB.prepare('SELECT key, value FROM app_store WHERE key = ?').bind(`user:${options.specificOwnerEmail}`).all();
+      rows = Array.isArray(res?.results) ? res.results : [];
+    } else {
+      const res = await env.DB.prepare("SELECT key, value FROM app_store WHERE key LIKE 'user:%'").all();
+      rows = Array.isArray(res?.results) ? res.results : [];
+    }
+
+    const now = new Date();
+
+    for (const row of rows) {
+      if (!row?.value) continue;
+      let payload: StoredPayload;
+      try {
+        payload = JSON.parse(row.value) as StoredPayload;
+      } catch {
+        continue;
+      }
+
+      const org = payload.org;
+      if (!org) continue;
+
+      const slug = normalizeSlug(org.slug);
+      const connection = await getTenantWhatsAppConnection(env, slug);
+      if (connection.status !== 'connected' || !connection.phoneNumberId) continue;
+
+      const timeZone = org.timezone || 'America/Sao_Paulo';
+      let todayDate = '';
+      let currentMinutes = 0;
+
+      try {
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        });
+        const parts = formatter.formatToParts(now);
+        const map = Object.fromEntries(parts.map(p => [p.type, p.value]));
+        todayDate = `${map.year}-${map.month}-${map.day}`;
+        currentMinutes = Number(map.hour) * 60 + Number(map.minute);
+      } catch {
+        todayDate = now.toISOString().slice(0, 10);
+        currentMinutes = now.getHours() * 60 + now.getMinutes();
+      }
+
+      const appointments = Array.isArray(payload.appointments) ? payload.appointments : [];
+      let updatedAny = false;
+
+      for (let i = 0; i < appointments.length; i++) {
+        const app = appointments[i] as any;
+        if (app.status !== 'scheduled' && app.status !== 'confirmed') continue;
+        if (app.date !== todayDate) continue;
+        if (app.reminder_sent_at) continue;
+
+        const [h, m] = String(app.start_time || '').split(':').map(Number);
+        const startMinutes = (h || 0) * 60 + (m || 0);
+        const diffMinutes = startMinutes - currentMinutes;
+
+        // Janela de lembrete: entre 15 minutos e 150 minutos (2h30) antes do horário marcado
+        if (diffMinutes >= 15 && diffMinutes <= 150) {
+          const rawPhone = String(app.client_phone || '').replace(/\D/g, '');
+          if (rawPhone.length < 10) continue;
+          const internationalPhone = rawPhone.length <= 11 ? `55${rawPhone}` : rawPhone;
+
+          const clientName = String(app.client_name || 'Cliente').trim();
+          const barberName = String(app.barber_name || 'Profissional').trim();
+          const serviceName = String(app.service_name || (app.services?.[0]?.name) || 'Atendimento').trim();
+          const orgName = String(org.name || 'Barbearia').trim();
+
+          const template = org.whatsapp_reminder_template;
+          let reminderBody = '';
+
+          if (template && template.includes('{cliente}')) {
+            reminderBody = template
+              .replace(/\{cliente\}/g, clientName)
+              .replace(/\{barbearia\}/g, orgName)
+              .replace(/\{data\}/g, todayDate.split('-').reverse().join('/'))
+              .replace(/\{horario\}/g, app.start_time)
+              .replace(/\{servico\}/g, serviceName)
+              .replace(/\{valor\}/g, Number(app.price || 0).toFixed(2));
+          } else {
+            reminderBody = [
+              `💈 *Lembrete de Horário - ${orgName}*`,
+              '',
+              `Olá, *${clientName}*! Passando para lembrar do seu atendimento hoje:`,
+              '',
+              `⏰ *Horário:* às ${app.start_time}`,
+              `✂️ *Serviço:* ${serviceName}`,
+              `👤 *Profissional:* ${barberName}`,
+              '',
+              `👉 Para confirmar sua presença, responda *CONFIRMAR*.`,
+              `Se precisar reagendar ou cancelar, responda *CANCELAR*.`,
+              '',
+              `Te esperamos!`
+            ].join('\n');
+          }
+
+          const sent = await sendWhatsAppTextMessage(
+            internationalPhone,
+            reminderBody,
+            connection.phoneNumberId,
+            env
+          );
+
+          if (sent) {
+            app.reminder_sent_at = new Date().toISOString();
+            updatedAny = true;
+            sentCount++;
+            sentAppointmentIds.push(app.id);
+
+            const notificationId = `reminder-${app.id}-${Date.now()}`;
+            const existingNotifs = Array.isArray(payload.notifications) ? payload.notifications : [];
+            payload.notifications = [{
+              id: notificationId,
+              org_id: org.id,
+              type: 'appointment_reminder',
+              title: 'Lembrete enviado via WhatsApp',
+              message: `Lembrete de ${app.start_time} enviado para ${clientName}.`,
+              created_at: new Date().toISOString(),
+              appointment_id: app.id,
+              client_name: clientName,
+              target_tab: 'agenda',
+            }, ...existingNotifs].slice(0, 100);
+          } else {
+            errorsCount++;
+          }
+        }
+      }
+
+      if (updatedAny) {
+        payload.updated_at = new Date().toISOString();
+        await storePayload(env, payload, slug, String(payload.updated_at || ''));
+      }
+    }
+  } catch (error) {
+    console.error('[runScheduledWhatsAppReminders Error]:', error);
+  }
+
+  return { sentCount, errorsCount, sentAppointmentIds };
 }
