@@ -31,6 +31,7 @@ import {
   ShieldCheck,
   CheckCircle2,
   Download,
+  Cake,
 } from 'lucide-react';
 import { ActionButton } from '../components/common/ActionButton';
 import { Client, Appointment, Organization } from '../types';
@@ -40,8 +41,11 @@ import {
   getClientCrmStats,
   createClientAppointmentsIndex,
   getClientAppointmentsFromIndex,
+  getBirthdayStatus,
 } from '../utils/clientCrm';
 import { WhatsAppActionsModal } from '../components/common/WhatsAppActionsModal';
+import { LoyaltyCardWidget } from '../components/loyalty/LoyaltyCardWidget';
+import { addLoyaltyStampToClient, redeemLoyaltyRewardFromClient } from '../utils/loyalty';
 import type { SpreadsheetValidationResult } from '../utils/clientImport';
 
 interface ClientesViewProps {
@@ -80,6 +84,10 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   const [whatsAppClient, setWhatsAppClient] = useState<Client | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [profileNotes, setProfileNotes] = useState('');
+  const [profileHaircutNotes, setProfileHaircutNotes] = useState('');
+  const [profileBirthDate, setProfileBirthDate] = useState('');
+  const [profilePreferences, setProfilePreferences] = useState('');
+  const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
   const [editingName, setEditingName] = useState('');
   const [editingPhone, setEditingPhone] = useState('');
   const [showNameEditor, setShowNameEditor] = useState(false);
@@ -283,16 +291,30 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   const openProfile = (client: Client) => {
     setSelectedClient(client);
     setProfileNotes(client.notes || '');
+    setProfileHaircutNotes(client.haircut_notes || '');
+    setProfileBirthDate(client.birth_date || '');
+    setProfilePreferences(client.preferences || '');
     setEditingName(client.name);
     setEditingPhone(client.phone || '');
     setShowNameEditor(false);
     setShowDeleteConfirm(false);
+    setProfileSaveSuccess(false);
   };
 
   const saveNotes = () => {
     if (!selectedClient) return;
     const selectedPhone = normalizeClientPhone(selectedClient.phone);
     const cleanNotes = profileNotes.trim();
+    const cleanHaircut = profileHaircutNotes.trim();
+    const cleanBirth = profileBirthDate.trim();
+    const cleanPrefs = profilePreferences.trim();
+
+    const patch: Partial<Client> = {
+      notes: cleanNotes || undefined,
+      haircut_notes: cleanHaircut || undefined,
+      birth_date: cleanBirth || undefined,
+      preferences: cleanPrefs || undefined,
+    };
 
     setClients((prev) => {
       const next = dedupeClients(prev);
@@ -302,17 +324,19 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
       });
 
       if (index >= 0) {
-        next[index] = { ...next[index], notes: cleanNotes };
+        next[index] = { ...next[index], ...patch };
         return next;
       }
 
       return [{
         ...selectedClient,
-        notes: cleanNotes,
+        ...patch,
       }, ...next];
     });
 
-    setSelectedClient((current) => current ? { ...current, notes: cleanNotes } : current);
+    setSelectedClient((current) => current ? { ...current, ...patch } : current);
+    setProfileSaveSuccess(true);
+    window.setTimeout(() => setProfileSaveSuccess(false), 2500);
   };
 
   const [nameSaveStatus, setNameSaveStatus] = useState<'idle' | 'loading' | 'success'>('idle');
@@ -397,6 +421,40 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
       return sameClient ? updateClient(client) : client;
     }));
     setSelectedClient((current) => current ? updateClient(current) : current);
+  };
+
+  const adjustLoyaltyStamps = (delta: number) => {
+    if (!selectedClient) return;
+    const selectedPhone = normalizeClientPhone(selectedClient.phone);
+    const selectedName = selectedClient.name.trim().toLocaleLowerCase('pt-BR');
+    const updateClient = (client: Client) => {
+      if (delta > 0) {
+        return addLoyaltyStampToClient(client, org).updatedClient;
+      } else {
+        const cur = Math.max(0, Number(client.loyalty_stamps || 0));
+        return { ...client, loyalty_stamps: Math.max(0, cur - 1) };
+      }
+    };
+    setClients((prev) => prev.map((client) => {
+      const sameClient = selectedPhone
+        ? normalizeClientPhone(client.phone) === selectedPhone
+        : client.name.trim().toLocaleLowerCase('pt-BR') === selectedName;
+      return sameClient ? updateClient(client) : client;
+    }));
+    setSelectedClient((current) => current ? updateClient(current) : current);
+  };
+
+  const handleManualRedeemReward = () => {
+    if (!selectedClient) return;
+    const selectedPhone = normalizeClientPhone(selectedClient.phone);
+    const selectedName = selectedClient.name.trim().toLocaleLowerCase('pt-BR');
+    setClients((prev) => prev.map((client) => {
+      const sameClient = selectedPhone
+        ? normalizeClientPhone(client.phone) === selectedPhone
+        : client.name.trim().toLocaleLowerCase('pt-BR') === selectedName;
+      return sameClient ? redeemLoyaltyRewardFromClient(client) : client;
+    }));
+    setSelectedClient((current) => current ? redeemLoyaltyRewardFromClient(current) : current);
   };
 
   const assignSubscription = (planId: string) => {
@@ -819,6 +877,26 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-lg sm:text-xl font-black text-white truncate">{selectedClient.name}</h3>
+                    {(() => {
+                      const bdayStatus = getBirthdayStatus(selectedClient.birth_date || profileBirthDate);
+                      if (bdayStatus === 'today') {
+                        return (
+                          <span className="px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30 text-[10px] font-black flex items-center gap-1 animate-pulse">
+                            <Cake className="w-3 h-3 text-pink-400" />
+                            <span>Aniversário Hoje! 🎂</span>
+                          </span>
+                        );
+                      }
+                      if (bdayStatus === 'this_month') {
+                        return (
+                          <span className="px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30 text-[10px] font-bold flex items-center gap-1">
+                            <Cake className="w-3 h-3 text-violet-400" />
+                            <span>Aniversariante do Mês 🎈</span>
+                          </span>
+                        );
+                      }
+                      return null;
+                    })()}
                     {selectedStats.totalVisits === 0 && !selectedStats.upcomingAppointment ? (
                       <span className="text-[9px] uppercase tracking-wider font-black text-cyan-200 border border-cyan-400/25 bg-cyan-400/10 rounded-full px-2 py-0.5">Novo cliente</span>
                     ) : selectedInactive ? (
@@ -893,6 +971,47 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                 </div>
               </div>
 
+              {/* CARTÃO FIDELIDADE DIGITAL */}
+              {org.loyalty_enabled !== false && (
+                <div className="space-y-3">
+                  <LoyaltyCardWidget
+                    client={selectedClient}
+                    org={org}
+                    canRedeem={Number(selectedClient.loyalty_rewards_available || 0) > 0}
+                    onRedeem={handleManualRedeemReward}
+                  />
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => adjustLoyaltyStamps(1)}
+                      className="flex-1 py-2 px-3 rounded-xl border border-amber-400/25 bg-amber-400/10 hover:bg-amber-400/20 text-amber-200 text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+1 Carimbo / Selo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adjustLoyaltyStamps(-1)}
+                      className="py-2 px-3 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white text-xs font-bold active:scale-95 transition-all"
+                      title="Remover 1 carimbo do cartão"
+                    >
+                      -1 Selo
+                    </button>
+                    {Number(selectedClient.loyalty_rewards_available || 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleManualRedeemReward}
+                        className="py-2 px-3 rounded-xl border border-emerald-500/30 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1 active:scale-95 transition-all"
+                      >
+                        <Gift className="w-3.5 h-3.5" />
+                        <span>Resgatar Recompensa</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <section className="rounded-2xl border border-amber-300/20 bg-gradient-to-r from-amber-300/[0.09] to-transparent p-4 sm:p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex gap-3">
@@ -948,19 +1067,88 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                 </div>
               )}
 
-              <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] gap-4">
-                <section className="rounded-2xl border border-slate-800 bg-slate-950/35 p-4 shadow-sm">
-                  <div className="flex items-center justify-between gap-3 mb-3">
-                    <div><p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Observações internas</p><p className="text-xs text-slate-400 mt-1">Preferências, detalhes ou lembretes da equipe.</p></div>
+              <div className="grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-4">
+                <section className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 sm:p-5 shadow-sm space-y-4">
+                  {/* FICHA TÉCNICA DO CORTE */}
+                  <div className="client-profile-haircut-card bg-gradient-to-br from-amber-500/10 via-slate-950 to-slate-900 border border-amber-500/30 rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-300 flex items-center justify-center">
+                        <Scissors className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider">Ficha Técnica do Corte</h4>
+                        <p className="text-[10px] text-slate-400">Pentes, degradê, altura da tesoura e fórmula na cadeira.</p>
+                      </div>
+                    </div>
+                    <textarea
+                      value={profileHaircutNotes}
+                      onChange={(e) => setProfileHaircutNotes(e.target.value)}
+                      rows={3}
+                      placeholder="Ex: Fade navalhado zero alta, disfarce com 1.5, topo tesoura 3 dedos, acabamento na shaver..."
+                      className="w-full rounded-xl border border-amber-500/30 bg-slate-950 px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-400 resize-y font-mono leading-relaxed"
+                    />
                   </div>
-                  <textarea
-                    value={profileNotes}
-                    onChange={(event) => setProfileNotes(event.target.value)}
-                    rows={7}
-                    placeholder="Ex: prefere máquina 1 nas laterais, costuma vir às sextas..."
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500 resize-y"
-                  />
-                  <button type="button" onClick={saveNotes} className="mt-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 px-3.5 py-2 text-xs font-bold text-emerald-400 flex items-center gap-2 hover:bg-emerald-500/15 transition-all active:scale-95"><Save className="w-3.5 h-3.5" /> Salvar observação</button>
+
+                  {/* ANIVERSÁRIO E PREFERÊNCIAS */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <Cake className="w-3 h-3 text-pink-400" />
+                        Data de Aniversário
+                      </label>
+                      <input
+                        type="text"
+                        value={profileBirthDate}
+                        onChange={(e) => setProfileBirthDate(e.target.value)}
+                        placeholder="DD/MM ou AAAA-MM-DD"
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                      />
+                    </div>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <Sparkles className="w-3 h-3 text-cyan-400" />
+                        Preferências na Cadeira
+                      </label>
+                      <input
+                        type="text"
+                        value={profilePreferences}
+                        onChange={(e) => setProfilePreferences(e.target.value)}
+                        placeholder="Ex: Café sem açúcar, silêncio..."
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* OBSERVAÇÕES GERAIS */}
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-1.5">
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Observações internas da equipe</p>
+                    <textarea
+                      value={profileNotes}
+                      onChange={(event) => setProfileNotes(event.target.value)}
+                      rows={2}
+                      placeholder="Ex: Costuma vir sextas no fim da tarde, amigo do barbeiro..."
+                      className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500 resize-y"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    {profileSaveSuccess ? (
+                      <span className="text-xs text-emerald-400 font-bold flex items-center gap-1.5 animate-fadeIn">
+                        <CheckCircle2 className="w-4 h-4" /> Ficha atualizada com sucesso!
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-500">Alterações salvas no CRM da barbearia.</span>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={saveNotes}
+                      className="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-4 py-2 text-xs flex items-center gap-2 transition-all active:scale-95 shadow-md shadow-emerald-500/20"
+                    >
+                      <Save className="w-3.5 h-3.5" /> Salvar Ficha & Dados
+                    </button>
+                  </div>
                 </section>
 
                 <section className="rounded-2xl border border-slate-800 bg-slate-950/35 p-4 min-w-0 shadow-sm">

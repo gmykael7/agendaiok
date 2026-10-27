@@ -159,3 +159,32 @@ export const getClientCrmStats = (
     canceledCount,
   };
 };
+
+export function getBirthdayStatus(birthDateStr?: string, now = new Date()): 'today' | 'this_month' | null {
+  if (!birthDateStr) return null;
+  // Suporta YYYY-MM-DD ou DD/MM
+  let month = 0;
+  let day = 0;
+  if (birthDateStr.includes('-')) {
+    const parts = birthDateStr.split('-').map(Number);
+    if (parts.length === 3) {
+      month = parts[1];
+      day = parts[2];
+    } else if (parts.length === 2) {
+      month = parts[0];
+      day = parts[1];
+    }
+  } else if (birthDateStr.includes('/')) {
+    const parts = birthDateStr.split('/').map(Number);
+    if (parts.length >= 2) {
+      day = parts[0];
+      month = parts[1];
+    }
+  }
+  if (!month || !day) return null;
+  const currentMonth = now.getMonth() + 1;
+  const currentDay = now.getDate();
+  if (month === currentMonth && day === currentDay) return 'today';
+  if (month === currentMonth) return 'this_month';
+  return null;
+}
