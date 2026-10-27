@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   X,
   LogOut,
+  Download,
 } from 'lucide-react';
 import {
   IconlyHome,
@@ -86,7 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <BrandLogo variant="mark" className="w-full h-full" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-lg font-extrabold tracking-tight text-white leading-none">AgendAI</h1>
+                <h1 className="text-lg font-black tracking-tight brand-gradient-text leading-none">AgendAI</h1>
                 <p className="text-[11px] text-cyan-300 font-medium mt-1">Gestão de Barbearia</p>
               </div>
             </div>
@@ -147,6 +148,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div className="shrink-0 p-4 border-t border-slate-800/80 space-y-3">
+          <button
+            onClick={() => {
+              if ('beforeinstallprompt' in window) {
+                // Notifica o evento caso exista
+                window.dispatchEvent(new CustomEvent('agendai-request-install'));
+              } else {
+                alert('Para instalar no Android:\n1. Toque nos 3 pontinhos do Chrome (canto superior direito)\n2. Selecione "Instalar aplicativo" ou "Adicionar à tela inicial"');
+              }
+            }}
+            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/20 active:scale-98 transition-all"
+          >
+            <span className="flex items-center gap-2">
+              <Download className="w-4 h-4 text-emerald-400" />
+              Instalar App no Celular
+            </span>
+            <span className="text-[10px] bg-emerald-500/20 px-1.5 py-0.5 rounded text-emerald-300 font-mono">PWA</span>
+          </button>
+
           <button
             onClick={() => {
               setCurrentTab('booking');

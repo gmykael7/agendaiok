@@ -8,9 +8,14 @@ import { ConfirmHost } from './components/common/ConfirmDialog';
 import { DemoBanner } from './components/common/DemoBanner';
 import { IS_DEMO } from './utils/demoSandbox';
 import { BrandLoader } from './components/common/AppLoader';
-import { applyMotionPreference } from './utils/motion';
+import { applyMotionPreference } from './utils/motionPref';
 
 applyMotionPreference();
+
+// Trata erro de chunk dinâmico desatualizado após novo deploy
+window.addEventListener('vite:preloadError', () => {
+  window.location.reload();
+});
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

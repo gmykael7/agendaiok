@@ -107,6 +107,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const todayScheduled = todayAppointments.filter(a => isOpenAppointmentStatus(a.status));
   const todayProductSales = productSales.filter((sale) => sale.status === 'completed' && sale.date === todayStr);
   const totalEmCaixaHoje = todayCompleted.reduce((acc, curr) => acc + curr.price, 0) + todayProductSales.reduce((acc, curr) => acc + Number(curr.total || 0), 0);
+  const totalVendasConcluidasHoje = todayCompleted.length + todayProductSales.length;
+  const ticketMedioHoje = totalVendasConcluidasHoje > 0 
+    ? Math.round(totalEmCaixaHoje / totalVendasConcluidasHoje) 
+    : 0;
 
   const now = new Date();
   const allScheduled = appointments
@@ -300,39 +304,57 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>}
 
       {/* CARDS DE MÉTRICAS PRINCIPAIS (RESPONSIVOS NO CELULAR) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4 xl:gap-5">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 xl:gap-5">
         {/* TOTAL EM CAIXA (HOJE) */}
-        <div className="stagger-item booking-card col-span-2 sm:col-span-1 bg-[#121B2E] rounded-2xl p-4 sm:p-5 xl:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.12)] min-w-0 transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.18)] hover:-translate-y-0.5">
+        <div className="stagger-item booking-card bg-[#121B2E] rounded-2xl p-4 sm:p-5 xl:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.12)] min-w-0 transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.18)] hover:-translate-y-0.5">
           <p className="text-[10px] sm:text-xs font-medium tracking-wider uppercase text-slate-400 truncate">
             FATURAMENTO HOJE
           </p>
-          <p className="text-2xl sm:text-3xl xl:text-4xl font-semibold text-emerald-400 font-mono mt-1 sm:mt-2 tracking-tight tabular-nums">
+          <p className="text-xl sm:text-3xl xl:text-4xl font-semibold text-emerald-400 font-mono mt-1 sm:mt-2 tracking-tight tabular-nums">
             R$ {totalEmCaixaHoje.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </p>
-          <p className="text-[9px] sm:text-[10px] text-slate-500 mt-1 hidden sm:block truncate">{todayCompleted.length} serviços • {todayProductSales.length} produtos</p>
+          <p className="text-[9px] sm:text-[10px] text-slate-500 mt-1 hidden sm:block truncate">
+            {todayCompleted.length} serviços • {todayProductSales.length} produtos
+          </p>
+        </div>
+
+        {/* TICKET MÉDIO HOJE (AO LADO DE FATURAMENTO HOJE) */}
+        <div className="stagger-item booking-card bg-[#121B2E] rounded-2xl p-4 sm:p-5 xl:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.12)] min-w-0 transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.18)] hover:-translate-y-0.5" style={{ animationDelay: '30ms' }}>
+          <p className="text-[10px] sm:text-xs font-medium tracking-wider uppercase text-slate-400 truncate flex items-center justify-between">
+            <span>TICKET MÉDIO</span>
+            <TrendingUp className="w-3.5 h-3.5 text-cyan-400 shrink-0 hidden sm:inline" />
+          </p>
+          <p className="text-xl sm:text-3xl xl:text-4xl font-semibold text-cyan-300 font-mono mt-1 sm:mt-2 tracking-tight tabular-nums">
+            R$ {ticketMedioHoje.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          </p>
+          <p className="text-[9px] sm:text-[10px] text-slate-500 mt-1 hidden sm:block truncate">
+            {totalVendasConcluidasHoje > 0 ? `Média por atendimento` : 'Sem vendas hoje'}
+          </p>
         </div>
 
         {/* ATENDIMENTOS DO DIA */}
-        <div className="stagger-item booking-card bg-[#121B2E] rounded-2xl p-4 sm:p-5 xl:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.12)] min-w-0 transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.18)] hover:-translate-y-0.5" style={{ animationDelay: '40ms' }}>
+        <div className="stagger-item booking-card bg-[#121B2E] rounded-2xl p-4 sm:p-5 xl:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.12)] min-w-0 transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.18)] hover:-translate-y-0.5" style={{ animationDelay: '60ms' }}>
           <p className="text-[10px] sm:text-xs font-medium tracking-wider uppercase text-slate-400 truncate">
             <span className="sm:hidden">ATENDIMENTOS</span>
             <span className="hidden sm:inline">ATENDIMENTOS DO DIA</span>
           </p>
-          <p className="text-lg min-[380px]:text-xl sm:text-3xl xl:text-4xl font-semibold text-white font-mono mt-1 sm:mt-2 tracking-tight">
+          <p className="text-xl sm:text-3xl xl:text-4xl font-semibold text-white font-mono mt-1 sm:mt-2 tracking-tight">
             {todayAppointments.length}
           </p>
-          <p className="text-[9px] sm:text-[10px] text-slate-500 mt-1 hidden sm:block truncate">{todayScheduled.length} agendados</p>
+          <p className="text-[9px] sm:text-[10px] text-slate-500 mt-1 hidden sm:block truncate">
+            {todayScheduled.length} agendados • {todayCompleted.length} concl.
+          </p>
         </div>
 
         {/* TOTAL AGENDAMENTOS PENDENTES */}
-        <div className="stagger-item booking-card bg-[#121B2E] rounded-2xl p-4 sm:p-5 xl:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.12)] min-w-0 transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.18)] hover:-translate-y-0.5" style={{ animationDelay: '80ms' }}>
+        <div className="stagger-item booking-card bg-[#121B2E] rounded-2xl p-4 sm:p-5 xl:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.12)] min-w-0 transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.18)] hover:-translate-y-0.5" style={{ animationDelay: '90ms' }}>
           <p className="text-[10px] sm:text-xs font-medium tracking-wider uppercase text-slate-400 truncate">
             EM ABERTO
           </p>
-          <p className="text-lg min-[380px]:text-xl sm:text-3xl xl:text-4xl font-semibold text-amber-400 font-mono mt-1 sm:mt-2 tracking-tight">
+          <p className="text-xl sm:text-3xl xl:text-4xl font-semibold text-amber-400 font-mono mt-1 sm:mt-2 tracking-tight">
             {allScheduled.length}
           </p>
-          <p className="text-[9px] sm:text-[10px] text-slate-500 mt-1 hidden sm:block">geral</p>
+          <p className="text-[9px] sm:text-[10px] text-slate-500 mt-1 hidden sm:block truncate">agendamentos futuros</p>
         </div>
       </div>
 

@@ -3,9 +3,10 @@ import { ArrowLeft, Building2, LogIn, UserPlus, Lock, Mail, Phone, User, Loader2
 import { BrandLogo } from '../components/common/BrandLogo';
 import { AgencyCredit } from '../components/common/AgencyCredit';
 import { Organization } from '../types';
-import { INITIAL_SERVICES, INITIAL_BARBERS } from '../data/mockData';
+import { INITIAL_SERVICES } from '../data/mockData';
 import { CloudSyncPayload, loginBarbershop, registerBarbershop } from '../services/cloudSync';
 import { getPublicAppOrigin } from '../config/urls';
+import { TEAM_PLAN_PRICE_LABEL } from '../utils/tenantPlan';
 
 interface AuthViewProps {
   onLogin: (data: CloudSyncPayload) => void;
@@ -164,6 +165,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
       email: emailTrimmed,
       slug: slug.trim().toLowerCase() || generateSlug(salonName),
       phone: phone.trim(),
+      plan: 'free',
+      account_status: 'active',
       primary_color: '#10b981',
       open_hour: '08:00',
       close_hour: '20:00',
@@ -184,7 +187,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
     };
 
     const initialServicesWithOrg = INITIAL_SERVICES.map(s => ({ ...s, org_id: newOrg.id }));
-    const initialBarbersWithOrg = INITIAL_BARBERS.map(b => ({ ...b, org_id: newOrg.id }));
+    const initialBarbersWithOrg = [{ id: 'b-' + Date.now(), org_id: newOrg.id, full_name: ownerName.trim(), role: 'Barbeiro', commission_rate: 0, solo_owner: true, phone: phone.trim(), active: true }];
     const payload = {
       org: newOrg,
       savedOrgs: [newOrg],
@@ -338,6 +341,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
         ) : (
           /* 2. FORMULÁRIO DE CADASTRO NOVO */
           <form onSubmit={handleRegisterSubmit} className="space-y-3.5 animate-fadeIn">
+            <p className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-xs leading-relaxed text-emerald-200">Grátis para 1 barbeiro, sem prazo de teste. Com 2 ou mais profissionais, plano Equipe por {TEAM_PLAN_PRICE_LABEL} para toda a equipe.</p>
             <div>
               <label htmlFor="auth-field-3" className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5 text-emerald-400" /> Nome da Barbearia *

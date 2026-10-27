@@ -153,16 +153,18 @@ html[data-app-theme="light"] .services-experience-panel :where(.text-slate-400) 
 
 [class~="bg-emerald-500"],
 [class~="bg-emerald-600"] {
-  background-color: var(--brand-color) !important;
+  background: var(--brand-gradient-btn, var(--brand-color)) !important;
+  color: var(--brand-contrast-color) !important;
 }
 
 [class~="hover:bg-emerald-400"]:hover,
 [class~="hover:bg-emerald-500"]:hover {
-  background-color: color-mix(in srgb, var(--brand-color) 86%, white) !important;
+  filter: brightness(1.08) saturate(1.05);
 }
 
 [class~="bg-emerald-400"] {
-  background-color: color-mix(in srgb, var(--brand-color) 90%, white) !important;
+  background: var(--brand-secondary, color-mix(in srgb, var(--brand-color) 90%, white)) !important;
+  color: var(--brand-contrast-color) !important;
 }
 
 [class~="bg-emerald-500/10"] { background-color: color-mix(in srgb, var(--brand-color) 10%, transparent) !important; }
@@ -197,8 +199,9 @@ html[data-app-theme="light"] .services-experience-panel :where(.text-slate-400) 
 
 
 /* Branding premium */
+/* Branding premium com sistema multi-tonal de paletas */
 .brand-gradient-text {
-  background: linear-gradient(135deg, var(--brand-color) 0%, var(--brand-accent-soft) 45%, var(--brand-accent) 100%);
+  background: var(--brand-gradient, linear-gradient(135deg, var(--brand-color) 0%, var(--brand-secondary) 35%, var(--brand-accent) 70%, var(--brand-highlight) 100%));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -206,28 +209,36 @@ html[data-app-theme="light"] .services-experience-panel :where(.text-slate-400) 
 
 .brand-panel {
   background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--brand-color) 12%, transparent), transparent 38%),
-    linear-gradient(180deg, color-mix(in srgb, var(--app-surface-color) 96%, black), var(--app-surface-dark));
-  border: 1px solid color-mix(in srgb, var(--brand-accent) 18%, rgba(148,163,184,0.2));
-  box-shadow: 0 18px 40px rgba(2, 8, 23, 0.38), inset 0 1px 0 rgba(255,255,255,0.03);
+    radial-gradient(circle at top left, color-mix(in srgb, var(--brand-color) 16%, transparent), transparent 42%),
+    radial-gradient(circle at bottom right, color-mix(in srgb, var(--brand-accent) 14%, transparent), transparent 46%),
+    linear-gradient(180deg, color-mix(in srgb, var(--app-surface-color) 96%, black), var(--app-surface-dark)) !important;
+  border: 1px solid color-mix(in srgb, var(--brand-secondary) 25%, rgba(148,163,184,0.2)) !important;
+  box-shadow: 0 18px 40px rgba(2, 8, 23, 0.38), inset 0 1px 0 color-mix(in srgb, var(--brand-highlight, white) 14%, transparent);
 }
 
 .brand-button-primary {
-  background-color: var(--brand-color);
-  background-image: none;
-  color: var(--brand-contrast-color);
-  box-shadow: 0 12px 30px color-mix(in srgb, var(--brand-color) 25%, transparent);
+  background: var(--brand-gradient-btn, var(--brand-color)) !important;
+  color: var(--brand-contrast-color) !important;
+  box-shadow: 0 12px 28px -4px color-mix(in srgb, var(--brand-color) 35%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--brand-highlight, white) 22%, transparent);
+  transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.brand-button-primary:hover {
+  filter: brightness(1.08) saturate(1.05);
+  box-shadow: 0 14px 32px -4px color-mix(in srgb, var(--brand-color) 45%, transparent) !important;
 }
 
 .brand-button-soft {
-  background: color-mix(in srgb, var(--brand-color) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--brand-color) 28%, transparent);
-  color: color-mix(in srgb, var(--brand-color) 88%, white);
+  background: color-mix(in srgb, var(--brand-accent) 14%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 32%, transparent) !important;
+  color: var(--brand-accent) !important;
 }
 
 .brand-chip {
-  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-color) 16%, transparent), color-mix(in srgb, var(--brand-accent) 16%, transparent));
-  border: 1px solid color-mix(in srgb, var(--brand-color) 22%, transparent);
+  background: var(--brand-gradient-card, linear-gradient(135deg, color-mix(in srgb, var(--brand-color) 16%, transparent), color-mix(in srgb, var(--brand-accent) 16%, transparent))) !important;
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 30%, transparent) !important;
+  color: var(--brand-accent) !important;
 }
 
 .brand-credit {
@@ -242,10 +253,32 @@ html[data-app-theme="light"] .services-experience-panel :where(.text-slate-400) 
   color: var(--brand-color) !important;
 }
 
+/* Integração da 3ª cor da paleta (Accent / Destaque secundário) */
+[class~="text-cyan-300"],
+[class~="text-cyan-400"],
+[class~="hover:text-cyan-300"]:hover,
+[class~="hover:text-cyan-400"]:hover {
+  color: var(--brand-accent) !important;
+}
+
+[class~="bg-cyan-400/10"],
+[class~="bg-cyan-500/10"],
+[class~="bg-cyan-400/15"],
+[class~="bg-cyan-500/15"] {
+  background-color: color-mix(in srgb, var(--brand-accent) 14%, transparent) !important;
+}
+
+[class~="border-cyan-400/20"],
+[class~="border-cyan-400/30"],
+[class~="border-cyan-500/20"],
+[class~="border-cyan-500/30"] {
+  border-color: color-mix(in srgb, var(--brand-accent) 30%, transparent) !important;
+}
+
+/* Integração da 1ª e 2ª cor nos botões e badges principais */
 [class~="bg-emerald-500"],
 [class~="bg-emerald-600"] {
-  background-color: var(--brand-color) !important;
-  background-image: none !important;
+  background: var(--brand-gradient-btn, var(--brand-color)) !important;
   color: var(--brand-contrast-color) !important;
 }
 
@@ -1048,20 +1081,22 @@ button:disabled,
   position: relative;
   isolation: isolate;
   background:
-    radial-gradient(circle at 10% 0%, color-mix(in srgb, var(--brand-color) 9%, transparent), transparent 32rem),
-    radial-gradient(circle at 96% 16%, color-mix(in srgb, var(--brand-accent) 9%, transparent), transparent 38rem),
-    var(--app-bg-color) !important;
+    radial-gradient(circle at 10% 0%, rgba(6, 182, 212, 0.10), transparent 32rem),
+    radial-gradient(circle at 96% 16%, rgba(16, 185, 129, 0.08), transparent 38rem),
+    #070d18 !important;
+  color: #f8fafc !important;
 }
 
 .superadmin-view :where([class~="bg-[#0b1628]"]) {
-  background: linear-gradient(155deg, rgba(18, 37, 60, 0.96), rgba(9, 21, 38, 0.98)) !important;
-  border-color: var(--app-border) !important;
-  box-shadow: var(--app-shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  background: #0d1728 !important;
+  border-color: rgba(51, 65, 85, 0.6) !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 .superadmin-view :where(input, select, textarea) {
-  background-color: rgba(3, 10, 21, 0.78) !important;
-  border-color: rgba(105, 133, 168, 0.28) !important;
+  background-color: rgba(6, 13, 25, 0.9) !important;
+  border-color: rgba(71, 85, 105, 0.6) !important;
+  color: #ffffff !important;
 }
 
 .superadmin-view :where(input, select, textarea):focus {
@@ -1493,7 +1528,7 @@ html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-b
 }
 
 html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view, .notification-center-panel) :where([class~="text-cyan-200"], [class~="text-cyan-300"], [class~="text-cyan-400"]) {
-  color: #0e7490 !important;
+  color: color-mix(in srgb, var(--brand-accent) 70%, #0f172a) !important;
 }
 
 html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view, .notification-center-panel) :where([class~="text-emerald-300"], [class~="text-emerald-400"]) {
@@ -1570,6 +1605,17 @@ html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view, .app-h
   background-color: #ffffff !important;
   border-color: #cfd8e3 !important;
   box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.035);
+}
+
+/* Paletas Modernas no modo claro: cards com contraste limpo e sem resquícios escuros */
+html[data-app-theme="light"] [aria-label="Paletas de Design Modernas"] > button[aria-checked="false"] {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+html[data-app-theme="light"] [aria-label="Paletas de Design Modernas"] > button[aria-checked="true"] {
+  background: #ffffff !important;
+  box-shadow: 0 10px 25px -4px rgba(15, 23, 42, 0.08) !important;
 }
 
 /* Fila de espera: superfície e hierarquia próprias no tema claro. */
@@ -1666,7 +1712,7 @@ html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal) :where([class
 }
 
 html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal, .booking-view, .auth-view) [class*="text-cyan-"] {
-  color: #08708a !important;
+  color: color-mix(in srgb, var(--brand-accent) 65%, #0f172a) !important;
 }
 
 html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal, .booking-view, .auth-view) [class*="text-teal-"] {
@@ -1685,13 +1731,178 @@ html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal, .booking-view
   color: #be123c !important;
 }
 
-html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal) :where([class*="bg-slate-950"], [class*="bg-slate-900"], [class*="bg-slate-800"]) {
+/* Limpeza de fundos e bordas escuras no modo claro para evitar caixas pretas indesejadas */
+html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal, .app-view, .booking-view, .auth-view) :where(
+  [class*="bg-slate-950"],
+  [class*="bg-slate-900"],
+  [class*="bg-slate-800"],
+  [class~="bg-[#050912]"],
+  [class~="bg-[#061120]"],
+  [class~="bg-[#07090d]"],
+  [class~="bg-[#070B14]"],
+  [class~="bg-[#070d18]"],
+  [class~="bg-[#07111F]"],
+  [class~="bg-[#07111f]"],
+  [class~="bg-[#08101f]"],
+  [class~="bg-[#090d13]"],
+  [class~="bg-[#0A1324]"],
+  [class~="bg-[#0B1120]"],
+  [class~="bg-[#0B1424]"],
+  [class~="bg-[#0B1426]"],
+  [class~="bg-[#0a211e]"],
+  [class~="bg-[#0b111a]"],
+  [class~="bg-[#0b1424]"],
+  [class~="bg-[#0b1426]"],
+  [class~="bg-[#0b1628]"],
+  [class~="bg-[#0b1b2d]"],
+  [class~="bg-[#0d1118]"],
+  [class~="bg-[#0d1728]"],
+  [class~="bg-[#0d1729]"],
+  [class~="bg-[#101923]"],
+  [class~="bg-[#10192b]"],
+  [class~="bg-[#121B2E]"]
+):not(.landing-demo-surface):not(.landing-demo-surface *) {
   background-color: #ffffff !important;
   background-image: none !important;
 }
 
-html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal) :where([class*="border-slate-8"], [class*="border-slate-7"]) {
+/* Bordas suaves no modo claro */
+html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal, .app-view, .booking-view, .auth-view) :where(
+  [class*="border-slate-8"],
+  [class*="border-slate-7"],
+  [class*="border-[#0B1120]"],
+  [class*="border-[#121B2E]"],
+  [class*="border-[#0d1118]"]
+):not(.landing-demo-surface):not(.landing-demo-surface *) {
   border-color: #d8e0e8 !important;
+}
+
+/* CARTÃO FIDELIDADE NO TEMA CLARO: visual de cartão dourado premium sobre fundo claro */
+html[data-app-theme="light"] .loyalty-card-widget {
+  background: linear-gradient(135deg, #fffdfa 0%, #ffffff 45%, #fef8ee 100%) !important;
+  border-color: #fde68a !important;
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.08) !important;
+}
+
+html[data-app-theme="light"] .loyalty-card-widget h4 {
+  color: #1e293b !important;
+}
+
+html[data-app-theme="light"] .loyalty-card-widget p,
+html[data-app-theme="light"] .loyalty-card-widget span {
+  color: #475569 !important;
+}
+
+html[data-app-theme="light"] .loyalty-card-widget strong.text-amber-200,
+html[data-app-theme="light"] .loyalty-card-widget strong.text-amber-300 {
+  color: #b45309 !important;
+}
+
+html[data-app-theme="light"] .loyalty-card-widget strong.text-slate-200,
+html[data-app-theme="light"] .loyalty-card-widget strong.text-white {
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .loyalty-card-widget .loyalty-icon-box {
+  background-color: #fef3c7 !important;
+  border-color: #fde68a !important;
+  color: #d97706 !important;
+}
+
+html[data-app-theme="light"] .loyalty-card-widget .loyalty-stamp-empty {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #94a3b8 !important;
+}
+
+html[data-app-theme="light"] .loyalty-card-widget .loyalty-stamp-target {
+  background-color: #fffbeb !important;
+  border-color: #f59e0b !important;
+  color: #d97706 !important;
+}
+
+html[data-app-theme="light"] .loyalty-card-widget .loyalty-stamp-filled {
+  background-color: #fef3c7 !important;
+  border-color: #f59e0b !important;
+  color: #b45309 !important;
+}
+
+html[data-app-theme="light"] .loyalty-card-widget .loyalty-progress-track {
+  background-color: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* FICHA TÉCNICA DO CORTE NO TEMA CLARO: destaque âmbar elegante com alto contraste */
+html[data-app-theme="light"] .client-profile-haircut-card {
+  background: linear-gradient(135deg, #fffbeb 0%, #ffffff 52%, #fff7ed 100%) !important;
+  border-color: #fcd34d !important;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.08) !important;
+}
+
+html[data-app-theme="light"] .client-profile-haircut-card label,
+html[data-app-theme="light"] .client-profile-haircut-card h4 {
+  color: #92400e !important;
+}
+
+html[data-app-theme="light"] .client-profile-haircut-card span.text-amber-300,
+html[data-app-theme="light"] .client-profile-haircut-card span.text-amber-400 {
+  color: #b45309 !important;
+}
+
+html[data-app-theme="light"] .client-profile-haircut-card p {
+  color: #78350f !important;
+}
+
+html[data-app-theme="light"] .client-profile-haircut-card textarea {
+  background-color: #ffffff !important;
+  border-color: #fde68a !important;
+  color: #1e293b !important;
+}
+
+html[data-app-theme="light"] .client-profile-haircut-card textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* MODAL DE FICHA TÉCNICA & HISTÓRICO CRM NO TEMA CLARO */
+html[data-app-theme="light"] .client-profile-modal-shell {
+  background: #ffffff !important;
+  border-color: #dfe5ec !important;
+  box-shadow: 0 25px 70px rgba(15, 23, 42, 0.18) !important;
+}
+
+html[data-app-theme="light"] .client-profile-stat-card {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+html[data-app-theme="light"] .client-profile-stat-card span.text-slate-400 {
+  color: #64748b !important;
+}
+
+html[data-app-theme="light"] .client-profile-stat-card strong.text-white {
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .client-profile-input-card {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+html[data-app-theme="light"] .client-profile-input-card label {
+  color: #334155 !important;
+}
+
+html[data-app-theme="light"] .client-profile-history-item {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+html[data-app-theme="light"] .client-profile-history-item strong.text-white {
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .client-profile-history-item p.text-slate-400 {
+  color: #64748b !important;
 }
 
 /* Cards privados acompanham o tema da barbearia; o Superadmin mantém seu visual. */

@@ -7,10 +7,12 @@ import {
   Building2, Settings, Phone, MapPin, Clock,
   Sparkles, RotateCcw, Check, Copy, ExternalLink, Share2, Smartphone, Download, Upload,
   Palette, BellRing, ShieldCheck, CloudDownload, Loader2, Info, MessageSquareText, Image as ImageIcon, Tv2, Youtube, Music2, Eye, EyeOff, DollarSign, Volume2, CalendarOff, Trash2,
-  Layout, CheckCircle, Flame, Moon, Sun, Monitor, Plus, ArrowUp, ArrowDown, Instagram, Facebook, AtSign, Globe2, MapPinned, LocateFixed, Power
+  Layout, CheckCircle, Flame, Moon, Sun, Monitor, Plus, ArrowUp, ArrowDown, Instagram, Facebook, AtSign, Globe2, MapPinned, LocateFixed, Power,
+  Gift, Award
 } from 'lucide-react';
+import { LoyaltyCardWidget } from '../components/loyalty/LoyaltyCardWidget';
 import { BusinessClosurePeriod, Organization, PublicGalleryImage } from '../types';
-import { AppThemeMode, AppThemePreference } from '../config/theme';
+import { AppThemeMode, AppThemePreference, MODERN_PALETTES, ModernPalette, findModernPalette, applyAppTheme } from '../config/theme';
 import { INITIAL_ORG, INITIAL_SERVICES, INITIAL_BARBERS, INITIAL_APPOINTMENTS } from '../data/mockData';
 import { restoreLastCloudBackup, saveTvSettingsToCloud } from '../services/cloudSync';
 import { enablePushNotifications, getPushSubscriptionState, getPushSupportMessage } from '../services/pushNotifications';
@@ -99,6 +101,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   appThemePreference,
   followSystemTheme,
 }) => {
+  const isLight = appThemeMode === 'light';
   const [name, setName] = useState(org.name);
   const [backupNotice, setBackupNotice] = useState('');
   const [ownerName, setOwnerName] = useState(org.owner_name || '');
@@ -127,8 +130,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [closureEnd, setClosureEnd] = useState(org.close_hour || '20:00');
   const [closureReason, setClosureReason] = useState('Fechado excepcionalmente');
 
-  // A única personalização visual da barbearia é a cor das ações principais.
+  // A personalização visual da barbearia inclui as novas paletas modernas de design.
   const [primaryColor, setPrimaryColor] = useState(org.primary_color || '#10b981');
+  const [themePalette, setThemePalette] = useState<string>(
+    org.theme_palette || findModernPalette(org.primary_color)?.id || 'emerald'
+  );
 
   const [coverImageUrl, setCoverImageUrl] = useState(org.cover_image_url || '');
   const [logoImageUrl, setLogoImageUrl] = useState(org.logo_image_url || '');
@@ -152,6 +158,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [reminderTemplate, setReminderTemplate] = useState(org.whatsapp_reminder_template || 'Olá {cliente}! Passando para lembrar do seu horário na {barbearia} em {data} às {horario}. Serviço: {servico}.');
   const [thanksTemplate, setThanksTemplate] = useState(org.whatsapp_thanks_template || 'Olá {cliente}! Obrigado por escolher a {barbearia}. Foi um prazer atender você. Até a próxima!');
   const [inactiveTemplate, setInactiveTemplate] = useState(org.whatsapp_inactive_template || 'Olá {cliente}! Sentimos sua falta na {barbearia}. Que tal reservar seu próximo horário?');
+  const [loyaltyEnabled, setLoyaltyEnabled] = useState(org.loyalty_enabled !== false);
+  const [loyaltyTargetStamps, setLoyaltyTargetStamps] = useState(org.loyalty_target_stamps || 10);
+  const [loyaltyRewardDescription, setLoyaltyRewardDescription] = useState(org.loyalty_reward_description || '1 Corte Grátis');
   const [savedSuccess, setSavedSuccess] = useState(false);
   const savedSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const publicClipboard = useClipboard();
@@ -191,6 +200,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setRotationEnabled(org.rotation_enabled === true);
     setClosedPeriods(Array.isArray(org.closed_periods) ? org.closed_periods : []);
     setPrimaryColor(org.primary_color || '#10b981');
+    setThemePalette(org.theme_palette || findModernPalette(org.primary_color)?.id || 'emerald');
     setCoverImageUrl(org.cover_image_url || '');
     setLogoImageUrl(org.logo_image_url || '');
     setGalleryImages(sanitizePublicGallery(org.public_gallery));
@@ -211,6 +221,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setReminderTemplate(org.whatsapp_reminder_template || 'Olá {cliente}! Passando para lembrar do seu horário na {barbearia} em {data} às {horario}. Serviço: {servico}.');
     setThanksTemplate(org.whatsapp_thanks_template || 'Olá {cliente}! Obrigado por escolher a {barbearia}. Foi um prazer atender você. Até a próxima!');
     setInactiveTemplate(org.whatsapp_inactive_template || 'Olá {cliente}! Sentimos sua falta na {barbearia}. Que tal reservar seu próximo horário?');
+    setLoyaltyEnabled(org.loyalty_enabled !== false);
+    setLoyaltyTargetStamps(org.loyalty_target_stamps || 10);
+    setLoyaltyRewardDescription(org.loyalty_reward_description || '1 Corte Grátis');
   }, [org]);
 
   useEffect(() => {
@@ -253,10 +266,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     rotation_enabled: rotationEnabled,
     closed_periods: periods,
     primary_color: primaryColor,
+    theme_palette: themePalette,
     cover_image_url: coverImageUrl.trim() || undefined,
     logo_image_url: logoImageUrl.trim() || undefined,
     public_gallery: sanitizePublicGallery(galleryImages),
     social_links: sanitizeSocialLinks(socialLinks),
+    loyalty_enabled: loyaltyEnabled,
+    loyalty_target_stamps: loyaltyTargetStamps,
+    loyalty_reward_description: loyaltyRewardDescription.trim() || undefined,
     tv_enabled: tvEnabled,
     tv_youtube_url: tvMediaType === 'youtube' ? (tvMediaUrl.trim() || undefined) : undefined,
     tv_media_type: tvMediaType,
@@ -278,7 +295,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const autoSaveFingerprint = JSON.stringify([
     name, ownerName, slug, phone, pixKey, pixHolder, address, city, state, neighborhood, directoryVisible, directoryLatitude, directoryLongitude,
     openHour, closeHour, breakEnabled, breakStart, breakEnd, rotationEnabled, closedPeriods,
-    primaryColor, coverImageUrl, logoImageUrl, galleryImages, socialLinks,
+    primaryColor, themePalette, coverImageUrl, logoImageUrl, galleryImages, socialLinks,
+    loyaltyEnabled, loyaltyTargetStamps, loyaltyRewardDescription,
     tvEnabled, tvMediaType, tvMediaUrl, tvVisualMode, tvAnimations, tvNotice,
     tvShowClientNames, tvShowPrices, tvSoundEnabled, tvSoundVolume, tvSoundStyle,
     confirmTemplate, reminderTemplate, thanksTemplate, inactiveTemplate,
@@ -616,21 +634,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {section === 'appearance' && (
-          <div className="bg-[#121B2E] border border-slate-800 p-5 sm:p-7 rounded-3xl space-y-7 shadow-xl">
-            <div className="flex items-start gap-3 border-b border-slate-800 pb-5">
+          <div className={`${isLight ? 'bg-white border-slate-200 text-slate-800' : 'bg-[#121B2E] border-slate-800 text-white'} border p-5 sm:p-7 rounded-3xl space-y-7 shadow-xl`}>
+            <div className={`flex items-start gap-3 border-b ${isLight ? 'border-slate-200' : 'border-slate-800'} pb-5`}>
               <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
                 <Palette className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white tracking-tight">Aparência simples e consistente</h3>
-                <p className="text-xs text-slate-400 mt-0.5">O AgendAI usa somente os temas claro e escuro. A única personalização da barbearia é a cor dos botões principais.</p>
+                <h3 className={`text-base font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>Aparência simples e consistente</h3>
+                <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>O AgendAI usa os temas claro e escuro. Personalize também com as novas paletas de estilo modernas.</p>
               </div>
             </div>
 
             <section className="space-y-3">
               <div className="flex items-center gap-2">
                 <Layout className="w-4 h-4 text-emerald-400" />
-                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Tema do sistema</h4>
+                <h4 className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Tema do sistema</h4>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
@@ -646,68 +664,279 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       onClick={() => mode === 'system' ? followSystemTheme() : setAppThemeMode(mode)}
                       aria-pressed={active}
                       className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition-all ${
-                        active ? 'border-emerald-400 bg-emerald-500/10 ring-1 ring-emerald-400/30' : 'border-slate-800 bg-[#0B1120] hover:border-slate-700'
+                        active
+                          ? 'border-emerald-400 bg-emerald-500/10 ring-1 ring-emerald-400/30'
+                          : isLight
+                            ? 'border-slate-200 bg-slate-50/80 hover:bg-slate-100 hover:border-slate-300'
+                            : 'border-slate-800 bg-[#0B1120] hover:border-slate-700'
                       }`}
                     >
                       <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${mode === 'dark' ? 'bg-slate-800 text-slate-100' : mode === 'light' ? 'bg-slate-100 text-slate-900' : 'bg-[linear-gradient(135deg,#f8fafc_50%,#0f172a_50%)] text-slate-700 ring-1 ring-slate-300 shadow-inner'}`}>
                         <Icon className="w-5 h-5" />
                       </span>
                       <span>
-                        <strong className="block text-sm text-white">{title}</strong>
-                        <span className="block mt-0.5 text-xs text-slate-400">{description}</span>
+                        <strong className={`block text-sm ${isLight ? 'text-slate-900' : 'text-white'}`}>{title}</strong>
+                        <span className={`block mt-0.5 text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{description}</span>
                       </span>
                       {active && <Check className="ml-auto w-5 h-5 text-emerald-400" />}
                     </button>
                   );
                 })}
               </div>
-              <p className="text-[11px] text-slate-500">No modo automático, cada aparelho acompanha sua própria configuração de aparência.</p>
+              <p className={`text-[11px] ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>No modo automático, cada aparelho acompanha sua própria configuração de aparência.</p>
             </section>
 
-            <section className="space-y-3 pt-5 border-t border-slate-800">
+            <section className={`space-y-3 pt-5 border-t ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-cyan-300" />
-                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Animações</h4>
+                <Sparkles className="w-4 h-4 text-cyan-400" />
+                <h4 className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Animações</h4>
               </div>
               <MotionPreference />
             </section>
 
-            <section className="space-y-3 pt-5 border-t border-slate-800">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Cor dos botões principais</h4>
+            {/* PALETAS DE DESIGN MODERNAS */}
+            <section className={`space-y-4 pt-5 border-t ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <h4 className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-slate-800' : 'text-slate-300'}`}>Paletas de Design Modernas</h4>
+                </div>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-cyan-400/10 text-cyan-400 border border-cyan-400/20">
+                  Estilo Visual Novo
+                </span>
               </div>
-              <div className="flex flex-wrap gap-3" role="radiogroup" aria-label="Cor dos botões principais">
-                {[
-                  { name: 'Azul', value: '#2296F3' },
-                  { name: 'Amarelo', value: '#FFD21F' },
-                  { name: 'Rosa', value: '#F91882' },
-                  { name: 'Roxo', value: '#7255F6' },
-                  { name: 'Laranja', value: '#FF7A00' },
-                  { name: 'Verde', value: '#10B981' },
-                ].map(({ name, value }) => {
-                  const active = primaryColor.toLowerCase() === value.toLowerCase();
+              <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                Selecione uma das paletas modernas inspiradas em gradientes de alta tecnologia. Elas personalizam botões, badges, bordas e destaques do AgendAI:
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5" role="radiogroup" aria-label="Paletas de Design Modernas">
+                {MODERN_PALETTES.map((palette) => {
+                  const isSelected = (themePalette === palette.id) || (!themePalette && primaryColor.toLowerCase() === palette.primary.toLowerCase());
                   return (
                     <button
-                      key={value}
+                      key={palette.id}
                       type="button"
-                      title={name}
-                      aria-label={`Usar ${name} nos botões principais`}
-                      aria-pressed={active}
+                      role="radio"
+                      aria-checked={isSelected}
                       onClick={() => {
-                        setPrimaryColor(value);
+                        setPrimaryColor(palette.primary);
+                        setThemePalette(palette.id);
+                        applyAppTheme(appThemeMode, palette.primary, palette.id);
                       }}
-                      className={`flex h-12 w-12 items-center justify-center rounded-full border-4 transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-white/70 ${
-                        active ? 'border-white scale-105 shadow-lg' : 'border-transparent'
+                      className={`group relative flex flex-col p-4 rounded-3xl border text-left transition-all duration-200 outline-none ${
+                        isSelected
+                          ? isLight
+                            ? 'bg-white shadow-xl ring-2 scale-[1.02]'
+                            : 'bg-[#121B2E] shadow-xl ring-2 scale-[1.02]'
+                          : isLight
+                            ? 'bg-slate-50/90 border-slate-200 hover:border-slate-300 hover:bg-white hover:shadow-md'
+                            : 'bg-[#0B1120] border-slate-800 hover:border-slate-700 hover:bg-[#121B2E]/60'
                       }`}
-                      style={{ backgroundColor: value }}
+                      style={{
+                        boxShadow: isSelected ? `0 12px 28px -4px ${palette.primary}33` : undefined,
+                        borderColor: isSelected ? palette.primary : undefined,
+                      }}
                     >
-                      {active && <Check className="w-6 h-6" style={{ color: getReadableTextColor(value) }} />}
+                      {/* Top Header */}
+                      <div className="flex items-center justify-between mb-3 w-full">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h5 className={`text-sm font-black tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>{palette.name}</h5>
+                            {palette.badge && (
+                              <span
+                                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                                style={{
+                                  backgroundColor: `${palette.primary}20`,
+                                  color: palette.colors[1] || palette.primary,
+                                  border: `1px solid ${palette.primary}40`,
+                                }}
+                              >
+                                {palette.badge}
+                              </span>
+                            )}
+                          </div>
+                          <p className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{palette.tagline}</p>
+                        </div>
+                        <div
+                          className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                            isSelected
+                              ? 'shadow-md scale-110'
+                              : isLight
+                                ? 'bg-slate-200/80 text-transparent border border-slate-300 group-hover:border-slate-400'
+                                : 'bg-slate-800/60 text-transparent border border-slate-700 group-hover:border-slate-500'
+                          }`}
+                          style={isSelected ? { backgroundColor: palette.primary, color: getReadableTextColor(palette.primary) } : undefined}
+                        >
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        </div>
+                      </div>
+
+                      {/* Swatches Capsule */}
+                      <div className={`w-full rounded-2xl p-2.5 flex items-center justify-center gap-2 border shadow-inner mb-2.5 ${
+                        isLight
+                          ? 'bg-slate-100/90 border-slate-200'
+                          : 'bg-black/35 border-white/10'
+                      }`}>
+                        {palette.colors.map((hex, idx) => (
+                          <span
+                            key={idx}
+                            title={hex}
+                            className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 transition-transform group-hover:scale-110 shrink-0 ${
+                              isLight ? 'border-white shadow-sm' : 'border-white/20 shadow-md'
+                            }`}
+                            style={{ backgroundColor: hex }}
+                          />
+                        ))}
+                      </div>
+
+                      {/* Hex Codes Pill */}
+                      <div className={`w-full rounded-xl px-2.5 py-1 flex items-center justify-between text-[10px] font-mono font-medium border mb-2.5 ${
+                        isLight
+                          ? 'bg-slate-100/80 text-slate-600 border-slate-200'
+                          : 'bg-black/20 text-slate-300 border-white/5'
+                      }`}>
+                        {palette.colors.map((hex, idx) => (
+                          <span key={idx}>{hex.replace('#', '')}</span>
+                        ))}
+                      </div>
+
+                      {/* Blended Gradient Capsule Bar */}
+                      <div
+                        className={`w-full h-3.5 sm:h-4 rounded-full shadow-inner ${
+                          isLight ? 'border border-black/5 shadow-sm' : 'border border-white/15'
+                        }`}
+                        style={{ background: palette.gradient }}
+                      />
                     </button>
                   );
                 })}
               </div>
-              <p className="text-[11px] text-slate-500">Aplicada nos botões, ações e destaques. Ela não altera o tema geral do sistema.</p>
+
+              {/* LIVE PREVIEW BANNER */}
+              <div className={`mt-4 p-4 rounded-2xl border space-y-3 ${
+                isLight
+                  ? 'bg-slate-50 border-slate-200 shadow-sm'
+                  : 'bg-[#0B1120] border-slate-800/80'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className={`text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                    <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                    Pré-visualização do tema selecionado
+                  </span>
+                  <span className={`text-[11px] font-mono ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                    Cor principal: <strong className={isLight ? 'text-slate-900' : 'text-white'}>{primaryColor.toUpperCase()}</strong>
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <button
+                    type="button"
+                    className="brand-button-primary px-4 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-2 transition-transform hover:scale-102"
+                  >
+                    <Check className="w-4 h-4" />
+                    Ação Principal (Cor 1 & 2)
+                  </button>
+                  <button
+                    type="button"
+                    className="brand-button-soft px-3.5 py-2 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5"
+                  >
+                    Sub-ação (Cor 3)
+                  </button>
+                  <span
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border"
+                    style={{
+                      backgroundColor: isLight ? 'color-mix(in srgb, var(--brand-accent) 12%, #fff)' : 'color-mix(in srgb, var(--brand-highlight, #fff) 18%, transparent)',
+                      color: isLight ? 'color-mix(in srgb, var(--brand-accent) 80%, #0f172a)' : 'var(--brand-highlight, #fff)',
+                      borderColor: isLight ? 'color-mix(in srgb, var(--brand-accent) 26%, #cbd5e1)' : 'color-mix(in srgb, var(--brand-highlight, #fff) 35%, transparent)',
+                    }}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Tag Suave (Cor 4)
+                  </span>
+                  <span className="brand-gradient-text text-sm font-black tracking-tight ml-auto">
+                    Gradiente das 4 Cores ✨
+                  </span>
+                </div>
+              </div>
+
+              {/* CORES CLÁSSICAS & PERSONALIZADA */}
+              <div className={`pt-4 border-t ${isLight ? 'border-slate-200' : 'border-slate-800/60'} space-y-3`}>
+                <div className="flex items-center justify-between">
+                  <h5 className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-400'}`}>Cores Clássicas ou Personalizada</h5>
+                  <span className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-500'}`}>Prefere um tom sólido específico?</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-3" role="radiogroup" aria-label="Cores sólidas">
+                  {[
+                    { name: 'Azul', value: '#2296F3' },
+                    { name: 'Amarelo', value: '#FFD21F' },
+                    { name: 'Rosa', value: '#F91882' },
+                    { name: 'Roxo', value: '#7255F6' },
+                    { name: 'Laranja', value: '#FF7A00' },
+                    { name: 'Verde', value: '#10B981' },
+                  ].map(({ name, value }) => {
+                    const active = primaryColor.toLowerCase() === value.toLowerCase() && (!themePalette || themePalette === 'custom');
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        title={name}
+                        aria-label={`Usar ${name} nos botões principais`}
+                        aria-pressed={active}
+                        onClick={() => {
+                          setPrimaryColor(value);
+                          setThemePalette('custom');
+                          applyAppTheme(appThemeMode, value, 'custom');
+                        }}
+                        className={`flex h-10 w-10 items-center justify-center rounded-full border-4 transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-white/70 ${
+                          active
+                            ? isLight ? 'border-slate-800 scale-105 shadow-lg' : 'border-white scale-105 shadow-lg'
+                            : 'border-transparent'
+                        }`}
+                        style={{ backgroundColor: value }}
+                      >
+                        {active && <Check className="w-5 h-5" style={{ color: getReadableTextColor(value) }} />}
+                      </button>
+                    );
+                  })}
+
+                  {/* Custom Hex Input */}
+                  <div className={`flex items-center gap-2 pl-2 border-l ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
+                    <label htmlFor="custom-color-picker" className={`text-xs font-mono ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                      Hex:
+                    </label>
+                    <input
+                      id="custom-color-picker"
+                      type="color"
+                      value={primaryColor.startsWith('#') && primaryColor.length === 7 ? primaryColor : '#10b981'}
+                      onChange={(e) => {
+                        setPrimaryColor(e.target.value);
+                        setThemePalette('custom');
+                        applyAppTheme(appThemeMode, e.target.value, 'custom');
+                      }}
+                      className={`w-9 h-9 rounded-xl border bg-transparent cursor-pointer ${isLight ? 'border-slate-300' : 'border-slate-700'}`}
+                      title="Escolher cor personalizada"
+                    />
+                    <input
+                      type="text"
+                      value={primaryColor}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPrimaryColor(val);
+                        if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+                          setThemePalette('custom');
+                          applyAppTheme(appThemeMode, val, 'custom');
+                        }
+                      }}
+                      placeholder="#10B981"
+                      maxLength={7}
+                      className={`w-24 border rounded-xl px-2.5 py-1.5 text-xs font-mono uppercase focus:outline-none ${
+                        isLight
+                          ? 'bg-white border-slate-300 text-slate-900 focus:border-cyan-600'
+                          : 'bg-[#0B1120] border-slate-800 text-white focus:border-cyan-400'
+                      }`}
+                    />
+                  </div>
+                </div>
+              </div>
             </section>
           </div>
         )}
@@ -891,6 +1120,84 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label htmlFor="settings-field-9" className="block text-xs font-semibold text-slate-300 mb-1.5">Titular do Pix</label>
               <input id="settings-field-9" type="text" value={pixHolder} onChange={(e) => setPixHolder(e.target.value)} placeholder={name || 'Nome do estabelecimento'} className="w-full bg-slate-900 border border-slate-700/70 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" />
             </div>
+          </div>
+
+          {/* PROGRAMA DE CARTÃO FIDELIDADE DIGITAL */}
+          <div className="bg-[#0B1120] p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-4">
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-amber-400/25 bg-amber-400/5 p-4">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-300">
+                    <Gift className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <strong className="block text-sm text-white">Cartão Fidelidade Digital ("A cada X cortes ganhe 1 grátis")</strong>
+                    <span className="block text-xs text-slate-400 mt-0.5">
+                      Carimba automaticamente o cartão do cliente ao concluir cada atendimento e libera o prêmio configurado.
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <SettingsToggle 
+                checked={loyaltyEnabled} 
+                onClick={() => setLoyaltyEnabled((value) => !value)} 
+                label="Cartão Fidelidade Digital" 
+              />
+            </div>
+
+            {loyaltyEnabled && (
+              <div className="space-y-4 pt-1 animate-fadeIn">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <Award className="w-3.5 h-3.5 text-amber-400" />
+                      Meta de Carimbos (Cortes para o prêmio)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {[5, 8, 10, 12].map((num) => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => setLoyaltyTargetStamps(num)}
+                          className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
+                            loyaltyTargetStamps === num
+                              ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md shadow-amber-400/20'
+                              : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                          }`}
+                        >
+                          {num} cortes
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <Gift className="w-3.5 h-3.5 text-emerald-400" />
+                      Nome da Recompensa
+                    </label>
+                    <input
+                      type="text"
+                      value={loyaltyRewardDescription}
+                      onChange={(e) => setLoyaltyRewardDescription(e.target.value)}
+                      placeholder="Ex: 1 Corte Grátis ou Barba Grátis"
+                      className="w-full bg-slate-900 border border-slate-700/70 rounded-xl px-4 py-2.5 text-xs text-white focus:border-emerald-500 focus:outline-none"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">Exibido nos cartões dos clientes e na página pública de agendamento.</p>
+                  </div>
+                </div>
+
+                {/* PRÉVIA DO CARTÃO FIDELIDADE */}
+                <div className="pt-2 border-t border-slate-800/80">
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Prévia do Cartão Digital</p>
+                  <LoyaltyCardWidget
+                    client={{ name: 'Cliente Demonstração', loyalty_stamps: Math.min(3, loyaltyTargetStamps - 1), total_visits: 3 }}
+                    org={{ loyalty_enabled: loyaltyEnabled, loyalty_target_stamps: loyaltyTargetStamps, loyalty_reward_description: loyaltyRewardDescription }}
+                    compact
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="bg-[#0B1120] p-3.5 sm:p-4 rounded-2xl border border-slate-800 space-y-4">

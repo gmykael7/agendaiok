@@ -30,6 +30,8 @@ import { LandingPromoVideo } from '../components/common/LandingPromoVideo';
 import { PublicThemeToggle } from '../components/common/PublicThemeToggle';
 import { PageSeo } from '../components/common/PageSeo';
 import type { AppThemeMode } from '../config/theme';
+import { TEAM_UPGRADE_URL } from '../config/urls';
+import { TEAM_PLAN_PRICE_LABEL } from '../utils/tenantPlan';
 
 interface LandingViewProps {
   onLogin: () => void;
@@ -122,7 +124,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onLogin, onRegister, a
         url: 'https://meuagendai.fun/',
         description: 'Plataforma de gestão e agendamento online para barbearias.',
         inLanguage: 'pt-BR',
-        offers: { '@type': 'Offer', price: '0', priceCurrency: 'BRL', description: 'Teste gratuito por 15 dias.' },
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'BRL', description: 'Grátis para 1 barbeiro, sem prazo de teste. Equipes com 2 ou mais profissionais precisam de um plano pago.' },
       }}
     />
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -193,7 +195,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onLogin, onRegister, a
               onClick={onRegister}
               className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl border border-[#FFE071]/70 bg-[#FFC400] px-6 py-3.5 text-sm font-black text-[#07111F] shadow-[0_16px_36px_rgba(255,196,0,0.2)] transition hover:bg-[#FFD333] active:scale-[.98]"
             >
-              Criar minha conta <ArrowRight className="h-4 w-4" />
+              Começar grátis <ArrowRight className="h-4 w-4" />
             </button>
             <a href="/barbearias" className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/[0.045] px-6 py-3.5 text-sm font-bold text-white transition hover:border-white/30 hover:bg-white/[0.08] active:scale-[.98]">Encontrar uma barbearia <MapPin className="h-4 w-4" /></a>
             <button
@@ -204,6 +206,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ onLogin, onRegister, a
               Já tenho uma conta
             </button>
           </div>
+
+          <p className="mt-4 text-sm font-semibold text-slate-300">Grátis para 1 barbeiro, sem prazo de teste. Com 2 ou mais, {TEAM_PLAN_PRICE_LABEL} para toda a equipe.</p>
 
           <div className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-[11px] font-medium text-slate-400">
             {['Acesso pelo celular', 'Página própria', 'Dados sincronizados'].map((item) => (
@@ -302,7 +306,11 @@ export const LandingView: React.FC<LandingViewProps> = ({ onLogin, onRegister, a
           <div className="relative">
             <BadgeCheck className="mx-auto h-9 w-9 text-[#FFC400]" />
             <h2 className="font-display mx-auto mt-4 max-w-2xl text-3xl font-normal tracking-[-0.035em] text-white sm:text-4xl">Pronto para modernizar sua barbearia?</h2>
-            <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-slate-400">Crie sua conta, configure seu espaço e comece a organizar seus atendimentos.</p>
+            <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-slate-400">Comece grátis com 1 barbeiro, sem prazo de teste. Ative um plano pago quando sua equipe crescer.</p>
+            <div className="mx-auto mt-6 grid max-w-2xl gap-3 text-left sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><p className="text-sm font-bold text-white">Individual</p><p className="mt-2 text-2xl font-black text-white">Grátis</p><p className="mt-2 text-xs leading-relaxed text-slate-400">1 barbeiro ativo, sem prazo de teste.</p></div>
+              <div className="rounded-2xl border border-[#FFC400]/35 bg-[#FFC400]/[0.04] p-5"><p className="text-sm font-bold text-[#FFD84A]">Equipe</p><p className="mt-2 text-2xl font-black text-white">{TEAM_PLAN_PRICE_LABEL}</p><p className="mt-2 text-xs leading-relaxed text-slate-400">2 ou mais barbeiros. Um valor mensal para toda a equipe.</p><a href={TEAM_UPGRADE_URL} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-11 items-center gap-2 text-xs font-bold text-[#FFD84A]">Ativar pelo WhatsApp <ArrowRight className="h-4 w-4" /></a></div>
+            </div>
             <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
               <button type="button" onClick={onRegister} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[#FFE071]/70 bg-[#FFC400] px-6 text-sm font-black text-[#07111F] transition hover:bg-[#FFD333]">
                 Criar conta agora <ArrowRight className="h-4 w-4" />

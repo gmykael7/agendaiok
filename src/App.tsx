@@ -20,12 +20,13 @@ import { Header } from './components/layout/Header';
 import { PlatformNotices } from './components/common/PlatformNotices';
 import { LoadingState } from './components/common/LoadingState';
 import { readStoredArray, safeSetItem } from './utils/storage';
-import { motionAllowed } from './utils/motion';
+import { motionAllowed } from './utils/motionPref';
 import { setAgendaFocus } from './utils/agendaFocus';
 import { OwnerAssistant } from './components/common/OwnerAssistant';
 import { bookingSlugFromLocation, isPublicBookingLocation } from './utils/routes';
 import { useClipboard } from './hooks/useClipboard';
 import { Modal } from './components/common/Modal';
+import { PwaInstallBanner } from './components/common/PwaInstallBanner';
 
 const DashboardView = lazy(() => import('./views/DashboardView').then(m => ({ default: m.DashboardView })));
 const AtendimentosView = lazy(() => import('./views/AtendimentosView').then(m => ({ default: m.AtendimentosView })));
@@ -67,6 +68,7 @@ import { BrandLoader } from './components/common/AppLoader';
 import { OnboardingChecklist } from './components/common/OnboardingChecklist';
 import { AgencyCredit } from './components/common/AgencyCredit';
 import { dedupeClients, upsertClient } from './utils/clients';
+import { addLoyaltyStampToClient } from './utils/loyalty';
 import { getAdminAppUrl } from './config/urls';
 import { getLocalDateKey } from './utils/scheduling';
 import { AppThemeMode, AppThemePreference, applyAppTheme, readStoredAppThemeMode, readStoredAppThemePreference, resolveSystemThemeMode, APP_THEME_STORAGE_KEY } from './config/theme';
@@ -622,7 +624,7 @@ export default function App() {
     // Landing e diretório são experiências da plataforma, com tema único para clientes.
     // Apenas a página de uma barbearia pode usar sua cor principal nos destaques.
     const themedOrg = isClientRoute ? publicOrgData : (isDirectoryRoute || !isLoggedIn ? null : org);
-    applyAppTheme(appThemeMode, themedOrg?.primary_color || '#10B981');
+    applyAppTheme(appThemeMode, themedOrg?.primary_color || '#10B981', themedOrg?.theme_palette);
   }, [appThemeMode, org, publicOrgData, isClientRoute, isDirectoryRoute]);
 
   // No modo automático, acompanha a preferência do sistema inclusive quando ela
@@ -1198,7 +1200,11 @@ export default function App() {
         price: serviceTotal, status: 'completed', payment_method: payment, date, created_at: nowIso,
       };
       setAppointments(current => current.some(item => item.id === appointmentId) ? current.map(item => item.id === appointmentId ? { ...item, ...serviceAppointment } : item) : [serviceAppointment, ...current]);
-      setClients(current => upsertClient(current, { name: command.client_name, phone: command.client_phone || '', org_id: org.id, visitDelta: 1, spentDelta: serviceTotal, lastVisit: 'Hoje' }).map(client => client.phone === command.client_phone || (!command.client_phone && client.name === command.client_name) ? { ...client, loyalty_points: Number(client.loyalty_points || 0) + 10 } : client));
+      setClients(current => upsertClient(current, { name: command.client_name, phone: command.client_phone || '', org_id: org.id, visitDelta: 1, spentDelta: serviceTotal, lastVisit: 'Hoje' }).map(client => {
+        const isMatch = client.phone === command.client_phone || (!command.client_phone && client.name === command.client_name);
+        if (!isMatch) return client;
+        return addLoyaltyStampToClient(client, org).updatedClient;
+      }));
     }
     if (productTotal > 0) {
       const saleId = `cmd-product-${command.id}`;
@@ -1286,6 +1292,23 @@ export default function App() {
 
     setSyncStatusMsg(`⚠️ ${result.error || 'Não foi possível concluir a conciliação.'} Suas alterações continuam neste aparelho.`);
   };
+
+  const handleRefreshPublicAppointments = useCallback(async () => {
+    const slug = isClientRoute ? publicRouteSlug : (org?.slug || '');
+    if (!slug) return;
+    try {
+      const freshData = await loadBarbershopFromCloud(slug);
+      if (freshData) {
+        if (isClientRoute) {
+          setPublicCloudData(freshData);
+        } else if (Array.isArray(freshData.appointments)) {
+          setAppointments(freshData.appointments);
+        }
+      }
+    } catch (e) {
+      console.debug('Falha ao atualizar agendamentos da nuvem:', e);
+    }
+  }, [isClientRoute, publicRouteSlug, org?.slug]);
 
   const handleAddAppointment = useCallback((newApp: Omit<Appointment, 'id'> & { id?: string }) => {
     if (isClientRoute) {
@@ -1561,6 +1584,7 @@ export default function App() {
           products={isClientRoute ? publicCloudData?.products || [] : products}
           onProductsChanged={isClientRoute ? items => setPublicCloudData(current => current ? { ...current, products: items } : current) : setProducts}
           onAddAppointment={handleAddAppointment}
+          onRefreshAppointments={handleRefreshPublicAppointments}
           onAddWaitlist={(entry) => setWaitlist(prev => [entry, ...prev])}
           onBackToAdmin={isLoggedIn && org ? () => {
             if (isClientRoute) {
@@ -1574,6 +1598,7 @@ export default function App() {
           appThemeMode={appThemeMode}
           onThemeModeChange={setAppThemeMode}
         />
+        <PwaInstallBanner />
       </main>
     );
   }
@@ -1593,7 +1618,12 @@ export default function App() {
   // 2. TELA DE AUTENTICAÇÃO (ACESSO RESTRITO - LOGIN OBRIGATÓRIO)
   if (!isLoggedIn || !org) {
     if (authEntry === 'landing') {
-      return <LandingView onLogin={() => openAuthEntry('login')} onRegister={() => openAuthEntry('register')} appThemeMode={appThemeMode} onThemeModeChange={setAppThemeMode} />;
+      return (
+        <>
+          <LandingView onLogin={() => openAuthEntry('login')} onRegister={() => openAuthEntry('register')} appThemeMode={appThemeMode} onThemeModeChange={setAppThemeMode} />
+          <PwaInstallBanner />
+        </>
+      );
     }
 
     return (
@@ -1606,6 +1636,7 @@ export default function App() {
           initialMode={authEntry}
           onBack={closeAuthEntry}
         />
+        <PwaInstallBanner />
       </div>
     );
   }
@@ -1777,6 +1808,7 @@ export default function App() {
                 services={services}
                 barbers={barbers}
                 org={org}
+                clients={clients}
                 setClients={setClients}
                 onOpenCommand={handleOpenAppointmentCommand}
               />
@@ -1792,6 +1824,8 @@ export default function App() {
                 setOrg={setOrg as React.Dispatch<React.SetStateAction<Organization>>}
                 waitlist={waitlist}
                 setWaitlist={setWaitlist}
+                clients={clients}
+                setClients={setClients}
               />
             )}
 
@@ -1888,6 +1922,8 @@ export default function App() {
       />
 
       <OwnerAssistant open={ownerAssistantOpen} onOpenChange={setOwnerAssistantOpen} onNavigate={navigateToTab} />
+
+      <PwaInstallBanner />
 
       {/* MODAL DE SINCRONIZAÇÃO ENTRE DISPOSITIVOS */}
       {showSyncModal && (

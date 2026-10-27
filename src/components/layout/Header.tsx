@@ -160,7 +160,7 @@ export const Header: React.FC<HeaderProps> = ({
             {org?.logo_image_url ? (
               <>
                 <BrandLogo variant="mark" className="w-full h-full p-1" alt="" />
-                <img src={org.logo_image_url} alt={`Logo ${establishmentName}`} className="profile-avatar absolute inset-0" onError={({ currentTarget }) => { currentTarget.style.display = 'none'; }} />
+                <img src={org.logo_image_url} alt={`Logo ${establishmentName}`} loading="lazy" decoding="async" className="profile-avatar absolute inset-0" onError={({ currentTarget }) => { currentTarget.style.display = 'none'; }} />
               </>
             ) : (
               <BrandLogo variant="mark" className="w-full h-full" />

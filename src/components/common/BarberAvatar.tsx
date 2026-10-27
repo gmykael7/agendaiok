@@ -36,6 +36,8 @@ export const BarberAvatar: React.FC<BarberAvatarProps> = ({
       <img
         src={avatarUrl}
         alt={name}
+        loading="lazy"
+        decoding="async"
         onError={() => setImageError(true)}
         className={`${sizeClasses[size]} profile-avatar object-cover object-center border border-slate-700 shadow shrink-0 ${className}`}
       />

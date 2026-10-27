@@ -1,17 +1,19 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, lazy, Suspense } from 'react';
 import { 
   Settings, Users, Scissors, Building2, Palette,
   ShieldCheck, Boxes, MessageSquare
 } from 'lucide-react';
 import { Organization, Service, Barber, Appointment, CurrentUser, Product, ProductSale } from '../types';
-import { TeamView } from './TeamView';
-import { ServicesView } from './ServicesView';
-import { SettingsView } from './SettingsView';
-import { UsersPermissionsView } from './UsersPermissionsView';
-import { ProductsView } from './ProductsView';
-import { WhatsAppSettingsSection } from '../components/settings/WhatsAppSettingsSection';
-import { INITIAL_ORG, INITIAL_SERVICES, INITIAL_BARBERS, INITIAL_APPOINTMENTS } from '../data/mockData';
+import { LoadingState } from '../components/common/LoadingState';
 import { AppThemeMode, AppThemePreference } from '../config/theme';
+
+const TeamView = lazy(() => import('./TeamView').then(m => ({ default: m.TeamView })));
+const ServicesView = lazy(() => import('./ServicesView').then(m => ({ default: m.ServicesView })));
+const SettingsView = lazy(() => import('./SettingsView').then(m => ({ default: m.SettingsView })));
+const UsersPermissionsView = lazy(() => import('./UsersPermissionsView').then(m => ({ default: m.UsersPermissionsView })));
+const ProductsView = lazy(() => import('./ProductsView').then(m => ({ default: m.ProductsView })));
+const WhatsAppSettingsSection = lazy(() => import('../components/settings/WhatsAppSettingsSection').then(m => ({ default: m.WhatsAppSettingsSection })));
+
 
 type SettingsSubTab = 'team' | 'services' | 'products' | 'general' | 'appearance' | 'users' | 'whatsapp';
 
@@ -228,66 +230,69 @@ export const AjustesView: React.FC<AjustesViewProps> = ({
 
       {/* CONTEÚDO DA SUB-ABA */}
       <div ref={contentRef} className="pt-2">
-        {subTab === 'team' && (
-          <TeamView
-            barbers={barbers}
-            setBarbers={setBarbers}
-            appointments={appointments}
-          />
-        )}
+        <Suspense fallback={<LoadingState />}>
+          {subTab === 'team' && (
+            <TeamView
+              org={org}
+              barbers={barbers}
+              setBarbers={setBarbers}
+              appointments={appointments}
+            />
+          )}
 
-        {subTab === 'services' && (
-          <ServicesView
-            services={services}
-            setServices={setServices}
-          />
-        )}
+          {subTab === 'services' && (
+            <ServicesView
+              services={services}
+              setServices={setServices}
+            />
+          )}
 
-        {subTab === 'products' && currentUser?.permissions?.products !== false && (
-          <ProductsView
-            org={org}
-            products={products}
-            setProducts={setProducts}
-            productSales={productSales}
-            setProductSales={setProductSales}
-          />
-        )}
+          {subTab === 'products' && currentUser?.permissions?.products !== false && (
+            <ProductsView
+              org={org}
+              products={products}
+              setProducts={setProducts}
+              productSales={productSales}
+              setProductSales={setProductSales}
+            />
+          )}
 
-        {subTab === 'users' && currentUser?.permissions?.usuarios !== false && (
-          <UsersPermissionsView barbers={barbers} currentUser={currentUser} />
-        )}
+          {subTab === 'users' && currentUser?.permissions?.usuarios !== false && (
+            <UsersPermissionsView barbers={barbers} currentUser={currentUser} />
+          )}
 
-        {subTab === 'general' && (
-          <SettingsView
-            section="general"
-            org={org}
-            setOrg={setOrg}
-            onLoadDemo={onLoadDemo}
-            onResetAll={onResetAll}
-            appThemeMode={appThemeMode}
-            setAppThemeMode={setAppThemeMode}
-            appThemePreference={appThemePreference}
-            followSystemTheme={followSystemTheme}
-          />
-        )}
+          {subTab === 'general' && (
+            <SettingsView
+              section="general"
+              org={org}
+              setOrg={setOrg}
+              onLoadDemo={onLoadDemo}
+              onResetAll={onResetAll}
+              appThemeMode={appThemeMode}
+              setAppThemeMode={setAppThemeMode}
+              appThemePreference={appThemePreference}
+              followSystemTheme={followSystemTheme}
+            />
+          )}
 
-        {subTab === 'appearance' && (
-          <SettingsView
-            section="appearance"
-            org={org}
-            setOrg={setOrg}
-            onLoadDemo={onLoadDemo}
-            onResetAll={onResetAll}
-            appThemeMode={appThemeMode}
-            setAppThemeMode={setAppThemeMode}
-            appThemePreference={appThemePreference}
-            followSystemTheme={followSystemTheme}
-          />
-        )}
+          {subTab === 'appearance' && (
+            <SettingsView
+              section="appearance"
+              org={org}
+              setOrg={setOrg}
+              onLoadDemo={onLoadDemo}
+              onResetAll={onResetAll}
+              appThemeMode={appThemeMode}
+              setAppThemeMode={setAppThemeMode}
+              appThemePreference={appThemePreference}
+              followSystemTheme={followSystemTheme}
+            />
+          )}
 
-        {subTab === 'whatsapp' && (
-          <WhatsAppSettingsSection org={org} setOrg={setOrg} />
-        )}
+          {subTab === 'whatsapp' && (
+            <WhatsAppSettingsSection org={org} setOrg={setOrg} />
+          )}
+        </Suspense>
       </div>
     </div>
   );

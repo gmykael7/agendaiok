@@ -43,8 +43,8 @@ const containsName = (text: string, name: string): boolean => {
   const target = words(name);
   return Boolean(target) && ` ${words(text)} `.includes(` ${target} `);
 };
-export const assistantToday = (now = new Date()): string => new Intl.DateTimeFormat('en-CA', {
-  timeZone: ASSISTANT_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+export const assistantToday = (now = new Date(), timeZone = ASSISTANT_TIME_ZONE): string => new Intl.DateTimeFormat('en-CA', {
+  timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(now);
 export const assistantAddDays = (date: string, days: number): string => {
   const value = new Date(`${date}T12:00:00Z`);

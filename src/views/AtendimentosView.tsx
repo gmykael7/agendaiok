@@ -6,7 +6,7 @@ import React, { useState, useMemo, useEffect, useLayoutEffect, useRef } from 're
 import { 
   CheckSquare, Plus, Clock, CheckCircle, X, 
   Search, Phone, DollarSign, CreditCard, Banknote, QrCode, MessageSquare, Calendar, Check, AlertCircle,
-  CheckCheck, UserRoundCheck, Play, UserX, Sparkles
+  CheckCheck, UserRoundCheck, Play, UserX, Sparkles, BellRing, Gift
 } from 'lucide-react';
 import { Appointment, Service, Barber, Organization, Client } from '../types';
 import { normalizeClientPhone } from '../utils/clients';
@@ -14,6 +14,9 @@ import { getLocalDateKey, isBookableBusinessDateTime, timeToMinutes } from '../u
 import { appointmentStatusClasses, appointmentStatusLabel, blocksAppointmentSlot, isOpenAppointmentStatus } from '../utils/appointmentStatus';
 import { buildAppointmentWhatsAppUrl, WhatsAppAction } from '../utils/whatsapp';
 import { WhatsAppActionsModal } from '../components/common/WhatsAppActionsModal';
+import { LoyaltyCardWidget } from '../components/loyalty/LoyaltyCardWidget';
+import { addLoyaltyStampToClient, redeemLoyaltyRewardFromClient } from '../utils/loyalty';
+import { ClientProfileModal } from '../components/crm/ClientProfileModal';
 
 interface AtendimentosViewProps {
   appointments: Appointment[];
@@ -21,6 +24,7 @@ interface AtendimentosViewProps {
   services: Service[];
   barbers: Barber[];
   org: Organization;
+  clients?: Client[];
   setClients: React.Dispatch<React.SetStateAction<Client[]>>;
   onOpenCommand?: (appointment: Appointment) => void;
 }
@@ -58,6 +62,7 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
   services,
   barbers,
   org,
+  clients = [],
   setClients,
   onOpenCommand,
 }) => {
@@ -71,7 +76,53 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
   const [completingApp, setCompletingApp] = useState<Appointment | null>(null);
   const [whatsAppAppointment, setWhatsAppAppointment] = useState<Appointment | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit' | 'debit' | 'cash'>('pix');
+  const [applyLoyaltyReward, setApplyLoyaltyReward] = useState<boolean>(false);
   const [modalError, setModalError] = useState('');
+  const [activeProfileClient, setActiveProfileClient] = useState<Client | null>(null);
+
+  const handleOpenClientProfile = (name: string, phone?: string) => {
+    const normPhone = phone ? normalizeClientPhone(phone) : '';
+    const found = clients?.find(c => {
+      if (normPhone && c.phone && normalizeClientPhone(c.phone) === normPhone) return true;
+      return c.name.trim().toLowerCase() === name.trim().toLowerCase();
+    });
+    if (found) {
+      setActiveProfileClient(found);
+    } else {
+      setActiveProfileClient({
+        id: `temp-${Date.now()}`,
+        name,
+        phone: phone || '',
+        total_visits: 0,
+        total_spent: 0,
+        haircut_notes: '',
+        birth_date: '',
+        preferences: '',
+      });
+    }
+  };
+
+  const handleUpdateProfileClient = (updated: Client) => {
+    setClients(prev => {
+      const exists = prev.some(c => c.id === updated.id);
+      if (exists) {
+        return prev.map(c => c.id === updated.id ? updated : c);
+      }
+      return [...prev, updated];
+    });
+    setActiveProfileClient(updated);
+  };
+
+  const completingClient = useMemo(() => {
+    if (!completingApp || !clients.length) return null;
+    const phone = normalizeClientPhone(completingApp.client_phone);
+    const name = completingApp.client_name?.trim().toLowerCase();
+    return clients.find(c => {
+      const cPhone = normalizeClientPhone(c.phone);
+      if (phone && cPhone) return phone === cPhone;
+      return Boolean(name && c.name?.trim().toLowerCase() === name);
+    }) || null;
+  }, [completingApp, clients]);
 
   // Form State Novo Atendimento
   const [clientName, setClientName] = useState('');
@@ -138,19 +189,44 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
     e.preventDefault();
     if (!completingApp) return;
 
+    const finalPrice = applyLoyaltyReward ? 0 : completingApp.price;
+
     setAppointments(prev => prev.map(a => 
-      a.id === completingApp.id ? { ...a, status: 'completed', payment_method: paymentMethod } : a
+      a.id === completingApp.id 
+        ? { 
+            ...a, 
+            status: 'completed', 
+            payment_method: paymentMethod, 
+            price: finalPrice,
+            loyalty_reward_applied: applyLoyaltyReward 
+          } 
+        : a
     ));
-    // O retorno concluído é a única ação que soma pontos automaticamente.
-    setClients(prev => prev.map(client => {
-      const clientPhone = normalizeClientPhone(client.phone);
+
+    // Atualiza o cliente e fidelidade
+    setClients(prev => {
       const appointmentPhone = normalizeClientPhone(completingApp.client_phone);
-      const sameClient = appointmentPhone
-        ? clientPhone === appointmentPhone
-        : client.name.trim().toLocaleLowerCase('pt-BR') === completingApp.client_name.trim().toLocaleLowerCase('pt-BR');
-      return sameClient ? { ...client, loyalty_points: Math.max(0, Number(client.loyalty_points || 0)) + 10 } : client;
-    }));
+      const cleanName = completingApp.client_name.trim().toLocaleLowerCase('pt-BR');
+
+      return prev.map(client => {
+        const clientPhone = normalizeClientPhone(client.phone);
+        const sameClient = appointmentPhone
+          ? clientPhone === appointmentPhone
+          : client.name.trim().toLocaleLowerCase('pt-BR') === cleanName;
+
+        if (!sameClient) return client;
+
+        if (applyLoyaltyReward) {
+          return redeemLoyaltyRewardFromClient(client);
+        } else {
+          const { updatedClient } = addLoyaltyStampToClient(client, org);
+          return updatedClient;
+        }
+      });
+    });
+
     setCompletingApp(null);
+    setApplyLoyaltyReward(false);
   };
 
   const handleCreate = (e: React.FormEvent) => {
@@ -350,7 +426,17 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
                       </span>
                     </div>
                     <div className="space-y-1.5 flex-1 min-w-0">
-                      <h4 className="font-bold text-white text-sm sm:text-base leading-snug truncate">{app.client_name}</h4>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenClientProfile(app.client_name, app.client_phone)}
+                          className="font-bold text-white text-sm sm:text-base leading-snug truncate hover:text-cyan-300 text-left transition-colors flex items-center gap-1.5 group"
+                          title="Ver Ficha Técnica e Histórico do Cliente"
+                        >
+                          <span className="truncate">{app.client_name}</span>
+                          <span className="text-[10px] text-cyan-400 opacity-80 group-hover:opacity-100 font-normal">📋</span>
+                        </button>
+                      </div>
 
                       {/* LISTA DE SERVIÇOS DO ATENDIMENTO */}
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -377,6 +463,14 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
 
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] sm:text-[11px] text-slate-400 pt-0.5">
                         <span>Barbeiro: <strong className="text-slate-200">{app.barber_name}</strong></span>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenClientProfile(app.client_name, app.client_phone)}
+                          className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 bg-cyan-500/10 hover:bg-cyan-500/20 px-2 py-0.5 rounded-md text-[10px] font-medium border border-cyan-500/20 transition-colors"
+                          title="Ficha Técnica do Corte e Histórico CRM"
+                        >
+                          📋 Ficha
+                        </button>
                         {app.client_phone && app.client_phone !== 'Não informado' && (
                           <button
                             type="button"
@@ -393,9 +487,20 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/80 w-full md:w-auto">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] sm:text-xs font-semibold shrink-0 ${appointmentStatusClasses(app.status)}`}>
-                      {appointmentStatusLabel(app.status)}
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[9px] sm:text-xs font-semibold shrink-0 ${appointmentStatusClasses(app.status)}`}>
+                        {appointmentStatusLabel(app.status)}
+                      </span>
+                      {app.reminder_sent_at && (
+                        <span
+                          title={`Lembrete enviado via WhatsApp às ${new Date(app.reminder_sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}
+                          className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full"
+                        >
+                          <BellRing className="w-2.5 h-2.5 shrink-0" />
+                          <span>Lembrete enviado</span>
+                        </span>
+                      )}
+                    </div>
 
                     {isOpenAppointmentStatus(app.status) && (
                       <div className="grid grid-cols-2 xl:grid-cols-4 gap-1.5 w-full md:w-auto">
@@ -541,11 +646,58 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
                   )}
                 </div>
 
-                <div className="flex justify-between border-t border-slate-800/80 pt-2 font-bold">
+                <div className="flex justify-between border-t border-slate-800/80 pt-2 font-bold items-center">
                   <span className="text-slate-300">Total a Receber:</span>
-                  <span className="text-base font-bold text-emerald-400 font-mono">R$ {completingApp.price.toFixed(2)}</span>
+                  <div className="text-right">
+                    {applyLoyaltyReward ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs line-through text-slate-500 font-mono">
+                          R$ {completingApp.price.toFixed(2)}
+                        </span>
+                        <span className="text-sm font-bold text-amber-400 font-mono">
+                          R$ 0,00 (Fidelidade)
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-base font-bold text-emerald-400 font-mono">
+                        R$ {completingApp.price.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              {/* CARTÃO FIDELIDADE DO CLIENTE */}
+              {org.loyalty_enabled !== false && (
+                <div className="space-y-2">
+                  <LoyaltyCardWidget
+                    client={completingClient || { name: completingApp.client_name, phone: completingApp.client_phone }}
+                    org={org}
+                    compact
+                  />
+
+                  {/* SE O CLIENTE TEM RECOMPENSA DISPONÍVEL */}
+                  {Number(completingClient?.loyalty_rewards_available || 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setApplyLoyaltyReward(prev => !prev)}
+                      className={`w-full p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all ${
+                        applyLoyaltyReward
+                          ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md shadow-amber-400/20'
+                          : 'bg-amber-400/10 hover:bg-amber-400/20 text-amber-300 border-amber-400/30'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Gift className="w-4 h-4 shrink-0" />
+                        <span>Resgatar Recompensa ({org.loyalty_reward_description || '1 Corte Grátis'})</span>
+                      </span>
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-black/20 font-black">
+                        {applyLoyaltyReward ? 'Aplicado (R$ 0,00)' : 'Aplicar'}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-2">
@@ -737,6 +889,16 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
             </form>
           </div>
         </Modal>
+      )}
+
+      {activeProfileClient && (
+        <ClientProfileModal
+          client={activeProfileClient}
+          org={org}
+          appointments={appointments}
+          onClose={() => setActiveProfileClient(null)}
+          onUpdateClient={handleUpdateProfileClient}
+        />
       )}
     </div>
   );

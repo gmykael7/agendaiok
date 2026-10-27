@@ -8,15 +8,20 @@ import {
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, 
   Clock, User, Scissors, Plus, CheckCircle, AlertCircle,
   Phone, MessageSquare, Check, X, DollarSign, QrCode, CreditCard, Banknote, Lock, ChevronDown, BellRing, HeartHandshake,
-  CheckCheck, UserRoundCheck, Play, UserX, Sparkles, Zap
+  CheckCheck, UserRoundCheck, Play, UserX, Sparkles, Zap, Gift
 } from 'lucide-react';
-import { Appointment, Barber, Service, Organization, WaitlistEntry } from '../types';
+import { Appointment, Barber, Service, Organization, WaitlistEntry, Client } from '../types';
 import { generateBusinessSlots, getLocalDateKey, isBookableBusinessDateTime, timeToMinutes } from '../utils/scheduling';
 import { buildAppointmentWhatsAppUrl, WhatsAppAction } from '../utils/whatsapp';
 import { WhatsAppActionsModal } from '../components/common/WhatsAppActionsModal';
 import { appointmentStatusClasses, appointmentStatusLabel, blocksAppointmentSlot, isOpenAppointmentStatus } from '../utils/appointmentStatus';
 import { WaitlistModal } from '../components/waitlist/WaitlistModal';
 import { findWaitlistMatches } from '../utils/waitlist';
+import { getAuthToken } from '../services/cloudSync';
+import { LoyaltyCardWidget } from '../components/loyalty/LoyaltyCardWidget';
+import { addLoyaltyStampToClient, redeemLoyaltyRewardFromClient, calculateLoyaltyProgress } from '../utils/loyalty';
+import { normalizeClientPhone, upsertClient } from '../utils/clients';
+import { ClientProfileModal } from '../components/crm/ClientProfileModal';
 
 interface AgendaViewProps {
   appointments: Appointment[];
@@ -27,6 +32,21 @@ interface AgendaViewProps {
   setOrg?: React.Dispatch<React.SetStateAction<Organization>>;
   waitlist?: WaitlistEntry[];
   setWaitlist?: React.Dispatch<React.SetStateAction<WaitlistEntry[]>>;
+  clients?: Client[];
+  setClients?: React.Dispatch<React.SetStateAction<Client[]>>;
+}
+
+const statusIcons = {
+  scheduled: Clock, confirmed: CheckCheck, arrived: UserRoundCheck,
+  in_progress: Play, completed: CheckCircle, no_show: UserX, canceled: X,
+};
+
+function AgendaStatusBadge({ status, className }: { status: Appointment['status']; className: string }) {
+  const Icon = statusIcons[status];
+  return <span className={`inline-flex items-center gap-1 rounded-full shrink-0 ${appointmentStatusClasses(status)} ${className}`}>
+    <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
+    {appointmentStatusLabel(status)}
+  </span>;
 }
 
 const isTimeSlotOccupied = (
@@ -65,6 +85,8 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   setOrg,
   waitlist = [],
   setWaitlist,
+  clients = [],
+  setClients,
 }) => {
   const [selectedBarberId, setSelectedBarberId] = useState<string>('all');
   const [pendingBarberFocus, setPendingBarberFocus] = useState<string | null>(null);
@@ -119,8 +141,56 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 
   const [completingApp, setCompletingApp] = useState<Appointment | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit' | 'debit' | 'cash'>('pix');
+  const [applyLoyaltyReward, setApplyLoyaltyReward] = useState<boolean>(false);
   const [whatsAppAppointment, setWhatsAppAppointment] = useState<Appointment | null>(null);
   const [confirmedFeedback, setConfirmedFeedback] = useState<Appointment | null>(null);
+  const [activeProfileClient, setActiveProfileClient] = useState<Client | null>(null);
+
+  const handleOpenClientProfile = (clientName: string, clientPhone?: string) => {
+    const normPhone = clientPhone ? normalizeClientPhone(clientPhone) : '';
+    const found = clients?.find(c => {
+      if (normPhone && c.phone && normalizeClientPhone(c.phone) === normPhone) return true;
+      return c.name.trim().toLowerCase() === clientName.trim().toLowerCase();
+    });
+    if (found) {
+      setActiveProfileClient(found);
+    } else {
+      setActiveProfileClient({
+        id: `temp-${Date.now()}`,
+        name: clientName,
+        phone: clientPhone || '',
+        total_visits: 0,
+        total_spent: 0,
+        haircut_notes: '',
+        birth_date: '',
+        preferences: '',
+      });
+    }
+  };
+
+  const handleUpdateProfileClient = (updated: Client) => {
+    if (setClients) {
+      setClients(prev => {
+        const exists = prev.some(c => c.id === updated.id);
+        if (exists) {
+          return prev.map(c => c.id === updated.id ? updated : c);
+        }
+        return [...prev, updated];
+      });
+    }
+    setActiveProfileClient(updated);
+  };
+
+  const completingClient = useMemo(() => {
+    if (!completingApp || !clients.length) return null;
+    const phone = normalizeClientPhone(completingApp.client_phone);
+    const name = completingApp.client_name?.trim().toLowerCase();
+    return clients.find(c => {
+      const cPhone = normalizeClientPhone(c.phone);
+      if (phone && cPhone) return phone === cPhone;
+      return Boolean(name && c.name?.trim().toLowerCase() === name);
+    }) || null;
+  }, [completingApp, clients]);
 
   useEffect(() => {
     if (!confirmedFeedback) return;
@@ -143,6 +213,60 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
     service_name?: string;
     matches: WaitlistEntry[];
   } | null>(null);
+
+  // Lembretes automáticos via WhatsApp (Anti No-Show)
+  const [triggeringReminders, setTriggeringReminders] = useState(false);
+  const [remindersFeedback, setRemindersFeedback] = useState<{ type: 'success' | 'info' | 'error'; message: string } | null>(null);
+
+  useEffect(() => {
+    if (!remindersFeedback) return;
+    const timer = window.setTimeout(() => setRemindersFeedback(null), 5500);
+    return () => window.clearTimeout(timer);
+  }, [remindersFeedback]);
+
+  const handleTriggerReminders = async () => {
+    setTriggeringReminders(true);
+    setRemindersFeedback(null);
+    try {
+      const token = getAuthToken();
+      const res = await fetch('/api/whatsapp/reminders/trigger', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+      });
+      const data = await res.json().catch(() => null) as any;
+      if (!res.ok) {
+        setRemindersFeedback({
+          type: 'error',
+          message: data?.error || 'Erro ao disparar lembretes.',
+        });
+        return;
+      }
+      if (data?.sentCount > 0) {
+        const sentIds = new Set<string>(data.sentAppointmentIds || []);
+        const nowIso = new Date().toISOString();
+        setAppointments(prev => prev.map(a => sentIds.has(a.id) ? { ...a, reminder_sent_at: nowIso } : a));
+        setRemindersFeedback({
+          type: 'success',
+          message: `${data.sentCount} lembrete(s) enviado(s) via WhatsApp para clientes com horário nas próximas 2 horas!`,
+        });
+      } else {
+        setRemindersFeedback({
+          type: 'info',
+          message: 'Nenhum agendamento pendente de lembrete para as próximas 2 horas hoje.',
+        });
+      }
+    } catch {
+      setRemindersFeedback({
+        type: 'error',
+        message: 'Falha de comunicação ao disparar lembretes.',
+      });
+    } finally {
+      setTriggeringReminders(false);
+    }
+  };
 
   // Modal novo agendamento na agenda
   const [showAddModal, setShowAddModal] = useState(false);
@@ -352,10 +476,52 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
     e.preventDefault();
     if (!completingApp) return;
 
+    const finalPrice = applyLoyaltyReward ? 0 : completingApp.price;
+
     setAppointments(prev => prev.map(a => 
-      a.id === completingApp.id ? { ...a, status: 'completed', payment_method: paymentMethod } : a
+      a.id === completingApp.id 
+        ? { 
+            ...a, 
+            status: 'completed', 
+            payment_method: paymentMethod, 
+            price: finalPrice,
+            loyalty_reward_applied: applyLoyaltyReward 
+          } 
+        : a
     ));
+
+    if (setClients) {
+      setClients(prev => {
+        const phone = normalizeClientPhone(completingApp.client_phone);
+        const name = completingApp.client_name?.trim();
+        const base = upsertClient(prev, {
+          name: completingApp.client_name,
+          phone: completingApp.client_phone,
+          org_id: completingApp.org_id,
+          visitDelta: 1,
+          spentDelta: finalPrice,
+          lastVisit: 'Hoje',
+        });
+
+        if (org.loyalty_enabled === false) return base;
+
+        return base.map(c => {
+          const cPhone = normalizeClientPhone(c.phone);
+          const isTarget = (phone && cPhone && phone === cPhone) || (!phone && c.name?.trim() === name);
+          if (!isTarget) return c;
+
+          if (applyLoyaltyReward) {
+            return redeemLoyaltyRewardFromClient(c);
+          } else {
+            const { updatedClient } = addLoyaltyStampToClient(c, org);
+            return updatedClient;
+          }
+        });
+      });
+    }
+
     setCompletingApp(null);
+    setApplyLoyaltyReward(false);
   };
 
   const handleCreateAppointment = (e: React.FormEvent) => {
@@ -532,6 +698,17 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
           )}
 
           <button
+            type="button"
+            disabled={triggeringReminders}
+            onClick={handleTriggerReminders}
+            className="px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0 disabled:opacity-50"
+            title="Verificar e enviar lembretes automáticos de WhatsApp aos clientes com horário nas próximas 2 horas"
+          >
+            <BellRing className={`w-3.5 h-3.5 ${triggeringReminders ? 'animate-bounce' : ''}`} />
+            <span>{triggeringReminders ? 'Enviando...' : 'Lembretes WhatsApp'}</span>
+          </button>
+
+          <button
             onClick={() => {
               setSelectedServiceIds(services[0] ? [services[0].id] : []);
               setBarberId(selectedBarberId !== 'all' ? selectedBarberId : barbers[0]?.id || '');
@@ -547,7 +724,28 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
         </div>
       </div>
 
-      {/* RÉGUA DA SEMANA ESTILO GOOGLE CALENDAR */}
+      {/* FEEDBACK DO DISPARO DE LEMBRETES */}
+      {remindersFeedback && (
+        <div className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-3 animate-fadeIn ${
+          remindersFeedback.type === 'success' ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-200' :
+          remindersFeedback.type === 'error' ? 'bg-rose-500/15 border-rose-500/30 text-rose-200' :
+          'bg-cyan-500/15 border-cyan-500/30 text-cyan-200'
+        }`}>
+          <div className="flex items-center gap-2 font-medium">
+            <BellRing className="w-4 h-4 shrink-0" />
+            <span>{remindersFeedback.message}</span>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setRemindersFeedback(null)} 
+            className="p-1 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* RÉGUA DA SEMANA */}
       <div className="bg-[#121B2E] border border-slate-800 rounded-3xl p-3 sm:p-4 shadow-xl">
         <div className="flex items-center justify-between gap-2 px-1 mb-2.5">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400 flex items-center gap-1.5">
@@ -576,7 +774,8 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-7 gap-1 sm:gap-2">
+        <div className="overflow-x-auto">
+        <div className="grid min-w-[332px] grid-cols-7 gap-1 sm:gap-2">
           {currentWeekDays.map((item) => {
             const count = weekAppointmentsCount[item.key] || 0;
             return (
@@ -584,50 +783,30 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                 key={item.key}
                 type="button"
                 onClick={() => setSelectedDate(item.key)}
-                className={`flex flex-col items-center justify-center py-2 px-1 sm:py-2.5 sm:px-2 rounded-2xl transition-all active:scale-95 relative group ${
+                aria-pressed={item.isSelected}
+                aria-current={item.isToday ? 'date' : undefined}
+                aria-label={`${item.date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}, ${count} ${count === 1 ? 'agendamento' : 'agendamentos'}`}
+                className={`flex h-[76px] sm:h-[84px] flex-col items-center justify-center gap-1 px-1 py-3 rounded-xl border transition-colors active:scale-95 relative group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   item.isSelected
-                    ? 'bg-emerald-500/15 border-2 border-emerald-500 text-white shadow-lg shadow-emerald-500/10'
-                    : 'border border-slate-800/80 bg-[#0B1120]/50 hover:bg-slate-800/60 hover:border-slate-700 text-slate-300'
+                    ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
+                    : 'border-slate-800 bg-[#0B1120]/50 hover:bg-slate-800/60 hover:border-slate-600 text-slate-300'
                 }`}
               >
-                <span className={`text-[9px] sm:text-[11px] font-bold tracking-wider ${
-                  item.isToday
-                    ? 'text-emerald-400 font-black'
-                    : item.isSelected
-                      ? 'text-white font-bold'
-                      : 'text-slate-400 group-hover:text-slate-200'
-                }`}>
+                <span className={`text-lg sm:text-xl font-bold leading-none tabular-nums ${item.isSelected || item.isToday ? 'text-emerald-400' : 'text-white'}`}>
+                  {item.dayNumber}
+                </span>
+                <span className={`text-[9px] sm:text-[11px] font-medium ${item.isSelected ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-200'}`}>
                   {item.weekdayShort}
                 </span>
-
-                <div className="mt-1 flex items-center justify-center">
-                  <span className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-black transition-all ${
-                    item.isToday
-                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30'
-                      : item.isSelected
-                        ? 'bg-slate-800 text-white border border-slate-700'
-                        : 'text-slate-200'
-                  }`}>
-                    {item.dayNumber}
+                {count > 0 && (
+                  <span aria-hidden="true" className={`absolute right-1 top-1 min-w-3.5 rounded-full px-0.5 text-center text-[8px] font-bold leading-[14px] ${item.isSelected ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>
+                    {count}
                   </span>
-                </div>
-
-                <div className="mt-1 flex items-center justify-center min-h-[14px]">
-                  {count > 0 ? (
-                    <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
-                      item.isSelected
-                        ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/30'
-                        : 'bg-slate-800 text-slate-400 border border-slate-700/60'
-                    }`}>
-                      {count}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-slate-600 opacity-30">•</span>
-                  )}
-                </div>
+                )}
               </button>
             );
           })}
+        </div>
         </div>
       </div>
 
@@ -696,16 +875,46 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                       }`}>
                         <div className="min-w-0">
                           <div className="flex items-start justify-between gap-2">
-                            <p className="text-xs font-black text-white truncate">{app.client_name}</p>
-                            <span className={`text-[8px] px-1.5 py-0.5 rounded-full shrink-0 ${appointmentStatusClasses(app.status)}`}>
-                              {appointmentStatusLabel(app.status)}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenClientProfile(app.client_name, app.client_phone)}
+                              className="text-xs font-black text-white hover:text-cyan-300 truncate text-left transition-colors flex items-center gap-1 group"
+                              title="Abrir ficha técnica e histórico do cliente"
+                            >
+                              <span className="truncate">{app.client_name}</span>
+                              <span className="text-[10px] text-cyan-400 opacity-70 group-hover:opacity-100 shrink-0">📋</span>
+                            </button>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {app.reminder_sent_at && (
+                                <span
+                                  title={`Lembrete WhatsApp enviado às ${new Date(app.reminder_sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}
+                                  className="inline-flex items-center text-emerald-400 p-0.5 rounded bg-emerald-500/10 border border-emerald-500/20"
+                                >
+                                  <BellRing className="w-2.5 h-2.5" />
+                                </span>
+                              )}
+                              <AgendaStatusBadge status={app.status} className="text-[8px] px-1.5 py-0.5" />
+                            </div>
                           </div>
-                          <p className="text-[10px] text-slate-300 mt-1 truncate">{app.service_name}</p>
+                          <p className="text-[10px] text-slate-300 mt-1 flex items-center gap-1.5 min-w-0">
+                            <Scissors className="w-3 h-3 shrink-0 text-emerald-400" aria-hidden="true" />
+                            <span className="truncate">{app.service_name}</span>
+                          </p>
                         </div>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] font-mono font-bold text-cyan-300">R$ {app.price.toFixed(2)}</span>
+                          <span className="text-[10px] font-mono font-bold text-cyan-300 inline-flex items-center gap-1">
+                            <Banknote className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
+                            R$ {app.price.toFixed(2)}
+                          </span>
                           <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenClientProfile(app.client_name, app.client_phone)}
+                              className="text-[9px] text-cyan-300 inline-flex items-center gap-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-1 hover:bg-cyan-500/20 active:scale-95 transition-all"
+                              title="Ficha técnica de corte e histórico do cliente"
+                            >
+                              Ficha
+                            </button>
                             {(app.status === 'scheduled' || app.status === 'confirmed') && (
                               <button
                                 type="button"
@@ -836,7 +1045,15 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                               </div>
                               <div className="space-y-1 min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-1.5">
-                                  <span className="font-bold text-white text-xs sm:text-sm truncate">{app.client_name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenClientProfile(app.client_name, app.client_phone)}
+                                    className="font-bold text-white text-xs sm:text-sm truncate hover:text-cyan-300 text-left transition-colors flex items-center gap-1 group"
+                                    title="Abrir ficha técnica e histórico do cliente"
+                                  >
+                                    <span className="truncate">{app.client_name}</span>
+                                    <span className="text-[10px] text-cyan-400 opacity-80 group-hover:opacity-100">📋</span>
+                                  </button>
 
                                   {!isOriginalStart && (
                                     <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.2 rounded font-mono">
@@ -846,23 +1063,37 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 
                                   {app.services && app.services.length > 0 ? (
                                     app.services.map((srv, idx) => (
-                                      <span key={idx} className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20 font-medium">
+                                      <span key={idx} className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20 font-medium">
+                                        <Scissors className="w-3 h-3 shrink-0" aria-hidden="true" />
                                         {srv.name}
                                       </span>
                                     ))
                                   ) : (
-                                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20 font-medium">
+                                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20 font-medium">
+                                      <Scissors className="w-3 h-3 shrink-0" aria-hidden="true" />
                                       {app.service_name}
                                     </span>
                                   )}
 
-                                  <span className="text-[11px] text-white font-mono font-bold">
+                                  <span className="inline-flex items-center gap-1 text-[11px] text-white font-mono font-bold">
+                                    <Banknote className="w-3.5 h-3.5 shrink-0 text-amber-400" aria-hidden="true" />
                                     R$ {app.price.toFixed(2)}
                                   </span>
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2 text-[10px] sm:text-xs text-slate-400">
-                                  <span>Barbeiro: <strong className="text-slate-200">{app.barber_name}</strong></span>
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <User className="w-3 h-3 shrink-0 text-sky-400" aria-hidden="true" />
+                                    <span>Barbeiro: <strong className="text-slate-200">{app.barber_name}</strong></span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenClientProfile(app.client_name, app.client_phone)}
+                                    className="inline-flex items-center gap-1 text-[10px] text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/20 hover:bg-cyan-500/20 active:scale-95 transition-all"
+                                    title="Abrir ficha técnica de corte e histórico"
+                                  >
+                                    📋 Ficha
+                                  </button>
                                   {app.client_phone && (
                                     <button
                                       type="button"
@@ -876,9 +1107,19 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                               </div>
                             </div>
 
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold shrink-0 ${appointmentStatusClasses(app.status)}`}>
-                              {appointmentStatusLabel(app.status)}
-                            </span>
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              <AgendaStatusBadge status={app.status} className="px-2 py-0.5 text-[9px] sm:text-[10px] font-semibold" />
+                              {app.reminder_sent_at && (
+                                <span
+                                  title={`Lembrete enviado via WhatsApp às ${new Date(app.reminder_sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}
+                                  className="inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-md"
+                                >
+                                  <BellRing className="w-2.5 h-2.5 shrink-0" />
+                                  <span className="hidden sm:inline">Lembrete WhatsApp</span>
+                                  <span className="sm:hidden">Lembrete</span>
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {/* LINHA INFERIOR: BOTÕES DE AÇÃO COM WRAP COMPLETO (NUNCA SOBRESSAEM) */}
@@ -1081,11 +1322,58 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                   )}
                 </div>
 
-                <div className="flex justify-between border-t border-slate-800/80 pt-2 font-bold">
+                <div className="flex justify-between border-t border-slate-800/80 pt-2 font-bold items-center">
                   <span className="text-slate-300">Total a Receber:</span>
-                  <span className="text-base font-bold text-emerald-400 font-mono">R$ {completingApp.price.toFixed(2)}</span>
+                  <div className="text-right">
+                    {applyLoyaltyReward ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs line-through text-slate-500 font-mono">
+                          R$ {completingApp.price.toFixed(2)}
+                        </span>
+                        <span className="text-sm font-bold text-amber-400 font-mono">
+                          R$ 0,00 (Fidelidade)
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-base font-bold text-emerald-400 font-mono">
+                        R$ {completingApp.price.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              {/* CARTÃO FIDELIDADE DO CLIENTE */}
+              {org.loyalty_enabled !== false && (
+                <div className="space-y-2">
+                  <LoyaltyCardWidget
+                    client={completingClient || { name: completingApp.client_name, phone: completingApp.client_phone }}
+                    org={org}
+                    compact
+                  />
+
+                  {/* SE O CLIENTE TEM RECOMPENSA DISPONÍVEL */}
+                  {Number(completingClient?.loyalty_rewards_available || 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setApplyLoyaltyReward(prev => !prev)}
+                      className={`w-full p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all ${
+                        applyLoyaltyReward
+                          ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md shadow-amber-400/20'
+                          : 'bg-amber-400/10 hover:bg-amber-400/20 text-amber-300 border-amber-400/30'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Gift className="w-4 h-4 shrink-0" />
+                        <span>Resgatar Recompensa ({org.loyalty_reward_description || '1 Corte Grátis'})</span>
+                      </span>
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-black/20 font-black">
+                        {applyLoyaltyReward ? 'Aplicado (R$ 0,00)' : 'Aplicar'}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-2">
@@ -1282,6 +1570,16 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
         releasedSlot={releasedSlotAlert}
         onClaimSlot={handleClaimWaitlistSlot}
       />
+
+      {activeProfileClient && (
+        <ClientProfileModal
+          client={activeProfileClient}
+          org={org}
+          appointments={appointments}
+          onClose={() => setActiveProfileClient(null)}
+          onUpdateClient={handleUpdateProfileClient}
+        />
+      )}
       {confirmedFeedback && createPortal(
         <div role="status" className="agendai-confirm-toast pointer-events-none fixed right-3 top-4 z-[260] w-[min(24rem,calc(100vw-1.5rem))] rounded-2xl border border-emerald-400/40 bg-[#0B1424] p-4 text-white shadow-[0_20px_60px_rgba(0,0,0,.45)] sm:right-6 sm:top-6">
           <div className="flex items-start gap-3">

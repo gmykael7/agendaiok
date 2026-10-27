@@ -9,7 +9,7 @@ import {
   IconlyProps,
 } from '../common/IconlyIcons';
 import { StaffPermissions, TabType } from '../../types';
-import { motionAllowed } from '../../utils/motion';
+import { motionAllowed } from '../../utils/motionPref';
 
 interface BottomNavProps {
   currentTab: TabType;
