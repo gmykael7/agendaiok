@@ -14,6 +14,7 @@ import {
   normalizeClientPhone,
 } from './booking';
 import {
+  assistantToday,
   assistantSlots,
   inferGuidedIntent,
   validAssistantDate,

@@ -29,3 +29,11 @@ test('link oficial do WhatsApp preserva emojis, acentos, formatação e quebras 
 test('link sem mensagem mantém somente o telefone internacional normalizado', () => {
   assert.equal(helpers.buildWhatsAppUrl('55 84 99918-8497'), 'https://wa.me/5584999188497');
 });
+
+test('formatPhoneBR formata números brasileiros de 10 e 11 dígitos com máscara legível', () => {
+  assert.equal(helpers.formatPhoneBR('84999188497'), '(84) 99918-8497');
+  assert.equal(helpers.formatPhoneBR('8433221100'), '(84) 3322-1100');
+  assert.equal(helpers.formatPhoneBR('(84) 99918-8497'), '(84) 99918-8497');
+  assert.equal(helpers.formatPhoneBR('84'), '(84');
+  assert.equal(helpers.formatPhoneBR(''), '');
+});

@@ -319,14 +319,16 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
                     <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                       Phone Number ID *
                     </label>
-                    <a
-                      href="https://business.facebook.com/wa/manage/phone-numbers/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline font-semibold inline-flex items-center gap-0.5"
-                    >
-                      Abrir Meta <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href="https://developers.facebook.com/apps/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline font-semibold inline-flex items-center gap-0.5"
+                      >
+                        Meta Developers <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </div>
                   </div>
                   <input
                     type="text"
@@ -341,6 +343,18 @@ export const WhatsAppSettingsSection: React.FC<WhatsAppSettingsSectionProps> = (
                       <CheckCircle2 className="w-3 h-3" /> {phoneNumberId.length} dígitos
                     </span>
                   )}
+                  
+                  {/* Dica passo a passo para encontrar o ID */}
+                  <div className="mt-2 p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400 space-y-1">
+                    <p className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                      💡 Onde encontrar o Phone Number ID:
+                    </p>
+                    <ol className="list-decimal list-inside space-y-0.5 text-[10.5px] leading-relaxed">
+                      <li>Acesse o <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener noreferrer" className="text-emerald-600 dark:text-emerald-400 underline font-semibold">Meta for Developers</a>.</li>
+                      <li>Clique no seu App e vá no menu <strong>WhatsApp &gt; Configuração da API</strong> (ou <em>API Setup</em>).</li>
+                      <li>Copie o número de 15 a 17 dígitos do campo <strong>Identificador do número de telefone (Phone number ID)</strong>.</li>
+                    </ol>
+                  </div>
                 </div>
 
                 <div>
