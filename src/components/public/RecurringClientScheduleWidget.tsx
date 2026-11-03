@@ -78,6 +78,12 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
   const [isSubmittingCancel, setIsSubmittingCancel] = useState<boolean>(false);
   const [cancelMessage, setCancelMessage] = useState<string>('');
   const [cancelError, setCancelError] = useState<string>('');
+  const [cancelSuccessSummary, setCancelSuccessSummary] = useState<{
+    original_date: string;
+    original_time: string;
+    professional_name: string;
+    next_recurring_date?: string;
+  } | null>(null);
 
   const [rescheduleModalOccurrence, setRescheduleModalOccurrence] = useState<RecurringOccurrence | null>(null);
   const [rescheduleReason, setRescheduleReason] = useState<string>('Imprevisto no horário habitual');
@@ -86,6 +92,13 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
   const [isSubmittingReschedule, setIsSubmittingReschedule] = useState<boolean>(false);
   const [rescheduleSuccessMsg, setRescheduleSuccessMsg] = useState<string>('');
   const [rescheduleError, setRescheduleError] = useState<string>('');
+  const [rescheduleSuccessSummary, setRescheduleSuccessSummary] = useState<{
+    original_date: string;
+    original_time: string;
+    new_date: string;
+    new_time: string;
+    professional_name: string;
+  } | null>(null);
 
   // Carrega contratos e próximas datas do cliente
   const loadClientSchedule = useCallback(async (phone: string) => {
@@ -206,13 +219,17 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
 
       const data = await res.json() as any;
       if (res.ok && data.success) {
+        const barberName = barbers.find(b => b.id === cancelModalOccurrence.professional_id)?.full_name || 'Profissional';
+        setCancelSuccessSummary(data.summary || {
+          original_date: cancelModalOccurrence.date.split('-').reverse().join('/'),
+          original_time: cancelModalOccurrence.start_time,
+          professional_name: barberName,
+          next_recurring_date: data.summary?.next_recurring_date,
+          barber_notified: true,
+        });
         setCancelMessage(data.message || 'Horário liberado com sucesso para esta semana.');
         if (onRefreshData) await onRefreshData();
         await loadClientSchedule(identifiedPhone);
-        setTimeout(() => {
-          setCancelModalOccurrence(null);
-          setCancelMessage('');
-        }, 2200);
       } else {
         setCancelError(data.error || 'Falha ao liberar horário.');
       }
@@ -231,6 +248,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
     setRescheduleSelectedTime('');
     setRescheduleError('');
     setRescheduleSuccessMsg('');
+    setRescheduleSuccessSummary(null);
   };
 
   // Gerar dias disponíveis para remarcação (próximos 14 dias a partir de hoje)
@@ -316,13 +334,18 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
 
       const data = await res.json() as any;
       if (res.ok && data.success) {
+        const barberName = barbers.find(b => b.id === rescheduleModalOccurrence.professional_id)?.full_name || 'Profissional';
+        setRescheduleSuccessSummary(data.summary || {
+          original_date: rescheduleModalOccurrence.date.split('-').reverse().join('/'),
+          original_time: rescheduleModalOccurrence.start_time,
+          new_date: rescheduleSelectedDate.split('-').reverse().join('/'),
+          new_time: rescheduleSelectedTime,
+          professional_name: barberName,
+          barber_notified: true,
+        });
         setRescheduleSuccessMsg(data.message || 'Horário remarcado com sucesso!');
         if (onRefreshData) await onRefreshData();
         await loadClientSchedule(identifiedPhone);
-        setTimeout(() => {
-          setRescheduleModalOccurrence(null);
-          setRescheduleSuccessMsg('');
-        }, 2500);
       } else {
         setRescheduleError(data.error || 'Não foi possível remarcar.');
       }
@@ -566,6 +589,8 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                           setCancelReason('Imprevisto no trabalho');
                           setCancelCustomNote('');
                           setCancelError('');
+                          setCancelMessage('');
+                          setCancelSuccessSummary(null);
                         }}
                         className="recurring-btn-cancel rounded-xl border border-rose-500/40 bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 text-xs font-bold px-3 py-2 flex items-center justify-center gap-1.5 transition-colors"
                       >
@@ -644,116 +669,159 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
       {cancelModalOccurrence && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="recurring-modal-sheet w-full max-w-lg rounded-3xl border border-slate-700 bg-[#0B1120] p-5 sm:p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom-4 duration-200">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
-                  <XCircle className="w-6 h-6" />
+            {cancelSuccessSummary ? (
+              <div className="py-2 space-y-4 animate-in zoom-in-95 duration-200 text-center">
+                <div className="w-14 h-14 mx-auto rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/10">
+                  <CheckCircle2 className="w-8 h-8" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-white">
-                    Não poderei ir esta semana
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Data:{' '}
-                    <strong className="text-white">
-                      {cancelModalOccurrence.date.split('-').reverse().join('/')}
-                    </strong>{' '}
-                    às <strong className="text-white">{cancelModalOccurrence.start_time}</strong>
+                  <h4 className="text-base font-black text-white">Horário liberado com sucesso!</h4>
+                  <p className="text-xs text-slate-300 mt-1">
+                    O profissional <strong className="text-white">{cancelSuccessSummary.professional_name}</strong> já recebeu seu feedback.
                   </p>
                 </div>
+                <div className="rounded-2xl border border-slate-800 bg-[#070B14] p-3.5 text-left text-xs space-y-2">
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span className="text-slate-400">Vaga liberada:</span>
+                    <strong className="text-rose-300">{cancelSuccessSummary.original_date} às {cancelSuccessSummary.original_time}</strong>
+                  </div>
+                  {cancelSuccessSummary.next_recurring_date && (
+                    <div className="flex items-center justify-between text-slate-300 border-t border-slate-800/80 pt-2">
+                      <span className="text-slate-400">Próximo horário garantido:</span>
+                      <strong className="text-emerald-400">{cancelSuccessSummary.next_recurring_date} às {cancelSuccessSummary.original_time}</strong>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 pt-1 text-[11px] text-emerald-400">
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Seu plano de Cliente Fixo segue 100% ativo!</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCancelModalOccurrence(null);
+                    setCancelSuccessSummary(null);
+                    setCancelMessage('');
+                  }}
+                  className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs py-2.5 transition-colors shadow-lg shadow-emerald-500/20"
+                >
+                  Entendido, fechar
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setCancelModalOccurrence(null)}
-                className="text-slate-400 hover:text-white text-lg p-1"
-              >
-                ✕
-              </button>
-            </div>
+            ) : (
+              <>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
+                      <XCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-white">
+                        Não poderei ir esta semana
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Data:{' '}
+                        <strong className="text-white">
+                          {cancelModalOccurrence.date.split('-').reverse().join('/')}
+                        </strong>{' '}
+                        às <strong className="text-white">{cancelModalOccurrence.start_time}</strong>
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCancelModalOccurrence(null)}
+                    className="text-slate-400 hover:text-white text-lg p-1"
+                  >
+                    ✕
+                  </button>
+                </div>
 
-            {/* Aviso tranquilizador */}
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3.5 flex items-start gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-emerald-200 leading-relaxed">
-                Você está liberando <strong>apenas o horário do dia{' '}
-                {cancelModalOccurrence.date.split('-').reverse().join('/')}</strong> para outro cliente da barbearia agendar. Seu horário fixo das próximas semanas continua <strong>100% garantido!</strong>
-              </p>
-            </div>
+                {/* Aviso tranquilizador */}
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3.5 flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-emerald-200 leading-relaxed">
+                    Você está liberando <strong>apenas o horário do dia{' '}
+                    {cancelModalOccurrence.date.split('-').reverse().join('/')}</strong> para outro cliente da barbearia agendar. Seu horário fixo das próximas semanas continua <strong>100% garantido!</strong>
+                  </p>
+                </div>
 
-            {/* Motivo Obrigatório com Chips Rápidos */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-200">
-                Qual o motivo do cancelamento? <span className="text-rose-400">*</span>
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {QUICK_REASONS.map((r) => {
-                  const isSelected = cancelReason === r;
-                  return (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => setCancelReason(r)}
-                      className={`recurring-chip-btn ${isSelected ? 'is-active' : ''} rounded-xl px-3 py-1.5 text-xs font-semibold border transition-all ${
-                        isSelected
-                          ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
-                          : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700'
-                      }`}
-                    >
-                      {r}
-                    </button>
-                  );
-                })}
-              </div>
+                {/* Motivo Obrigatório com Chips Rápidos */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-200">
+                    Qual o motivo do cancelamento? <span className="text-rose-400">*</span>
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {QUICK_REASONS.map((r) => {
+                      const isSelected = cancelReason === r;
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setCancelReason(r)}
+                          className={`recurring-chip-btn ${isSelected ? 'is-active' : ''} rounded-xl px-3 py-1.5 text-xs font-semibold border transition-all ${
+                            isSelected
+                              ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
+                              : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700'
+                          }`}
+                        >
+                          {r}
+                        </button>
+                      );
+                    })}
+                  </div>
 
-              <textarea
-                rows={2}
-                value={cancelCustomNote}
-                onChange={(e) => setCancelCustomNote(e.target.value)}
-                placeholder="Observação ou mensagem para a barbearia (opcional)..."
-                className="w-full mt-2 rounded-xl border border-slate-800 bg-[#070B14] p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
-              />
-            </div>
+                  <textarea
+                    rows={2}
+                    value={cancelCustomNote}
+                    onChange={(e) => setCancelCustomNote(e.target.value)}
+                    placeholder="Observação ou mensagem para a barbearia (opcional)..."
+                    className="w-full mt-2 rounded-xl border border-slate-800 bg-[#070B14] p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
 
-            {cancelError && (
-              <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-300 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{cancelError}</span>
-              </div>
-            )}
-
-            {cancelMessage && (
-              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 text-xs flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>{cancelMessage}</span>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setCancelModalOccurrence(null)}
-                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors"
-              >
-                Voltar
-              </button>
-              <button
-                type="button"
-                disabled={isSubmittingCancel}
-                onClick={handleConfirmCancel}
-                className="w-full rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs py-2.5 flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-              >
-                {isSubmittingCancel ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    Liberando...
-                  </>
-                ) : (
-                  <>
-                    <span>Confirmar liberação</span>
-                  </>
+                {cancelError && (
+                  <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-300 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{cancelError}</span>
+                  </div>
                 )}
-              </button>
-            </div>
+
+                {cancelMessage && (
+                  <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 text-xs flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{cancelMessage}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setCancelModalOccurrence(null)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmittingCancel}
+                    onClick={handleConfirmCancel}
+                    className="w-full rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs py-2.5 flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                  >
+                    {isSubmittingCancel ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Liberando...
+                      </>
+                    ) : (
+                      <>
+                        <span>Confirmar liberação</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -764,6 +832,45 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
       {rescheduleModalOccurrence && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="recurring-modal-sheet w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-700 bg-[#0B1120] p-5 sm:p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom-4 duration-200">
+            {rescheduleSuccessSummary ? (
+              <div className="py-2 space-y-4 animate-in zoom-in-95 duration-200 text-center">
+                <div className="w-14 h-14 mx-auto rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 flex items-center justify-center shadow-lg shadow-cyan-500/10">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-white">Troca de horário confirmada!</h4>
+                  <p className="text-xs text-slate-300 mt-1">
+                    O profissional <strong className="text-white">{rescheduleSuccessSummary.professional_name}</strong> já foi avisado e sua vaga original foi liberada na agenda.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-[#070B14] p-3.5 text-left text-xs space-y-2.5">
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span className="text-slate-400">Horário anterior (liberado):</span>
+                    <strong className="text-slate-400 line-through">{rescheduleSuccessSummary.original_date} às {rescheduleSuccessSummary.original_time}</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-cyan-200 border-t border-slate-800/80 pt-2">
+                    <span className="text-slate-300 font-semibold">Novo horário reservado:</span>
+                    <strong className="text-cyan-300 font-bold">{rescheduleSuccessSummary.new_date} às {rescheduleSuccessSummary.new_time}</strong>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 text-[11px] text-cyan-400">
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Excepcionalmente nesta semana. Na próxima, seu horário fixo padrão volta ao normal!</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRescheduleModalOccurrence(null);
+                    setRescheduleSuccessSummary(null);
+                    setRescheduleSuccessMsg('');
+                  }}
+                  className="w-full rounded-xl bg-gradient-to-r from-cyan-400 to-teal-400 hover:from-cyan-300 hover:to-teal-300 text-slate-950 font-black text-xs py-2.5 transition-all shadow-lg shadow-cyan-400/20"
+                >
+                  Entendido, fechar
+                </button>
+              </div>
+            ) : (
+              <>
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 flex items-center justify-center shrink-0">
@@ -950,6 +1057,8 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                 )}
               </button>
             </div>
+              </>
+            )}
           </div>
         </div>
       )}

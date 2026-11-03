@@ -25,6 +25,8 @@ import { ClientProfileModal } from '../components/crm/ClientProfileModal';
 import type { RecurringSchedule } from '../types';
 import { isDateOccurrenceOfRecurring } from '../utils/recurringSchedules';
 import { MakeRecurringModal } from '../components/recurring/MakeRecurringModal';
+import { getClientBookingUrl } from '../config/urls';
+import { formatBroadcastFreedSlotMessage, buildWhatsAppShareLink } from '../utils/recurringNotifications';
 
 interface AgendaViewProps {
   appointments: Appointment[];
@@ -96,6 +98,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   setRecurringSchedules,
 }) => {
   const [makeRecurringAppt, setMakeRecurringAppt] = useState<Appointment | null>(null);
+  const [copiedAlertId, setCopiedAlertId] = useState<string | null>(null);
   const [selectedBarberId, setSelectedBarberId] = useState<string>('all');
   const [pendingBarberFocus, setPendingBarberFocus] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateKey());
@@ -844,10 +847,23 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
           {recurringAlertsForDate.map(alert => {
             const time = alert.original_date ? alert.original_date.split(' ')[1] || alert.start_time : alert.start_time;
             const actionText = alert.is_rescheduled ? 'remarcou o horário desta semana' : 'não poderá comparecer esta semana';
+            const origDate = alert.original_date ? alert.original_date.split(' ')[0] : (alert.date || selectedDate);
+            const barberObj = barbers.find(b => b.id === alert.barber_id);
+            const professionalName = barberObj?.full_name || alert.barber_name || org.name || 'Profissional';
+            const publicPageUrl = getClientBookingUrl(org.slug);
+            const broadcastText = formatBroadcastFreedSlotMessage({
+              original_date: origDate,
+              original_time: time,
+              professional_name: professionalName,
+              barbershop_name: org.name,
+              public_page_url: publicPageUrl,
+            });
+            const isCopied = copiedAlertId === alert.id;
+
             return (
               <div 
                 key={alert.id}
-                className="p-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-fadeIn shadow-lg shadow-amber-500/5"
+                className="p-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-200 text-xs flex flex-col md:flex-row md:items-center justify-between gap-3 animate-fadeIn shadow-lg shadow-amber-500/5"
               >
                 <div className="flex items-start sm:items-center gap-2.5">
                   <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 shrink-0">
@@ -862,6 +878,44 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                     )}
                     <span className="text-emerald-400 ml-1 font-semibold block sm:inline">· Horário aberto na agenda pública</span>
                   </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(broadcastText);
+                      setCopiedAlertId(alert.id);
+                      setTimeout(() => setCopiedAlertId(null), 3000);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                      isCopied
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 hover:text-white'
+                    }`}
+                  >
+                    {isCopied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Texto copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>📢</span>
+                        <span>Copiar Texto para Status / WhatsApp</span>
+                      </>
+                    )}
+                  </button>
+
+                  <a
+                    href={buildWhatsAppShareLink(broadcastText)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 transition-colors"
+                    title="Enviar para WhatsApp / Status"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </a>
                 </div>
               </div>
             );

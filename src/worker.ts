@@ -22,6 +22,19 @@ import {
   getDayOfWeekLabel,
   getFrequencyLabel,
 } from './utils/recurringSchedules';
+import {
+  formatDateBR,
+  normalizePhoneToInternational,
+  calculateNextRecurringDate,
+  formatCancelWeekBarberMessage,
+  formatCancelWeekClientMessage,
+  formatRescheduleWeekBarberMessage,
+  formatRescheduleWeekClientMessage,
+  formatWelcomeRecurringClientMessage,
+  formatBroadcastFreedSlotMessage,
+  buildWhatsAppLink,
+  buildWhatsAppShareLink,
+} from './utils/recurringNotifications';
 import type { RecurringSchedule, RecurringFrequency } from './types';
 type D1PreparedStatementLike = {
   bind: (...values: any[]) => D1PreparedStatementLike;
@@ -2135,20 +2148,96 @@ export default {
         }
 
         const notificationId = `notif-cancel-${Date.now()}`;
-        const targetDateFormatted = targetDate.split('-').reverse().join('/');
+        const targetDateFormatted = formatDateBR(targetDate);
+        const professionalName = barber?.full_name || barber?.name || 'Profissional';
+        const professionalPhone = barber?.phone || current.org?.phone || '';
+        const serviceName = service?.name || 'Atendimento';
+        const barbershopName = current.org?.name || 'Barbearia';
+        const nextRecurringDate = calculateNextRecurringDate(targetDate, schedule.frequency);
+        const publicPageUrl = `https://meuagendai.fun/agendar/${encodeURIComponent(current.org.slug || '')}`;
+
+        // 1.1 Mensagem para a Barbearia / Profissional
+        const barberMessage = formatCancelWeekBarberMessage({
+          professional_name: professionalName,
+          client_name: schedule.client_name,
+          client_phone: schedule.client_phone,
+          original_date: targetDate,
+          original_time: schedule.start_time,
+          service_name: serviceName,
+          cancellation_feedback: feedback,
+        });
+
+        // 1.2 Mensagem para o Cliente
+        const clientMessage = formatCancelWeekClientMessage({
+          client_name: schedule.client_name,
+          barbershop_name: barbershopName,
+          original_date: targetDate,
+          original_time: schedule.start_time,
+          frequency_label: getFrequencyLabel(schedule.frequency),
+          next_recurring_date: nextRecurringDate,
+        });
+
+        // Mensagem de Divulgação da Vaga Liberada no Status / WhatsApp
+        const broadcastMessage = formatBroadcastFreedSlotMessage({
+          original_date: targetDate,
+          original_time: schedule.start_time,
+          professional_name: professionalName,
+          barbershop_name: barbershopName,
+          public_page_url: publicPageUrl,
+        });
+
+        const barberWaLink = professionalPhone ? buildWhatsAppLink(professionalPhone, barberMessage) : '';
+        const clientWaLink = schedule.client_phone ? buildWhatsAppLink(schedule.client_phone, clientMessage) : '';
+
         const newNotification = {
           id: notificationId,
           org_id: current.org.id,
-          type: 'appointment_canceled',
+          type: 'recurring_freed',
           title: 'Vaga liberada por Cliente Fixo',
           message: `${schedule.client_name} liberou a vaga de ${targetDateFormatted} às ${schedule.start_time}. Motivo: ${feedback}`,
           created_at: new Date().toISOString(),
           client_name: schedule.client_name,
+          client_phone: schedule.client_phone,
+          barber_id: schedule.professional_id,
+          wa_link: barberWaLink || clientWaLink,
+          broadcast_text: broadcastMessage,
+          freed_date: targetDate,
+          freed_time: schedule.start_time,
           target_tab: 'agenda',
         };
         current.notifications = [newNotification, ...(Array.isArray(current.notifications) ? current.notifications : [])].slice(0, 100);
 
         await storePayload(env, current, current.org.slug, String(current.updated_at || ''));
+
+        // Disparo assíncrono de WhatsApp para não travar resposta da API pública
+        const notifyBarber = current.org?.recurring_whatsapp_notify_barber !== false;
+        const notifyClient = current.org?.recurring_whatsapp_notify_client !== false;
+
+        const dispatchWhatsAppTask = async () => {
+          try {
+            const connection = await getTenantWhatsAppConnection(env, current.org.slug);
+            const phoneId = connection.status === 'connected' && connection.phoneNumberId
+              ? connection.phoneNumberId
+              : env.WHATSAPP_PHONE_NUMBER_ID;
+
+            if (!phoneId || !env.WHATSAPP_ACCESS_TOKEN) return;
+
+            if (notifyBarber && professionalPhone) {
+              const intlBarberPhone = normalizePhoneToInternational(professionalPhone);
+              await sendWhatsAppTextMessage(intlBarberPhone, barberMessage, phoneId, env);
+            }
+
+            if (notifyClient && schedule.client_phone) {
+              const intlClientPhone = normalizePhoneToInternational(schedule.client_phone);
+              await sendWhatsAppTextMessage(intlClientPhone, clientMessage, phoneId, env);
+            }
+          } catch (waErr) {
+            console.warn('Falha no disparo assíncrono de WhatsApp (cancel-week):', waErr);
+          }
+        };
+
+        if (ctx?.waitUntil) ctx.waitUntil(dispatchWhatsAppTask());
+        else dispatchWhatsAppTask().catch(console.warn);
 
         const email = normalizeEmail(current.org?.email);
         if (email) {
@@ -2165,6 +2254,13 @@ export default {
         return jsonResponse({
           success: true,
           message: `Você liberou o horário do dia ${targetDateFormatted}. Seu horário fixo das próximas semanas continua 100% garantido!`,
+          summary: {
+            original_date: targetDateFormatted,
+            original_time: schedule.start_time,
+            professional_name: professionalName,
+            next_recurring_date: nextRecurringDate,
+            barber_notified: true,
+          },
         });
       } catch (error: any) {
         return jsonResponse({ error: error?.message || 'Falha ao liberar horário.' }, 500);
@@ -2288,21 +2384,100 @@ export default {
         }
 
         const notificationId = `notif-resched-${Date.now()}`;
-        const origFormatted = origDateOnly.split('-').reverse().join('/');
-        const newFormatted = newDate.split('-').reverse().join('/');
+        const origFormatted = formatDateBR(origDateOnly);
+        const newFormatted = formatDateBR(newDate);
+        const professionalName = barber?.full_name || barber?.name || 'Profissional';
+        const professionalPhone = barber?.phone || current.org?.phone || '';
+        const serviceName = service?.name || 'Atendimento';
+        const barbershopName = current.org?.name || 'Barbearia';
+        const publicPageUrl = `https://meuagendai.fun/agendar/${encodeURIComponent(current.org.slug || '')}`;
+
+        // 2.1 Mensagem para a Barbearia / Profissional
+        const barberMessage = formatRescheduleWeekBarberMessage({
+          professional_name: professionalName,
+          client_name: schedule.client_name,
+          client_phone: schedule.client_phone,
+          original_date: origDateOnly,
+          original_time: schedule.start_time,
+          new_date: newDate,
+          new_time: newTime,
+          service_name: serviceName,
+          cancellation_feedback: feedback,
+        });
+
+        // 2.2 Mensagem para o Cliente
+        const clientMessage = formatRescheduleWeekClientMessage({
+          client_name: schedule.client_name,
+          barbershop_name: barbershopName,
+          new_date: newDate,
+          new_time: newTime,
+          professional_name: professionalName,
+          service_name: serviceName,
+          day_of_week_label: getDayOfWeekLabel(schedule.day_of_week),
+          original_time: schedule.start_time,
+        });
+
+        // Mensagem de Divulgação da Vaga Liberada no Status / WhatsApp
+        const broadcastMessage = formatBroadcastFreedSlotMessage({
+          original_date: origDateOnly,
+          original_time: schedule.start_time,
+          professional_name: professionalName,
+          barbershop_name: barbershopName,
+          public_page_url: publicPageUrl,
+        });
+
+        const barberWaLink = professionalPhone ? buildWhatsAppLink(professionalPhone, barberMessage) : '';
+        const clientWaLink = schedule.client_phone ? buildWhatsAppLink(schedule.client_phone, clientMessage) : '';
+
         const newNotification = {
           id: notificationId,
           org_id: current.org.id,
-          type: 'appointment_rescheduled',
+          type: 'recurring_rescheduled',
           title: 'Cliente Fixo Remarcou Horário',
           message: `${schedule.client_name} trocou ${origFormatted} às ${schedule.start_time} para ${newFormatted} às ${newTime}. Motivo: ${feedback}`,
           created_at: new Date().toISOString(),
           client_name: schedule.client_name,
+          client_phone: schedule.client_phone,
+          barber_id: schedule.professional_id,
+          wa_link: barberWaLink || clientWaLink,
+          broadcast_text: broadcastMessage,
+          freed_date: origDateOnly,
+          freed_time: schedule.start_time,
           target_tab: 'agenda',
         };
         current.notifications = [newNotification, ...(Array.isArray(current.notifications) ? current.notifications : [])].slice(0, 100);
 
         await storePayload(env, current, current.org.slug, String(current.updated_at || ''));
+
+        // Disparo assíncrono de WhatsApp para não travar resposta da API pública
+        const notifyBarber = current.org?.recurring_whatsapp_notify_barber !== false;
+        const notifyClient = current.org?.recurring_whatsapp_notify_client !== false;
+
+        const dispatchWhatsAppTask = async () => {
+          try {
+            const connection = await getTenantWhatsAppConnection(env, current.org.slug);
+            const phoneId = connection.status === 'connected' && connection.phoneNumberId
+              ? connection.phoneNumberId
+              : env.WHATSAPP_PHONE_NUMBER_ID;
+
+            if (!phoneId || !env.WHATSAPP_ACCESS_TOKEN) return;
+
+            if (notifyBarber && professionalPhone) {
+              const intlBarberPhone = normalizePhoneToInternational(professionalPhone);
+              await sendWhatsAppTextMessage(intlBarberPhone, barberMessage, phoneId, env);
+            }
+
+            if (notifyClient && schedule.client_phone) {
+              const intlClientPhone = normalizePhoneToInternational(schedule.client_phone);
+              await sendWhatsAppTextMessage(intlClientPhone, clientMessage, phoneId, env);
+            }
+          } catch (waErr) {
+            console.warn('Falha no disparo assíncrono de WhatsApp (reschedule-week):', waErr);
+          }
+        };
+
+        if (ctx?.waitUntil) ctx.waitUntil(dispatchWhatsAppTask());
+        else dispatchWhatsAppTask().catch(console.warn);
 
         const email = normalizeEmail(current.org?.email);
         if (email) {
@@ -2320,6 +2495,15 @@ export default {
           success: true,
           message: `Tudo certo! Excepcionalmente nesta semana seu horário mudou para ${newFormatted} às ${newTime}. Na próxima vez seu horário fixo padrão continua normal.`,
           appointment: cleanRescheduled,
+          summary: {
+            original_date: origFormatted,
+            original_time: schedule.start_time,
+            new_date: newFormatted,
+            new_time: newTime,
+            professional_name: professionalName,
+            service_name: serviceName,
+            barber_notified: true,
+          },
         });
       } catch (error: any) {
         return jsonResponse({ error: error?.message || 'Falha ao remarcar horário.' }, 500);
@@ -2467,8 +2651,58 @@ export default {
             current.clients = clients;
           }
 
+          const notifyClient = current.org?.recurring_whatsapp_notify_client !== false;
+          const barber = (Array.isArray(current.barbers) ? current.barbers : []).find((b: any) => b.id === newSchedule.professional_id);
+          const service = (Array.isArray(current.services) ? current.services : []).find((s: any) => s.id === newSchedule.service_id);
+          const professionalName = barber?.full_name || barber?.name || 'Profissional';
+          const serviceName = service?.name || 'Atendimento';
+          const barbershopName = current.org?.name || 'Barbearia';
+          const publicPageUrl = `https://meuagendai.fun/agendar/${encodeURIComponent(current.org?.slug || '')}`;
+
+          const welcomeMessage = formatWelcomeRecurringClientMessage({
+            client_name: newSchedule.client_name,
+            barbershop_name: barbershopName,
+            frequency_label: getFrequencyLabel(newSchedule.frequency),
+            day_of_week_label: getDayOfWeekLabel(newSchedule.day_of_week),
+            start_time: newSchedule.start_time,
+            professional_name: professionalName,
+            service_name: serviceName,
+            first_date: newSchedule.anchor_date,
+            public_page_url: publicPageUrl,
+          });
+
+          const welcomeWaLink = newSchedule.client_phone
+            ? buildWhatsAppLink(newSchedule.client_phone, welcomeMessage)
+            : '';
+
+          if (notifyClient && newSchedule.client_phone) {
+            const dispatchWelcomeTask = async () => {
+              try {
+                const connection = await getTenantWhatsAppConnection(env, current.org?.slug);
+                const phoneId = connection.status === 'connected' && connection.phoneNumberId
+                  ? connection.phoneNumberId
+                  : env.WHATSAPP_PHONE_NUMBER_ID;
+
+                if (!phoneId || !env.WHATSAPP_ACCESS_TOKEN) return;
+
+                const intlClientPhone = normalizePhoneToInternational(newSchedule.client_phone);
+                await sendWhatsAppTextMessage(intlClientPhone, welcomeMessage, phoneId, env);
+              } catch (waErr) {
+                console.warn('Falha no disparo de boas-vindas WhatsApp:', waErr);
+              }
+            };
+
+            if (ctx?.waitUntil) ctx.waitUntil(dispatchWelcomeTask());
+            else dispatchWelcomeTask().catch(console.warn);
+          }
+
           await storePayload(env, current, current.org?.slug, String(current.updated_at || ''));
-          return jsonResponse({ success: true, schedule: newSchedule }, 201);
+          return jsonResponse({
+            success: true,
+            schedule: newSchedule,
+            welcome_wa_link: welcomeWaLink,
+            welcome_message: welcomeMessage,
+          }, 201);
         } catch (err: any) {
           return jsonResponse({ error: err?.message || 'Falha ao criar cliente fixo.' }, 500);
         }

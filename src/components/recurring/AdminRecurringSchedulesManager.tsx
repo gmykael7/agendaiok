@@ -15,7 +15,8 @@ import {
   Phone,
   Search,
   Check,
-  X
+  X,
+  MessageSquare
 } from 'lucide-react';
 import type { Barber, Organization, RecurringFrequency, RecurringSchedule, RecurringStatus, Service, Client } from '../../types';
 import { formatPhoneBR, buildWhatsAppUrl } from '../../utils/whatsapp';
@@ -30,6 +31,7 @@ import {
 
 interface AdminRecurringSchedulesManagerProps {
   org: Organization;
+  setOrg?: React.Dispatch<React.SetStateAction<Organization>>;
   recurringSchedules: RecurringSchedule[];
   setRecurringSchedules: React.Dispatch<React.SetStateAction<RecurringSchedule[]>>;
   barbers: Barber[];
@@ -40,6 +42,7 @@ interface AdminRecurringSchedulesManagerProps {
 
 export const AdminRecurringSchedulesManager: React.FC<AdminRecurringSchedulesManagerProps> = ({
   org,
+  setOrg,
   recurringSchedules,
   setRecurringSchedules,
   barbers,
@@ -277,6 +280,65 @@ export const AdminRecurringSchedulesManager: React.FC<AdminRecurringSchedulesMan
           <Plus className="w-4 h-4" />
           <span>Novo Cliente Fixo</span>
         </button>
+      </div>
+
+      {/* CONFIGURAÇÃO DE NOTIFICAÇÕES VIA WHATSAPP */}
+      <div className="recurring-subcard rounded-2xl border border-slate-800 bg-[#0B1526] p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+            <MessageSquare className="w-4 h-4" />
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-white">Notificações Automáticas de Clientes Fixos</h4>
+            <p className="text-[11px] text-slate-400">Mensagens e alertas automáticos via WhatsApp</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+          <label className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-700/60 bg-slate-900/60 cursor-pointer hover:border-slate-600 transition-colors">
+            <input
+              type="checkbox"
+              checked={org.recurring_whatsapp_notify_client !== false}
+              onChange={(e) => {
+                if (setOrg) {
+                  setOrg(prev => ({
+                    ...prev,
+                    recurring_whatsapp_notify_client: e.target.checked,
+                  }));
+                }
+              }}
+              className="mt-0.5 rounded border-slate-600 bg-slate-800 text-purple-600 focus:ring-purple-500"
+            />
+            <div className="text-xs">
+              <span className="font-semibold text-white block">Enviar confirmação no WhatsApp do cliente ao cancelar/remarcar horário fixo</span>
+              <span className="text-[11px] text-slate-400">
+                O cliente recebe aviso com o cancelamento da semana ou remarcação e o próximo horário fixo garantido.
+              </span>
+            </div>
+          </label>
+
+          <label className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-700/60 bg-slate-900/60 cursor-pointer hover:border-slate-600 transition-colors">
+            <input
+              type="checkbox"
+              checked={org.recurring_whatsapp_notify_barber !== false}
+              onChange={(e) => {
+                if (setOrg) {
+                  setOrg(prev => ({
+                    ...prev,
+                    recurring_whatsapp_notify_barber: e.target.checked,
+                  }));
+                }
+              }}
+              className="mt-0.5 rounded border-slate-600 bg-slate-800 text-purple-600 focus:ring-purple-500"
+            />
+            <div className="text-xs">
+              <span className="font-semibold text-white block">Enviar alerta no WhatsApp do barbeiro com o feedback do cliente</span>
+              <span className="text-[11px] text-slate-400">
+                Notifica imediatamente o profissional e a barbearia assim que um horário for liberado.
+              </span>
+            </div>
+          </label>
+        </div>
       </div>
 
       {/* Barra de Filtros e Busca */}

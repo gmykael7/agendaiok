@@ -578,6 +578,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
       {activeMainTab === 'recurring' ? (
         <AdminRecurringSchedulesManager
           org={org}
+          setOrg={setOrg}
           recurringSchedules={recurringSchedules}
           setRecurringSchedules={setRecurringSchedules || (() => {})}
           barbers={barbers}

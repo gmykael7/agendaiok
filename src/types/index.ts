@@ -254,7 +254,9 @@ export type AppNotificationType =
   | 'appointment_started'
   | 'appointment_no_show'
   | 'product_order'
-  | 'waitlist_entry';
+  | 'waitlist_entry'
+  | 'recurring_freed'
+  | 'recurring_rescheduled';
 
 export interface AppNotification {
   id: string;
@@ -267,6 +269,12 @@ export interface AppNotification {
   appointment_id?: string;
   client_id?: string;
   client_name?: string;
+  client_phone?: string;
+  barber_id?: string;
+  wa_link?: string;
+  broadcast_text?: string;
+  freed_date?: string;
+  freed_time?: string;
   target_tab?: 'agenda' | 'atendimentos' | 'clientes' | 'relatorios' | 'produtos';
 }
 
@@ -383,6 +391,8 @@ export interface Organization {
   whatsapp_reminder_template?: string;
   whatsapp_thanks_template?: string;
   whatsapp_inactive_template?: string;
+  recurring_whatsapp_notify_client?: boolean;
+  recurring_whatsapp_notify_barber?: boolean;
   tv_enabled?: boolean;
   tv_youtube_url?: string;
   tv_media_type?: 'youtube' | 'spotify' | 'apple_music' | 'audio' | 'institutional';
