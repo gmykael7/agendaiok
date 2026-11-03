@@ -10,7 +10,7 @@ const preset = (role: StaffRole): StaffPermissions => role === 'admin'
   : { dashboard:true, atendimentos:true, agenda:true, caixa:false, clientes:true, relatorios:false, ajustes:false, equipe:false, usuarios:false, products:false };
 
 const permissionLabels: Array<[keyof StaffPermissions, string]> = [
-  ['dashboard','Dashboard'], ['atendimentos','Atendimentos'], ['agenda','Agenda'], ['caixa','Caixa'],
+  ['dashboard','Início'], ['atendimentos','Atendimentos'], ['agenda','Agenda'], ['caixa','Caixa'],
   ['clientes','Clientes'], ['products','Produtos & vendas'], ['relatorios','Relatórios'], ['ajustes','Ajustes gerais'], ['equipe','Equipe e comissões'], ['usuarios','Usuários e permissões'],
 ];
 

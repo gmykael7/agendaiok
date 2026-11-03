@@ -757,46 +757,50 @@ button:disabled,
 
 .app-bottom-nav {
   background: transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-  padding-bottom: 0 !important;
-}
-
-.app-bottom-nav-wave-svg {
-  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.55));
-  will-change: transform;
-  transform: translateZ(0);
-}
-
-.app-bottom-nav-wave-path {
-  fill: rgba(12, 21, 39, 0.96);
-  stroke: rgba(255, 255, 255, 0.09);
-  stroke-width: 1.2px;
-}
-
-.app-bottom-nav-side-btn {
-  color: #8b9bb4 !important;
-}
-
-.app-bottom-nav-side-btn:hover {
-  color: #cbd5e1 !important;
-}
-
-.app-bottom-nav-side-btn.is-active {
-  color: #ffffff !important;
-}
-
-.app-bottom-nav-hero {
-  background: var(--brand-color) !important;
-  color: var(--hero-icon-color, #ffffff) !important;
   border: none !important;
-  box-shadow: 0 10px 24px -2px color-mix(in srgb, var(--brand-color) 55%, transparent) !important;
+  box-shadow: none !important;
+  padding: 0 !important;
 }
 
-.app-bottom-nav-hero svg {
-  color: var(--hero-icon-color, #ffffff) !important;
-  stroke: var(--hero-icon-color, #ffffff) !important;
+.app-bottom-nav-bar {
+  background: rgba(12, 21, 39, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
+  border-radius: 9999px;
+}
+
+.app-bottom-nav-sliding-pill {
+  background: linear-gradient(135deg, var(--brand-color, #10b981) 0%, color-mix(in srgb, var(--brand-color, #10b981) 60%, #06b6d4) 50%, #06b6d4 100%);
+  border-radius: 9999px;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--brand-color, #10b981) 45%, transparent),
+              0 1px 6px color-mix(in srgb, #06b6d4 35%, transparent);
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.app-bottom-nav-item {
+  color: #94a3b8 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.app-bottom-nav-item:hover {
+  color: #e2e8f0 !important;
+}
+
+.app-bottom-nav-item.is-active {
+  --iconly-cutout: #022c22;
+  --app-surface-color: #022c22;
+  color: #ffffff !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.app-bottom-nav-item.is-active svg {
+  color: #ffffff !important;
 }
 
 .app-content {
@@ -1453,44 +1457,45 @@ html[data-app-theme="light"] .app-sidebar {
 
 html[data-app-theme="light"] .app-bottom-nav {
   background: transparent !important;
-  border-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+html[data-app-theme="light"] .app-bottom-nav-bar {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 12px 28px -6px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(15, 23, 42, 0.05);
+  border-radius: 9999px;
+}
+
+html[data-app-theme="light"] .app-bottom-nav-sliding-pill {
+  background: linear-gradient(135deg, var(--brand-color, #059669) 0%, color-mix(in srgb, var(--brand-color, #059669) 60%, #0891b2) 50%, #0891b2 100%);
+  border-radius: 9999px;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--brand-color, #059669) 35%, transparent),
+              0 1px 6px color-mix(in srgb, #0891b2 25%, transparent);
+}
+
+html[data-app-theme="light"] .app-bottom-nav-item {
+  color: #64748b !important;
+  background: transparent !important;
+  border: none !important;
   box-shadow: none !important;
 }
 
-html[data-app-theme="light"] .app-bottom-nav-wave-svg {
-  filter: drop-shadow(0 10px 22px rgba(15, 23, 42, 0.1));
-  will-change: transform;
-  transform: translateZ(0);
-}
-
-html[data-app-theme="light"] .app-bottom-nav-wave-path {
-  fill: rgba(255, 255, 255, 0.98);
-  stroke: rgba(226, 232, 240, 0.95);
-  stroke-width: 1.2px;
-}
-
-html[data-app-theme="light"] .app-bottom-nav-side-btn {
-  color: #94a3b8 !important;
-}
-
-html[data-app-theme="light"] .app-bottom-nav-side-btn:hover {
-  color: #475569 !important;
-}
-
-html[data-app-theme="light"] .app-bottom-nav-side-btn.is-active {
+html[data-app-theme="light"] .app-bottom-nav-item:hover {
   color: #0f172a !important;
 }
 
-html[data-app-theme="light"] .app-bottom-nav-hero {
-  background: var(--brand-color) !important;
-  color: var(--hero-icon-color, #ffffff) !important;
-  border: none !important;
-  box-shadow: 0 10px 24px -2px color-mix(in srgb, var(--brand-color) 50%, transparent) !important;
-}
-
-html[data-app-theme="light"] .app-bottom-nav-hero svg {
-  color: var(--hero-icon-color, #ffffff) !important;
-  stroke: var(--hero-icon-color, #ffffff) !important;
+html[data-app-theme="light"] .app-bottom-nav-item.is-active,
+html[data-app-theme="light"] .app-bottom-nav-item.is-active :where(.text-white, svg, span) {
+  --iconly-cutout: #064e3b;
+  --app-surface-color: #064e3b;
+  color: #ffffff !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 html[data-app-theme="light"] .app-sidebar-item:hover {
@@ -1502,7 +1507,7 @@ html[data-app-theme="light"] .app-sidebar-item[aria-current="page"] {
   background-color: color-mix(in srgb, var(--brand-color) 15%, white) !important;
 }
 
-html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view, .notification-center-panel) :where(.text-white, .text-slate-100) {
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .auth-view, .booking-view, .notification-center-panel) :where(.text-white, .text-slate-100) {
   color: #172033 !important;
 }
 
@@ -1515,31 +1520,31 @@ html[data-app-theme="light"] .booking-showcase-media :where(.text-white) {
   padding: 0;
 }
 
-html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view, .notification-center-panel) .text-slate-200 {
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .auth-view, .booking-view, .notification-center-panel) .text-slate-200 {
   color: #334155 !important;
 }
 
-html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view, .notification-center-panel) .text-slate-300 {
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .auth-view, .booking-view, .notification-center-panel) .text-slate-300 {
   color: #475569 !important;
 }
 
-html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view, .notification-center-panel) :where(.text-slate-400, .text-slate-500) {
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .auth-view, .booking-view, .notification-center-panel) :where(.text-slate-400, .text-slate-500) {
   color: #64748b !important;
 }
 
-html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view, .notification-center-panel) :where([class~="text-cyan-200"], [class~="text-cyan-300"], [class~="text-cyan-400"]) {
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .auth-view, .booking-view, .notification-center-panel) :where([class~="text-cyan-200"], [class~="text-cyan-300"], [class~="text-cyan-400"]) {
   color: color-mix(in srgb, var(--brand-accent) 70%, #0f172a) !important;
 }
 
-html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view, .notification-center-panel) :where([class~="text-emerald-300"], [class~="text-emerald-400"]) {
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .auth-view, .booking-view, .notification-center-panel) :where([class~="text-emerald-300"], [class~="text-emerald-400"]) {
   color: color-mix(in srgb, var(--brand-color) 55%, #172033) !important;
 }
 
-html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view, .notification-center-panel) :where([class~="text-amber-200"], [class~="text-amber-300"], [class~="text-amber-400"]) {
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .auth-view, .booking-view, .notification-center-panel) :where([class~="text-amber-200"], [class~="text-amber-300"], [class~="text-amber-400"]) {
   color: #a34c0b !important;
 }
 
-html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .app-bottom-nav, .auth-view, .booking-view, .notification-center-panel) :where([class~="text-rose-300"], [class~="text-rose-400"]) {
+html[data-app-theme="light"] :where(.app-view, .app-header, .app-sidebar, .auth-view, .booking-view, .notification-center-panel) :where([class~="text-rose-300"], [class~="text-rose-400"]) {
   color: #be123c !important;
 }
 

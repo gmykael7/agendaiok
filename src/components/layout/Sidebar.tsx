@@ -52,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const publicPageLabel = publicPageUrl.replace(/^https?:\/\//, '');
 
   const menuItems: { id: TabType; label: string; icon: React.FC<IconlyProps>; permission: keyof StaffPermissions }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: IconlyHome, permission: 'dashboard' },
+    { id: 'dashboard', label: 'Início', icon: IconlyHome, permission: 'dashboard' },
     { id: 'atendimentos', label: 'Atender', icon: IconlyClipboard, permission: 'atendimentos' },
     { id: 'agenda', label: 'Agenda', icon: IconlyCalendar, permission: 'agenda' },
     { id: 'clientes', label: 'Clientes', icon: IconlyUsers, permission: 'clientes' },

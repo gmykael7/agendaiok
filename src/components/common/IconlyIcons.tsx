@@ -69,7 +69,7 @@ export const IconlyClipboard: React.FC<IconlyProps> = ({ className = 'w-6 h-6', 
     />
     <path
       d="M9.2 13.3l2.1 2.1 3.9-4.1"
-      stroke={active ? 'var(--app-surface-color, #ffffff)' : 'currentColor'}
+      stroke={active ? 'var(--iconly-cutout, var(--app-surface-color, #042f2e))' : 'currentColor'}
       strokeWidth="2.2"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -144,31 +144,31 @@ export const IconlyCalendar: React.FC<IconlyProps> = ({
         cx="8.5"
         cy="13.2"
         r="1.2"
-        fill={active ? 'var(--app-surface-color, #ffffff)' : 'currentColor'}
+        fill={active ? 'var(--iconly-cutout, var(--app-surface-color, #042f2e))' : 'currentColor'}
       />
       <circle
         cx="12"
         cy="13.2"
         r="1.2"
-        fill={active ? 'var(--app-surface-color, #ffffff)' : 'currentColor'}
+        fill={active ? 'var(--iconly-cutout, var(--app-surface-color, #042f2e))' : 'currentColor'}
       />
       <circle
         cx="15.5"
         cy="13.2"
         r="1.2"
-        fill={active ? 'var(--app-surface-color, #ffffff)' : 'currentColor'}
+        fill={active ? 'var(--iconly-cutout, var(--app-surface-color, #042f2e))' : 'currentColor'}
       />
       <circle
         cx="8.5"
         cy="16.8"
         r="1.2"
-        fill={active ? 'var(--app-surface-color, #ffffff)' : 'currentColor'}
+        fill={active ? 'var(--iconly-cutout, var(--app-surface-color, #042f2e))' : 'currentColor'}
       />
       <circle
         cx="12"
         cy="16.8"
         r="1.2"
-        fill={active ? 'var(--app-surface-color, #ffffff)' : 'currentColor'}
+        fill={active ? 'var(--iconly-cutout, var(--app-surface-color, #042f2e))' : 'currentColor'}
       />
     </svg>
   );
@@ -192,7 +192,7 @@ export const IconlyWallet: React.FC<IconlyProps> = ({ className = 'w-6 h-6', act
     />
     <path
       d="M15.2 9.5H21.5v5H15.2a2.5 2.5 0 0 1 0-5Z"
-      fill={active ? 'var(--app-surface-color, #ffffff)' : 'currentColor'}
+      fill={active ? 'var(--iconly-cutout, var(--app-surface-color, #042f2e))' : 'currentColor'}
       className={active ? 'iconly-flap-slide' : ''}
     />
     <circle
@@ -220,7 +220,7 @@ export const IconlySetting: React.FC<IconlyProps> = ({ className = 'w-6 h-6', ac
       cx="12"
       cy="12"
       r="3.4"
-      fill={active ? 'var(--app-surface-color, #ffffff)' : 'currentColor'}
+      fill={active ? 'var(--iconly-cutout, var(--app-surface-color, #042f2e))' : 'currentColor'}
     />
   </svg>
 );
@@ -282,13 +282,13 @@ export const IconlyBag: React.FC<IconlyProps> = ({ className = 'w-6 h-6', active
       cx="9.2"
       cy="11.5"
       r="1"
-      fill={active ? 'var(--app-surface-color, #ffffff)' : 'currentColor'}
+      fill={active ? 'var(--iconly-cutout, var(--app-surface-color, #042f2e))' : 'currentColor'}
     />
     <circle
       cx="14.8"
       cy="11.5"
       r="1"
-      fill={active ? 'var(--app-surface-color, #ffffff)' : 'currentColor'}
+      fill={active ? 'var(--iconly-cutout, var(--app-surface-color, #042f2e))' : 'currentColor'}
     />
   </svg>
 );
@@ -307,7 +307,7 @@ export const IconlyReceipt: React.FC<IconlyProps> = ({ className = 'w-6 h-6', ac
     />
     <path
       d="M8.5 8.5h7M8.5 12.5h4.5"
-      stroke={active ? 'var(--app-surface-color, #ffffff)' : 'currentColor'}
+      stroke={active ? 'var(--iconly-cutout, var(--app-surface-color, #042f2e))' : 'currentColor'}
       strokeWidth="2"
       strokeLinecap="round"
     />
@@ -328,7 +328,7 @@ export const IconlyBadge: React.FC<IconlyProps> = ({ className = 'w-6 h-6', acti
     />
     <path
       d="m9.3 12.2 1.9 1.9 3.6-3.8"
-      stroke={active ? 'var(--app-surface-color, #ffffff)' : 'currentColor'}
+      stroke={active ? 'var(--iconly-cutout, var(--app-surface-color, #042f2e))' : 'currentColor'}
       strokeWidth="2.2"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -379,7 +379,7 @@ export const IconlyChart: React.FC<IconlyProps> = ({ className = 'w-6 h-6', acti
     />
     <path
       d="M8.2 15.8v-3.2M12 15.8V8.5M15.8 15.8v-5.2"
-      stroke={active ? 'var(--app-surface-color, #ffffff)' : 'currentColor'}
+      stroke={active ? 'var(--iconly-cutout, var(--app-surface-color, #042f2e))' : 'currentColor'}
       strokeWidth="2.2"
       strokeLinecap="round"
     />
