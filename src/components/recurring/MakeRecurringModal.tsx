@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Sparkles, Calendar, Clock, User, Phone, Check, RefreshCw, AlertCircle } from 'lucide-react';
 import type { Appointment, Barber, Organization, RecurringFrequency, RecurringSchedule, RecurringStatus, Service } from '../../types';
 import { formatPhoneBR } from '../../utils/whatsapp';
+import { getAuthToken } from '../../services/cloudSync';
 import {
   DAY_NAMES,
   getDayOfWeekFromDate,
@@ -87,9 +88,13 @@ export const MakeRecurringModal: React.FC<MakeRecurringModalProps> = ({
 
     setIsSubmitting(true);
     try {
+      const token = getAuthToken();
       const res = await fetch('/api/admin/recurring-schedules', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(candidate),
       });
 

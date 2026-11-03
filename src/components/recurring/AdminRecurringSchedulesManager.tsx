@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type { Barber, Organization, RecurringFrequency, RecurringSchedule, RecurringStatus, Service, Client } from '../../types';
 import { formatPhoneBR, buildWhatsAppUrl } from '../../utils/whatsapp';
+import { getAuthToken } from '../../services/cloudSync';
 import {
   DAY_NAMES,
   getDayOfWeekLabel,
@@ -123,9 +124,13 @@ export const AdminRecurringSchedulesManager: React.FC<AdminRecurringSchedulesMan
   const handleTogglePause = async (schedule: RecurringSchedule) => {
     const nextStatus: RecurringStatus = schedule.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
     try {
+      const token = getAuthToken();
       const res = await fetch('/api/admin/recurring-schedules', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ id: schedule.id, status: nextStatus }),
       });
       if (res.ok) {
@@ -144,8 +149,12 @@ export const AdminRecurringSchedulesManager: React.FC<AdminRecurringSchedulesMan
       return;
     }
     try {
+      const token = getAuthToken();
       const res = await fetch(`/api/admin/recurring-schedules?id=${schedule.id}`, {
         method: 'DELETE',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
       if (res.ok) {
         setRecurringSchedules((prev) => prev.filter((s) => s.id !== schedule.id));
@@ -200,9 +209,13 @@ export const AdminRecurringSchedulesManager: React.FC<AdminRecurringSchedulesMan
       const method = isEdit ? 'PUT' : 'POST';
       const payload = isEdit ? { ...candidate, id: editingSchedule!.id } : candidate;
 
+      const token = getAuthToken();
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
 
