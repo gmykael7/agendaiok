@@ -5,7 +5,7 @@ import {
   Sparkles, Check, ChevronLeft, ChevronRight, AlertCircle, Share2, Plus, CheckSquare, Square, Lock, ShoppingBag, ShoppingCart, Minus, PackageCheck, Image as ImageIcon,
   Zap, Gift, Award
 } from 'lucide-react';
-import { Organization, Service, Barber, Appointment, Product, WaitlistEntry } from '../types';
+import { Organization, Service, Barber, Appointment, Product, WaitlistEntry, RecurringSchedule } from '../types';
 import { LoyaltyCardWidget } from '../components/loyalty/LoyaltyCardWidget';
 import { pushAppointmentToCloud, pushProductOrderToCloud } from '../services/cloudSync';
 import { BarberAvatar } from '../components/common/BarberAvatar';
@@ -28,12 +28,14 @@ import { buildGoogleCalendarUrl, downloadIcsFile } from '../utils/calendarLinks'
 import { localDateKey } from '../utils/localDate';
 import { gsap, MOTION_ALLOWED_QUERY, useGSAP } from '../utils/motion';
 import type { AppThemeMode } from '../config/theme';
+import { RecurringClientScheduleWidget } from '../components/public/RecurringClientScheduleWidget';
 
 interface TenantBookingViewProps {
   org: Organization;
   services: Service[];
   barbers: Barber[];
   appointments: Appointment[];
+  recurringSchedules?: RecurringSchedule[];
   products?: Product[];
   onProductsChanged?: (products: Product[]) => void;
   onAddAppointment: (newApp: Omit<Appointment, 'id'> & { id?: string }) => Appointment | void;
@@ -45,15 +47,17 @@ interface TenantBookingViewProps {
   onThemeModeChange?: (mode: AppThemeMode) => void;
 }
 
-// Verifica se um slot de horário está ocupado por agendamento existente
+// Verifica se um slot de horário está ocupado por agendamento existente ou cliente fixo
 export const isTimeSlotOccupied = (
   slotTime: string,
   candidateDurationMinutes: number,
   barberId: string,
   dateStr: string,
   allAppointments: Appointment[],
-  excludeAppointmentId?: string
-): boolean => isPublicTimeSlotOccupied(slotTime, candidateDurationMinutes, barberId, dateStr, allAppointments, excludeAppointmentId);
+  excludeAppointmentId?: string,
+  recurringSchedules?: RecurringSchedule[],
+  services?: Service[]
+): boolean => isPublicTimeSlotOccupied(slotTime, candidateDurationMinutes, barberId, dateStr, allAppointments, excludeAppointmentId, recurringSchedules, services);
 
 
 const getLocalDateStr = (now = new Date(), timeZone?: string): string =>
@@ -164,6 +168,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
   services,
   barbers,
   appointments,
+  recurringSchedules = [],
   products = [],
   onProductsChanged,
   onAddAppointment,
@@ -478,10 +483,11 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
         appointments,
         dateStr: cell.dateStr,
         now: statusClock,
+        recurringSchedules,
       }));
     });
     return statuses;
-  }, [calendarDays, org, activeServices, activeBarbers, appointments, statusClock]);
+  }, [calendarDays, org, activeServices, activeBarbers, appointments, statusClock, recurringSchedules]);
 
   // Totais calculados dos serviços selecionados
   const totalPrice = useMemo(() => {
@@ -580,7 +586,10 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
       totalDuration,
       selectedBarber.id,
       selectedDate,
-      appointments
+      appointments,
+      undefined,
+      recurringSchedules,
+      services
     );
 
     if (isOccupied) {
@@ -783,6 +792,16 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
 
           <PublicShowcase org={org} />
 
+          {publicMode === 'services' && !confirmed && (
+            <RecurringClientScheduleWidget
+              org={org}
+              services={services}
+              barbers={barbers}
+              appointments={appointments}
+              recurringSchedules={recurringSchedules}
+              onRefreshData={onRefreshAppointments}
+            />
+          )}
 
           {publicMode === 'services' && !confirmed && (
             <BookingAssistant key={org.slug} org={org} services={services} barbers={barbers} appointments={appointments} onChooseSlot={chooseAssistantSlot} />
@@ -1412,7 +1431,10 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                           totalDuration,
                           selectedBarber?.id || '',
                           selectedDate,
-                          appointments
+                          appointments,
+                          undefined,
+                          recurringSchedules,
+                          services
                         );
                         const isOutsideBusinessTime = !isBookableBusinessTime(time, totalDuration, org);
                         const isExceptionalClosure = overlapsBusinessClosure(time, totalDuration, selectedDate, org);

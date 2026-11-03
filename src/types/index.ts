@@ -163,6 +163,32 @@ export interface Appointment {
   reminder_sent_at?: string;
   loyalty_reward_applied?: boolean;
   notes?: string;
+  recurring_id?: string;
+  is_rescheduled?: number | boolean;
+  original_date?: string;
+  cancellation_feedback?: string;
+}
+
+export type RecurringFrequency = 'WEEKLY' | 'BIWEEKLY';
+export type RecurringStatus = 'ACTIVE' | 'PAUSED' | 'CANCELLED';
+
+export interface RecurringSchedule {
+  id: string;
+  tenant_id: string;
+  client_phone: string;
+  client_name: string;
+  professional_id: string;
+  service_id: string;
+  day_of_week: number; // 0 (Domingo) a 6 (Sábado)
+  start_time: string; // "HH:mm"
+  frequency: RecurringFrequency; // 'WEEKLY' | 'BIWEEKLY'
+  anchor_date: string; // "YYYY-MM-DD"
+  status: RecurringStatus; // 'ACTIVE' | 'PAUSED' | 'CANCELLED'
+  created_at?: string;
+  professional_name?: string;
+  service_name?: string;
+  price?: number;
+  duration_minutes?: number;
 }
 
 export type WaitlistPeriod = 'morning' | 'afternoon' | 'evening' | 'any';

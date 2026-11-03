@@ -1,4 +1,4 @@
-import { Organization, Service, Barber, Appointment, Client, AppNotification, CurrentUser, Product, ProductSale, ServiceCommand, WaitlistEntry } from '../types';
+import { Organization, Service, Barber, Appointment, Client, AppNotification, CurrentUser, Product, ProductSale, ServiceCommand, WaitlistEntry, RecurringSchedule } from '../types';
 
 export interface CloudSyncPayload {
   org: Organization | null;
@@ -12,6 +12,7 @@ export interface CloudSyncPayload {
   productSales?: ProductSale[];
   commands?: ServiceCommand[];
   waitlist?: WaitlistEntry[];
+  recurring_schedules?: RecurringSchedule[];
   current_user?: CurrentUser;
   updated_at?: string;
 }
@@ -52,6 +53,7 @@ export const normalizeCloudPayload = (data: any): CloudSyncPayload => ({
   productSales: Array.isArray(data?.productSales) ? data.productSales : [],
   commands: Array.isArray(data?.commands) ? data.commands : [],
   waitlist: Array.isArray(data?.waitlist) ? data.waitlist : [],
+  recurring_schedules: Array.isArray(data?.recurring_schedules) ? data.recurring_schedules : [],
   current_user: data?.current_user || undefined,
   updated_at: data?.updated_at,
 });

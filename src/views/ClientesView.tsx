@@ -34,7 +34,7 @@ import {
   Cake,
 } from 'lucide-react';
 import { ActionButton } from '../components/common/ActionButton';
-import { Client, Appointment, Organization } from '../types';
+import { Client, Appointment, Organization, Barber, Service, RecurringSchedule } from '../types';
 import { clientIdentityKey, dedupeClients, normalizeClientPhone, upsertClient } from '../utils/clients';
 import { buildClientWhatsAppUrl, WhatsAppAction } from '../utils/whatsapp';
 import {
@@ -47,6 +47,7 @@ import { WhatsAppActionsModal } from '../components/common/WhatsAppActionsModal'
 import { LoyaltyCardWidget } from '../components/loyalty/LoyaltyCardWidget';
 import { addLoyaltyStampToClient, redeemLoyaltyRewardFromClient } from '../utils/loyalty';
 import type { SpreadsheetValidationResult } from '../utils/clientImport';
+import { AdminRecurringSchedulesManager } from '../components/recurring/AdminRecurringSchedulesManager';
 
 interface ClientesViewProps {
   clients: Client[];
@@ -55,6 +56,10 @@ interface ClientesViewProps {
   setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>;
   org: Organization;
   setOrg: React.Dispatch<React.SetStateAction<Organization>>;
+  barbers?: Barber[];
+  services?: Service[];
+  recurringSchedules?: RecurringSchedule[];
+  setRecurringSchedules?: React.Dispatch<React.SetStateAction<RecurringSchedule[]>>;
 }
 
 type ClientFilter = 'all' | 'active' | 'inactive';
@@ -78,7 +83,12 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   setAppointments,
   org,
   setOrg,
+  barbers = [],
+  services = [],
+  recurringSchedules = [],
+  setRecurringSchedules,
 }) => {
+  const [activeMainTab, setActiveMainTab] = useState<'crm' | 'recurring'>('crm');
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [whatsAppClient, setWhatsAppClient] = useState<Client | null>(null);
@@ -531,7 +541,53 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
         </div>
       </div>
 
-      {importError && (
+      {/* ABAS PRINCIPAIS: CRM vs CLIENTES FIXOS */}
+      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('crm')}
+          className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
+            activeMainTab === 'crm'
+              ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Todos os Clientes & CRM</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 font-mono text-slate-300">
+            {allClients.length}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('recurring')}
+          className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
+            activeMainTab === 'recurring'
+              ? 'bg-purple-500/15 border border-purple-500/30 text-purple-300'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+          }`}
+        >
+          <CalendarDays className="w-4 h-4" />
+          <span>🔁 Clientes Fixos (Recorrência)</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-mono">
+            {recurringSchedules.length}
+          </span>
+        </button>
+      </div>
+
+      {activeMainTab === 'recurring' ? (
+        <AdminRecurringSchedulesManager
+          org={org}
+          recurringSchedules={recurringSchedules}
+          setRecurringSchedules={setRecurringSchedules || (() => {})}
+          barbers={barbers}
+          services={services}
+          clients={clients}
+          appointments={appointments}
+        />
+      ) : (
+        <>
+          {importError && (
         <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs font-semibold text-rose-200">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
@@ -786,6 +842,8 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
             </span>
           </button>
         </div>
+      )}
+        </>
       )}
 
       <WhatsAppActionsModal

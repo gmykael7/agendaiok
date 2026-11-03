@@ -22,6 +22,9 @@ import { LoyaltyCardWidget } from '../components/loyalty/LoyaltyCardWidget';
 import { addLoyaltyStampToClient, redeemLoyaltyRewardFromClient, calculateLoyaltyProgress } from '../utils/loyalty';
 import { normalizeClientPhone, upsertClient } from '../utils/clients';
 import { ClientProfileModal } from '../components/crm/ClientProfileModal';
+import type { RecurringSchedule } from '../types';
+import { isDateOccurrenceOfRecurring } from '../utils/recurringSchedules';
+import { MakeRecurringModal } from '../components/recurring/MakeRecurringModal';
 
 interface AgendaViewProps {
   appointments: Appointment[];
@@ -34,6 +37,8 @@ interface AgendaViewProps {
   setWaitlist?: React.Dispatch<React.SetStateAction<WaitlistEntry[]>>;
   clients?: Client[];
   setClients?: React.Dispatch<React.SetStateAction<Client[]>>;
+  recurringSchedules?: RecurringSchedule[];
+  setRecurringSchedules?: React.Dispatch<React.SetStateAction<RecurringSchedule[]>>;
 }
 
 const statusIcons = {
@@ -87,7 +92,10 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   setWaitlist,
   clients = [],
   setClients,
+  recurringSchedules = [],
+  setRecurringSchedules,
 }) => {
+  const [makeRecurringAppt, setMakeRecurringAppt] = useState<Appointment | null>(null);
   const [selectedBarberId, setSelectedBarberId] = useState<string>('all');
   const [pendingBarberFocus, setPendingBarberFocus] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateKey());
@@ -191,6 +199,15 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
       return Boolean(name && c.name?.trim().toLowerCase() === name);
     }) || null;
   }, [completingApp, clients]);
+
+  const recurringAlertsForDate = useMemo(() => {
+    return appointments.filter(app => {
+      if (!app.recurring_id || !app.cancellation_feedback) return false;
+      if (app.date === selectedDate && app.status === 'canceled') return true;
+      if (app.is_rescheduled && app.original_date && app.original_date.startsWith(selectedDate)) return true;
+      return false;
+    });
+  }, [appointments, selectedDate]);
 
   useEffect(() => {
     if (!confirmedFeedback) return;
@@ -419,13 +436,89 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 
   // Agendamentos específicos da data selecionada
   const dayAppointments = useMemo(() => {
-    return appointments.filter(a => {
+    const existing = appointments.filter(a => {
       const appDate = a.date || getLocalDateKey();
       const matchesDate = appDate === selectedDate;
       const matchesBarber = selectedBarberId === 'all' || a.barber_id === selectedBarberId;
       return matchesDate && matchesBarber;
     });
-  }, [appointments, selectedDate, selectedBarberId]);
+
+    // Adiciona clientes fixos ativos que ocorrem nesta data e que não possuam agendamento explícito
+    if (recurringSchedules && recurringSchedules.length > 0) {
+      const existingRecurringIds = new Set(
+        existing.filter(a => a.recurring_id).map(a => a.recurring_id)
+      );
+
+      // Também verifica se algum foi remarcado DESTA data para outra
+      const rescheduledAwayIds = new Set(
+        appointments
+          .filter(a => Boolean(a.is_rescheduled) && (a.original_date || '').split(' ')[0] === selectedDate)
+          .map(a => a.recurring_id)
+      );
+
+      for (const schedule of recurringSchedules) {
+        if (schedule.status !== 'ACTIVE') continue;
+        if (selectedBarberId !== 'all' && schedule.professional_id !== selectedBarberId) continue;
+        if (existingRecurringIds.has(schedule.id)) continue;
+        if (rescheduledAwayIds.has(schedule.id)) continue;
+        if (!isDateOccurrenceOfRecurring(schedule, selectedDate)) continue;
+
+        const barber = barbers.find(b => b.id === schedule.professional_id);
+        const service = services.find(s => s.id === schedule.service_id);
+
+        existing.push({
+          id: `virtual-rec-${schedule.id}-${selectedDate}`,
+          org_id: org.id,
+          recurring_id: schedule.id,
+          client_name: schedule.client_name,
+          client_phone: schedule.client_phone,
+          barber_id: schedule.professional_id,
+          barber_name: barber?.full_name || 'Profissional',
+          service_id: schedule.service_id,
+          service_name: service?.name || 'Serviço',
+          start_time: schedule.start_time,
+          duration_minutes: service?.duration_minutes || 30,
+          price: service?.price || 0,
+          status: 'scheduled',
+          date: selectedDate,
+          created_at: schedule.created_at,
+        });
+      }
+    }
+
+    return existing;
+  }, [appointments, selectedDate, selectedBarberId, recurringSchedules, barbers, services, org.id]);
+
+  // Alertas de feedback de cancelamento ou remarcação da data selecionada
+  const feedbackAlerts = useMemo(() => {
+    const alerts: { client_name: string; type: 'canceled' | 'rescheduled'; time: string; feedback: string }[] = [];
+    appointments.forEach(a => {
+      if (!a.recurring_id) return;
+      if (a.date === selectedDate && a.status === 'canceled' && a.cancellation_feedback) {
+        alerts.push({
+          client_name: a.client_name,
+          type: 'canceled',
+          time: a.start_time,
+          feedback: a.cancellation_feedback,
+        });
+      } else if (a.date === selectedDate && Boolean(a.is_rescheduled) && a.cancellation_feedback) {
+        alerts.push({
+          client_name: a.client_name,
+          type: 'rescheduled',
+          time: a.start_time,
+          feedback: a.cancellation_feedback,
+        });
+      } else if (Boolean(a.is_rescheduled) && (a.original_date || '').split(' ')[0] === selectedDate && a.cancellation_feedback) {
+        alerts.push({
+          client_name: a.client_name,
+          type: 'canceled',
+          time: (a.original_date || '').split(' ')[1] || a.start_time,
+          feedback: `Remarcou para ${a.date?.split('-').reverse().join('/')} às ${a.start_time}: "${a.cancellation_feedback}"`,
+        });
+      }
+    });
+    return alerts;
+  }, [appointments, selectedDate]);
 
   const boardBarbers = useMemo(() => {
     const active = barbers.filter(b => b.active !== false);
@@ -745,6 +838,37 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
         </div>
       )}
 
+      {/* ALERTAS DE CLIENTES FIXOS QUE LIBERARAM VAGAS HOJE */}
+      {recurringAlertsForDate.length > 0 && (
+        <div className="space-y-2">
+          {recurringAlertsForDate.map(alert => {
+            const time = alert.original_date ? alert.original_date.split(' ')[1] || alert.start_time : alert.start_time;
+            const actionText = alert.is_rescheduled ? 'remarcou o horário desta semana' : 'não poderá comparecer esta semana';
+            return (
+              <div 
+                key={alert.id}
+                className="p-3.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-fadeIn shadow-lg shadow-amber-500/5"
+              >
+                <div className="flex items-start sm:items-center gap-2.5">
+                  <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 shrink-0">
+                    <AlertCircle className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <span className="font-bold text-white">Vaga liberada ({time}):</span> {alert.client_name} {actionText}.
+                    {alert.cancellation_feedback && (
+                      <span className="text-amber-300 ml-1">
+                        Motivo: &quot;{alert.cancellation_feedback}&quot;
+                      </span>
+                    )}
+                    <span className="text-emerald-400 ml-1 font-semibold block sm:inline">· Horário aberto na agenda pública</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* RÉGUA DA SEMANA */}
       <div className="bg-[#121B2E] border border-slate-800 rounded-3xl p-3 sm:p-4 shadow-xl">
         <div className="flex items-center justify-between gap-2 px-1 mb-2.5">
@@ -885,6 +1009,18 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                               <span className="text-[10px] text-cyan-400 opacity-70 group-hover:opacity-100 shrink-0">📋</span>
                             </button>
                             <div className="flex items-center gap-1 shrink-0">
+                              {app.recurring_id && (
+                                <span 
+                                  title={app.is_rescheduled ? `Remarcado de ${app.original_date || ''}` : 'Cliente Fixo recorrente'}
+                                  className={`inline-flex items-center text-[8px] font-bold px-1.5 py-0.5 rounded border ${
+                                    app.is_rescheduled 
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' 
+                                      : 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                                  }`}
+                                >
+                                  {app.is_rescheduled ? '🔄 Remarcado' : '🔁 Fixo'}
+                                </span>
+                              )}
                               {app.reminder_sent_at && (
                                 <span
                                   title={`Lembrete WhatsApp enviado às ${new Date(app.reminder_sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}
@@ -915,6 +1051,16 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                             >
                               Ficha
                             </button>
+                            {!app.recurring_id && isOpenAppointmentStatus(app.status) && (
+                              <button
+                                type="button"
+                                onClick={() => setMakeRecurringAppt(app)}
+                                className="text-[9px] text-purple-300 inline-flex items-center gap-1 rounded-lg bg-purple-500/10 border border-purple-500/20 px-1.5 py-1 hover:bg-purple-500/20 active:scale-95 transition-all"
+                                title="Tornar este cliente em Cliente Fixo"
+                              >
+                                📌 Fixo
+                              </button>
+                            )}
                             {(app.status === 'scheduled' || app.status === 'confirmed') && (
                               <button
                                 type="button"
@@ -1103,11 +1249,33 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                                       <MessageSquare className="w-2.5 h-2.5" /> WhatsApp
                                     </button>
                                   )}
+                                  {!app.recurring_id && isOpenAppointmentStatus(app.status) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setMakeRecurringAppt(app)}
+                                      className="inline-flex items-center gap-1 text-[10px] text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-lg border border-purple-500/20 hover:bg-purple-500/20 active:scale-95 transition-all"
+                                      title="Tornar este agendamento em horário fixo recorrente"
+                                    >
+                                      📌 Tornar Fixo
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>
 
                             <div className="flex flex-col items-end gap-1 shrink-0">
+                              {app.recurring_id && (
+                                <span 
+                                  title={app.is_rescheduled ? `Remarcado de ${app.original_date || ''}` : 'Cliente Fixo recorrente'}
+                                  className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${
+                                    app.is_rescheduled 
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' 
+                                      : 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                                  }`}
+                                >
+                                  {app.is_rescheduled ? '🔄 Remarcado' : '🔁 Cliente Fixo'}
+                                </span>
+                              )}
                               <AgendaStatusBadge status={app.status} className="px-2 py-0.5 text-[9px] sm:text-[10px] font-semibold" />
                               {app.reminder_sent_at && (
                                 <span
@@ -1578,6 +1746,23 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
           appointments={appointments}
           onClose={() => setActiveProfileClient(null)}
           onUpdateClient={handleUpdateProfileClient}
+        />
+      )}
+
+      {makeRecurringAppt && (
+        <MakeRecurringModal
+          appointment={makeRecurringAppt}
+          org={org}
+          barbers={barbers}
+          services={services}
+          recurringSchedules={recurringSchedules}
+          setRecurringSchedules={setRecurringSchedules || (() => {})}
+          appointments={appointments}
+          onClose={() => setMakeRecurringAppt(null)}
+          onSuccess={(created) => {
+            setAppointments(prev => prev.map(a => a.id === makeRecurringAppt.id ? { ...a, recurring_id: created.id } : a));
+            setMakeRecurringAppt(null);
+          }}
         />
       )}
       {confirmedFeedback && createPortal(

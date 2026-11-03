@@ -13,6 +13,16 @@ import { processWhatsAppEvent } from './integrations/whatsapp/processor';
 import { handleAvailabilityRequest, handleWhatsAppFlowRequest } from './integrations/whatsapp/flow';
 import { connectTenantWhatsApp, disconnectTenantWhatsApp, getTenantWhatsAppConnection } from './integrations/whatsapp/tenant';
 import type { WhatsAppEvent } from './integrations/whatsapp/types';
+import {
+  normalizePhoneOnlyDigits,
+  isDateOccurrenceOfRecurring,
+  getNextOccurrences,
+  isRecurringSlotOccupied,
+  hasRecurringConflict,
+  getDayOfWeekLabel,
+  getFrequencyLabel,
+} from './utils/recurringSchedules';
+import type { RecurringSchedule, RecurringFrequency } from './types';
 type D1PreparedStatementLike = {
   bind: (...values: any[]) => D1PreparedStatementLike;
   first: <T = any>() => Promise<T | null>;
@@ -462,7 +472,8 @@ const sanitizePrivatePayload = (input: StoredPayload): StoredPayload => {
     }))
     .sort((a: any, b: any) => String(b.created_at).localeCompare(String(a.created_at)))
     .slice(0, 100);
-  return { ...safeInput, org, savedOrgs, clients, products, productSales, commands, notifications };
+  const recurring_schedules = Array.isArray(safeInput.recurring_schedules) ? safeInput.recurring_schedules : [];
+  return { ...safeInput, org, savedOrgs, clients, products, productSales, commands, notifications, recurring_schedules };
 };
 
 const sanitizePublicPayload = (input: StoredPayload): StoredPayload => {
@@ -475,7 +486,10 @@ const sanitizePublicPayload = (input: StoredPayload): StoredPayload => {
     ? input.appointments
         .filter((appointment: any) => {
           if (!appointment || typeof appointment !== 'object') return false;
-          if (appointment.status === 'canceled' || appointment.status === 'no_show') return false;
+          if (appointment.status === 'canceled' || (appointment.status as string) === 'cancelled' || appointment.status === 'no_show') {
+            // Preserva cancelamentos de recorrência para permitir a liberação da vaga no dia
+            if (!appointment.recurring_id) return false;
+          }
           const appDate = String(appointment.date || '');
           return !appDate || appDate >= businessNow.date;
         })
@@ -489,6 +503,24 @@ const sanitizePublicPayload = (input: StoredPayload): StoredPayload => {
           client_name: 'Reservado',
           client_phone: '',
           payment_method: undefined,
+          recurring_id: appointment.recurring_id ? String(appointment.recurring_id) : undefined,
+          is_rescheduled: appointment.is_rescheduled ? 1 : 0,
+          original_date: appointment.original_date ? String(appointment.original_date) : undefined,
+        }))
+    : [];
+
+  const recurring_schedules = Array.isArray(input.recurring_schedules)
+    ? input.recurring_schedules
+        .filter((s: any) => s && s.status === 'ACTIVE')
+        .map((s: any) => ({
+          id: String(s.id || ''),
+          professional_id: String(s.professional_id || s.barber_id || ''),
+          service_id: String(s.service_id || ''),
+          day_of_week: Number(s.day_of_week),
+          start_time: String(s.start_time || ''),
+          frequency: s.frequency === 'BIWEEKLY' ? 'BIWEEKLY' : 'WEEKLY',
+          anchor_date: String(s.anchor_date || ''),
+          status: 'ACTIVE',
         }))
     : [];
 
@@ -501,6 +533,7 @@ const sanitizePublicPayload = (input: StoredPayload): StoredPayload => {
     commands: [],
     barbers,
     appointments,
+    recurring_schedules,
     clients: [],
     updated_at: input.updated_at,
   };
@@ -893,20 +926,59 @@ export const validateBusinessTime = (appointment: any, org: any): string | null 
   return null;
 };
 
-export const overlapsExistingAppointment = (appointment: any, existing: any[]): boolean => {
+export const overlapsExistingAppointment = (
+  appointment: any,
+  existing: any[],
+  recurringSchedules?: any[],
+  services?: any[]
+): boolean => {
   const date = String(appointment.date || '');
   const barberId = String(appointment.barber_id || '');
   const start = minutesFromTime(appointment.start_time);
   const duration = Math.max(5, Number(appointment.duration_minutes || 30));
   const end = start + duration;
-  return existing.some((item: any) => {
-    if (item.status === 'canceled' || item.status === 'no_show') return false;
+
+  const apptOverlap = existing.some((item: any) => {
+    if (item.status === 'canceled' || (item.status as string) === 'cancelled' || item.status === 'no_show') return false;
     if (String(item.date || '') !== date) return false;
     if (String(item.barber_id || '') !== barberId) return false;
     const itemStart = minutesFromTime(item.start_time);
     const itemDuration = Math.max(5, Number(item.duration_minutes || 30));
     return start < itemStart + itemDuration && itemStart < end;
   });
+
+  if (apptOverlap) return true;
+
+  if (Array.isArray(recurringSchedules) && recurringSchedules.length > 0) {
+    const isRecurringBlocked = recurringSchedules.some((s: any) => {
+      if (s.status !== 'ACTIVE') return false;
+      if (String(s.professional_id || s.barber_id || '') !== barberId) return false;
+      if (!isDateOccurrenceOfRecurring(s, date)) return false;
+
+      const srv = Array.isArray(services) ? services.find((sv: any) => sv.id === s.service_id) : undefined;
+      const sDuration = srv ? (srv.duration_minutes || 30) : 30;
+      const sStart = minutesFromTime(s.start_time);
+      const sEnd = sStart + sDuration;
+
+      const overlaps = start < sEnd && sStart < end;
+      if (!overlaps) return false;
+
+      // Verifica se houve exceção (cancelamento ou remarcação que liberou esta data)
+      const isFreed = existing.some((a: any) => {
+        if (!a || a.recurring_id !== s.id) return false;
+        if (a.date === date && (a.status === 'canceled' || (a.status as string) === 'cancelled' || a.status === 'no_show')) return true;
+        const origDateOnly = (a.original_date || '').split(' ')[0];
+        if (Boolean(a.is_rescheduled) && origDateOnly === date) return true;
+        return false;
+      });
+
+      return !isFreed;
+    });
+
+    if (isRecurringBlocked) return true;
+  }
+
+  return false;
 };
 
 // ---------- WEB PUSH ----------
@@ -1705,8 +1777,8 @@ export default {
         }
         const businessTimeError = validateBusinessTime(cleanAppointment, current.org);
         if (businessTimeError) return jsonResponse({ error: businessTimeError }, 409);
-        if (overlapsExistingAppointment(cleanAppointment, previousAppointments)) {
-          return jsonResponse({ error: 'Este horário acabou de ser reservado. Escolha outro horário.' }, 409);
+        if (overlapsExistingAppointment(cleanAppointment, previousAppointments, current.recurring_schedules, current.services)) {
+          return jsonResponse({ error: 'Este horário acabou de ser reservado ou está ocupado por cliente fixo. Escolha outro horário.' }, 409);
         }
 
         current.appointments = [cleanAppointment, ...previousAppointments];
@@ -1787,6 +1859,694 @@ export default {
         if (error instanceof BookingInputError) return jsonResponse({ error: error.message }, error.status);
         if (error instanceof SyntaxError) return jsonResponse({ error: 'Agendamento inválido.' }, 400);
         return jsonResponse({ error: error?.message || 'Falha ao registrar agendamento.' }, 500);
+      }
+    }
+
+    // =========================================================================
+    // CLIENTES FIXOS / RECORRÊNCIA (SEMANAL E QUINZENAL)
+    // =========================================================================
+
+    // Consulta de agenda pública do cliente identificado
+    if (url.pathname === '/api/public/client-schedule' && (request.method === 'GET' || request.method === 'OPTIONS')) {
+      if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+      const tenantParam = url.searchParams.get('tenantId') || url.searchParams.get('tenant_id') || url.searchParams.get('slug') || '';
+      const phoneParam = url.searchParams.get('phone') || '';
+      const cleanPhone = normalizePhoneOnlyDigits(phoneParam);
+      if (!tenantParam || !cleanPhone) {
+        return jsonResponse({ error: 'Parâmetros tenantId e phone são obrigatórios.' }, 400);
+      }
+
+      const current = await loadPayloadBySlug(env, tenantParam);
+      if (!current || !current.org) return jsonResponse({ error: 'Barbearia não encontrada.' }, 404);
+
+      let dbSchedules: any[] = [];
+      if (env.DB) {
+        try {
+          const tenantId = current.org.id || tenantParam;
+          const result = await env.DB.prepare(
+            `SELECT * FROM recurring_schedules WHERE (tenant_id = ? OR tenant_id = ?) AND (client_phone = ? OR client_phone LIKE ?) AND status = 'ACTIVE'`
+          ).bind(tenantId, normalizeSlug(current.org.slug), cleanPhone, `%${cleanPhone.slice(-8)}%`).all();
+          dbSchedules = result.results || [];
+        } catch (e) {
+          console.warn('Erro ao consultar D1 recurring_schedules:', e);
+        }
+      }
+
+      const payloadSchedules = (Array.isArray(current.recurring_schedules) ? current.recurring_schedules : [])
+        .filter((s: any) => {
+          if (s.status !== 'ACTIVE') return false;
+          const sPhone = normalizePhoneOnlyDigits(s.client_phone);
+          return sPhone === cleanPhone || sPhone.endsWith(cleanPhone.slice(-8));
+        });
+
+      const schedulesMap = new Map<string, any>();
+      for (const s of [...payloadSchedules, ...dbSchedules]) {
+        schedulesMap.set(s.id, s);
+      }
+      const allSchedules = Array.from(schedulesMap.values());
+
+      const barbers = Array.isArray(current.barbers) ? current.barbers : [];
+      const services = Array.isArray(current.services) ? current.services : [];
+      const appointments = Array.isArray(current.appointments) ? current.appointments : [];
+
+      const enrichedSchedules = allSchedules.map((s: any) => {
+        const barber = barbers.find((b: any) => b.id === s.professional_id);
+        const service = services.find((sv: any) => sv.id === s.service_id);
+        return {
+          ...s,
+          professional_name: barber?.full_name || 'Profissional',
+          service_name: service?.name || 'Serviço',
+          price: service?.price || 0,
+          duration_minutes: service?.duration_minutes || 30,
+        };
+      });
+
+      const allUpcoming: any[] = [];
+      for (const schedule of enrichedSchedules) {
+        const occurrences = getNextOccurrences(schedule, 4, appointments);
+        for (const occ of occurrences) {
+          allUpcoming.push({
+            ...occ,
+            professional_name: schedule.professional_name,
+            service_name: schedule.service_name,
+            price: schedule.price,
+            duration_minutes: schedule.duration_minutes,
+            frequency: schedule.frequency,
+          });
+        }
+      }
+
+      allUpcoming.sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`));
+      const clientName = enrichedSchedules[0]?.client_name || '';
+
+      return jsonResponse({
+        success: true,
+        client_name: clientName,
+        client_phone: cleanPhone,
+        schedules: enrichedSchedules,
+        upcoming: allUpcoming,
+      });
+    }
+
+    // Identificação rápida do cliente na página pública
+    if (url.pathname === '/api/public/client-identify' && request.method === 'POST') {
+      try {
+        const body = await request.json() as any;
+        const tenantParam = body.tenant_id || body.tenantId || body.slug || '';
+        const cleanPhone = normalizePhoneOnlyDigits(body.phone);
+        const clientName = String(body.name || '').trim();
+
+        if (!tenantParam || !cleanPhone) {
+          return jsonResponse({ error: 'Parâmetros tenant_id e phone são obrigatórios.' }, 400);
+        }
+
+        const current = await loadPayloadBySlug(env, tenantParam);
+        if (!current || !current.org) return jsonResponse({ error: 'Barbearia não encontrada.' }, 404);
+
+        let dbSchedules: any[] = [];
+        if (env.DB) {
+          try {
+            const tenantId = current.org.id || tenantParam;
+            const result = await env.DB.prepare(
+              `SELECT * FROM recurring_schedules WHERE (tenant_id = ? OR tenant_id = ?) AND (client_phone = ? OR client_phone LIKE ?) AND status = 'ACTIVE'`
+            ).bind(tenantId, normalizeSlug(current.org.slug), cleanPhone, `%${cleanPhone.slice(-8)}%`).all();
+            dbSchedules = result.results || [];
+          } catch (e) {
+            console.warn('Erro ao consultar D1 recurring_schedules:', e);
+          }
+        }
+
+        const payloadSchedules = (Array.isArray(current.recurring_schedules) ? current.recurring_schedules : [])
+          .filter((s: any) => {
+            if (s.status !== 'ACTIVE') return false;
+            const sPhone = normalizePhoneOnlyDigits(s.client_phone);
+            return sPhone === cleanPhone || sPhone.endsWith(cleanPhone.slice(-8));
+          });
+
+        const schedulesMap = new Map<string, any>();
+        for (const s of [...payloadSchedules, ...dbSchedules]) {
+          schedulesMap.set(s.id, s);
+        }
+        const allSchedules = Array.from(schedulesMap.values());
+
+        const barbers = Array.isArray(current.barbers) ? current.barbers : [];
+        const services = Array.isArray(current.services) ? current.services : [];
+        const appointments = Array.isArray(current.appointments) ? current.appointments : [];
+
+        const enrichedSchedules = allSchedules.map((s: any) => {
+          const barber = barbers.find((b: any) => b.id === s.professional_id);
+          const service = services.find((sv: any) => sv.id === s.service_id);
+          return {
+            ...s,
+            professional_name: barber?.full_name || 'Profissional',
+            service_name: service?.name || 'Serviço',
+            price: service?.price || 0,
+            duration_minutes: service?.duration_minutes || 30,
+          };
+        });
+
+        const allUpcoming: any[] = [];
+        for (const schedule of enrichedSchedules) {
+          const occurrences = getNextOccurrences(schedule, 4, appointments);
+          for (const occ of occurrences) {
+            allUpcoming.push({
+              ...occ,
+              professional_name: schedule.professional_name,
+              service_name: schedule.service_name,
+              price: schedule.price,
+              duration_minutes: schedule.duration_minutes,
+              frequency: schedule.frequency,
+            });
+          }
+        }
+
+        allUpcoming.sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`));
+
+        return jsonResponse({
+          success: true,
+          client_name: clientName || enrichedSchedules[0]?.client_name || '',
+          client_phone: cleanPhone,
+          schedules: enrichedSchedules,
+          upcoming: allUpcoming,
+        });
+      } catch (err: any) {
+        return jsonResponse({ error: err?.message || 'Falha ao identificar cliente.' }, 500);
+      }
+    }
+
+    // Cancelamento da semana com feedback obrigatório
+    if (url.pathname === '/api/public/recurring/cancel-week' && request.method === 'POST') {
+      try {
+        const body = await request.json() as any;
+        const tenantParam = body.tenant_id || body.tenantId || body.slug || '';
+        const recurringId = String(body.recurring_id || '').trim();
+        const targetDate = String(body.target_date || '').trim();
+        const feedback = String(body.cancellation_feedback || '').trim();
+
+        if (!tenantParam || !recurringId || !targetDate) {
+          return jsonResponse({ error: 'Parâmetros tenant_id, recurring_id e target_date são obrigatórios.' }, 400);
+        }
+        if (!feedback) {
+          return jsonResponse({ error: 'O motivo do cancelamento é obrigatório para liberar o horário.' }, 400);
+        }
+
+        const current = await loadPayloadBySlug(env, tenantParam);
+        if (!current || !current.org) return jsonResponse({ error: 'Barbearia não encontrada.' }, 404);
+
+        let schedule = (Array.isArray(current.recurring_schedules) ? current.recurring_schedules : []).find((s: any) => s.id === recurringId);
+        if (!schedule && env.DB) {
+          schedule = await env.DB.prepare('SELECT * FROM recurring_schedules WHERE id = ?').bind(recurringId).first();
+        }
+        if (!schedule) return jsonResponse({ error: 'Contrato de cliente fixo não encontrado.' }, 404);
+
+        const barber = (Array.isArray(current.barbers) ? current.barbers : []).find((b: any) => b.id === schedule.professional_id);
+        const service = (Array.isArray(current.services) ? current.services : []).find((s: any) => s.id === schedule.service_id);
+
+        const exceptionApptId = `rec-cancel-${recurringId}-${targetDate}`;
+        const previousAppointments = Array.isArray(current.appointments) ? current.appointments : [];
+
+        const cleanException = {
+          id: exceptionApptId,
+          org_id: current.org.id,
+          recurring_id: recurringId,
+          is_rescheduled: 0,
+          original_date: `${targetDate} ${schedule.start_time}`,
+          date: targetDate,
+          start_time: schedule.start_time,
+          duration_minutes: service?.duration_minutes || 30,
+          barber_id: schedule.professional_id,
+          barber_name: barber?.full_name || 'Profissional',
+          service_id: schedule.service_id,
+          service_name: service?.name || 'Serviço',
+          client_name: schedule.client_name,
+          client_phone: schedule.client_phone,
+          price: service?.price || 0,
+          status: 'canceled',
+          cancellation_feedback: feedback,
+          created_at: new Date().toISOString(),
+        };
+
+        const existingIdx = previousAppointments.findIndex(
+          (a: any) => a.id === exceptionApptId || (a.recurring_id === recurringId && a.date === targetDate)
+        );
+        if (existingIdx >= 0) {
+          previousAppointments[existingIdx] = { ...previousAppointments[existingIdx], ...cleanException };
+        } else {
+          previousAppointments.unshift(cleanException);
+        }
+        current.appointments = previousAppointments;
+
+        if (env.DB) {
+          try {
+            await env.DB.prepare(`
+              INSERT INTO appointments (
+                id, tenant_id, org_id, client_name, client_phone, professional_id, barber_id,
+                service_id, service_name, start_time, duration_minutes, price, status,
+                date, created_at, recurring_id, is_rescheduled, original_date, cancellation_feedback
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET
+                status = 'canceled',
+                cancellation_feedback = excluded.cancellation_feedback,
+                original_date = excluded.original_date
+            `).bind(
+              cleanException.id,
+              current.org.id,
+              current.org.id,
+              cleanException.client_name,
+              cleanException.client_phone,
+              cleanException.barber_id,
+              cleanException.barber_id,
+              cleanException.service_id,
+              cleanException.service_name,
+              cleanException.start_time,
+              cleanException.duration_minutes,
+              cleanException.price,
+              'canceled',
+              cleanException.date,
+              cleanException.created_at,
+              cleanException.recurring_id,
+              0,
+              cleanException.original_date,
+              cleanException.cancellation_feedback
+            ).run();
+          } catch (err) {
+            console.warn('Erro ao salvar cancelamento de recorrência no D1:', err);
+          }
+        }
+
+        const notificationId = `notif-cancel-${Date.now()}`;
+        const targetDateFormatted = targetDate.split('-').reverse().join('/');
+        const newNotification = {
+          id: notificationId,
+          org_id: current.org.id,
+          type: 'appointment_canceled',
+          title: 'Vaga liberada por Cliente Fixo',
+          message: `${schedule.client_name} liberou a vaga de ${targetDateFormatted} às ${schedule.start_time}. Motivo: ${feedback}`,
+          created_at: new Date().toISOString(),
+          client_name: schedule.client_name,
+          target_tab: 'agenda',
+        };
+        current.notifications = [newNotification, ...(Array.isArray(current.notifications) ? current.notifications : [])].slice(0, 100);
+
+        await storePayload(env, current, current.org.slug, String(current.updated_at || ''));
+
+        const email = normalizeEmail(current.org?.email);
+        if (email) {
+          const pushTask = notifyAdminDevices(env, email, {
+            title: 'Vaga liberada por Cliente Fixo',
+            body: `${schedule.client_name} liberou ${targetDateFormatted} às ${schedule.start_time} (${feedback}). A vaga já está aberta!`,
+            tag: notificationId,
+            url: '/?tab=agenda',
+          });
+          if (ctx?.waitUntil) ctx.waitUntil(pushTask);
+          else void pushTask;
+        }
+
+        return jsonResponse({
+          success: true,
+          message: `Você liberou o horário do dia ${targetDateFormatted}. Seu horário fixo das próximas semanas continua 100% garantido!`,
+        });
+      } catch (error: any) {
+        return jsonResponse({ error: error?.message || 'Falha ao liberar horário.' }, 500);
+      }
+    }
+
+    // Remarcação na agenda aberta com liberação da data original
+    if (url.pathname === '/api/public/recurring/reschedule-week' && request.method === 'POST') {
+      try {
+        const body = await request.json() as any;
+        const tenantParam = body.tenant_id || body.tenantId || body.slug || '';
+        const recurringId = String(body.recurring_id || '').trim();
+        const originalDate = String(body.original_date || '').trim();
+        const newDate = String(body.new_date || '').trim();
+        const newTime = String(body.new_time || '').trim();
+        const feedback = String(body.cancellation_feedback || '').trim();
+
+        if (!tenantParam || !recurringId || !originalDate || !newDate || !newTime) {
+          return jsonResponse({ error: 'Parâmetros tenant_id, recurring_id, original_date, new_date e new_time são obrigatórios.' }, 400);
+        }
+        if (!feedback) {
+          return jsonResponse({ error: 'O motivo da remarcação é obrigatório.' }, 400);
+        }
+
+        const current = await loadPayloadBySlug(env, tenantParam);
+        if (!current || !current.org) return jsonResponse({ error: 'Barbearia não encontrada.' }, 404);
+
+        let schedule = (Array.isArray(current.recurring_schedules) ? current.recurring_schedules : []).find((s: any) => s.id === recurringId);
+        if (!schedule && env.DB) {
+          schedule = await env.DB.prepare('SELECT * FROM recurring_schedules WHERE id = ?').bind(recurringId).first();
+        }
+        if (!schedule) return jsonResponse({ error: 'Contrato de cliente fixo não encontrado.' }, 404);
+
+        const barber = (Array.isArray(current.barbers) ? current.barbers : []).find((b: any) => b.id === schedule.professional_id);
+        const service = (Array.isArray(current.services) ? current.services : []).find((s: any) => s.id === schedule.service_id);
+        const duration = service?.duration_minutes || 30;
+
+        const previousAppointments = Array.isArray(current.appointments) ? current.appointments : [];
+
+        const isOccupied = overlapsExistingAppointment(
+          { date: newDate, start_time: newTime, barber_id: schedule.professional_id, duration_minutes: duration },
+          previousAppointments,
+          current.recurring_schedules,
+          current.services
+        );
+        if (isOccupied) {
+          return jsonResponse({ error: 'O horário escolhido não está disponível. Por favor, escolha outro dia ou horário.' }, 409);
+        }
+
+        const origDateOnly = originalDate.split(' ')[0];
+        const exceptionApptId = `rec-resched-${recurringId}-${origDateOnly}`;
+
+        const cleanRescheduled = {
+          id: exceptionApptId,
+          org_id: current.org.id,
+          recurring_id: recurringId,
+          is_rescheduled: 1,
+          original_date: `${origDateOnly} ${schedule.start_time}`,
+          date: newDate,
+          start_time: newTime,
+          duration_minutes: duration,
+          barber_id: schedule.professional_id,
+          barber_name: barber?.full_name || 'Profissional',
+          service_id: schedule.service_id,
+          service_name: service?.name || 'Serviço',
+          client_name: schedule.client_name,
+          client_phone: schedule.client_phone,
+          price: service?.price || 0,
+          status: 'scheduled',
+          cancellation_feedback: feedback,
+          created_at: new Date().toISOString(),
+        };
+
+        const existingIdx = previousAppointments.findIndex((a: any) => a.id === exceptionApptId);
+        if (existingIdx >= 0) {
+          previousAppointments[existingIdx] = cleanRescheduled;
+        } else {
+          previousAppointments.unshift(cleanRescheduled);
+        }
+        current.appointments = previousAppointments;
+
+        if (env.DB) {
+          try {
+            await env.DB.prepare(`
+              INSERT INTO appointments (
+                id, tenant_id, org_id, client_name, client_phone, professional_id, barber_id,
+                service_id, service_name, start_time, duration_minutes, price, status,
+                date, created_at, recurring_id, is_rescheduled, original_date, cancellation_feedback
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET
+                status = 'scheduled',
+                date = excluded.date,
+                start_time = excluded.start_time,
+                is_rescheduled = 1,
+                original_date = excluded.original_date,
+                cancellation_feedback = excluded.cancellation_feedback
+            `).bind(
+              cleanRescheduled.id,
+              current.org.id,
+              current.org.id,
+              cleanRescheduled.client_name,
+              cleanRescheduled.client_phone,
+              cleanRescheduled.barber_id,
+              cleanRescheduled.barber_id,
+              cleanRescheduled.service_id,
+              cleanRescheduled.service_name,
+              cleanRescheduled.start_time,
+              cleanRescheduled.duration_minutes,
+              cleanRescheduled.price,
+              'scheduled',
+              cleanRescheduled.date,
+              cleanRescheduled.created_at,
+              cleanRescheduled.recurring_id,
+              1,
+              cleanRescheduled.original_date,
+              cleanRescheduled.cancellation_feedback
+            ).run();
+          } catch (err) {
+            console.warn('Erro ao registrar remarcação no D1:', err);
+          }
+        }
+
+        const notificationId = `notif-resched-${Date.now()}`;
+        const origFormatted = origDateOnly.split('-').reverse().join('/');
+        const newFormatted = newDate.split('-').reverse().join('/');
+        const newNotification = {
+          id: notificationId,
+          org_id: current.org.id,
+          type: 'appointment_rescheduled',
+          title: 'Cliente Fixo Remarcou Horário',
+          message: `${schedule.client_name} trocou ${origFormatted} às ${schedule.start_time} para ${newFormatted} às ${newTime}. Motivo: ${feedback}`,
+          created_at: new Date().toISOString(),
+          client_name: schedule.client_name,
+          target_tab: 'agenda',
+        };
+        current.notifications = [newNotification, ...(Array.isArray(current.notifications) ? current.notifications : [])].slice(0, 100);
+
+        await storePayload(env, current, current.org.slug, String(current.updated_at || ''));
+
+        const email = normalizeEmail(current.org?.email);
+        if (email) {
+          const pushTask = notifyAdminDevices(env, email, {
+            title: 'Cliente Fixo Remarcou Horário',
+            body: `${schedule.client_name} trocou ${origFormatted} (${schedule.start_time}) para ${newFormatted} às ${newTime}.`,
+            tag: notificationId,
+            url: '/?tab=agenda',
+          });
+          if (ctx?.waitUntil) ctx.waitUntil(pushTask);
+          else void pushTask;
+        }
+
+        return jsonResponse({
+          success: true,
+          message: `Tudo certo! Excepcionalmente nesta semana seu horário mudou para ${newFormatted} às ${newTime}. Na próxima vez seu horário fixo padrão continua normal.`,
+          appointment: cleanRescheduled,
+        });
+      } catch (error: any) {
+        return jsonResponse({ error: error?.message || 'Falha ao remarcar horário.' }, 500);
+      }
+    }
+
+    // CRUD Administrativo de Clientes Fixos
+    if (url.pathname === '/api/admin/recurring-schedules') {
+      const session = await getSessionContext(request, env);
+      if (!session) return jsonResponse({ error: 'Sessão inválida ou expirada.' }, 401);
+      const email = session.owner_email;
+      const rawUser = await dbGet(env, `user:${email}`);
+      if (!rawUser) return jsonResponse({ error: 'Estabelecimento não encontrado.' }, 404);
+      const current = JSON.parse(rawUser) as StoredPayload;
+      const tenantId = current.org?.id || '';
+
+      if (request.method === 'GET') {
+        let schedules = Array.isArray(current.recurring_schedules) ? current.recurring_schedules : [];
+        if (env.DB) {
+          try {
+            const result = await env.DB.prepare('SELECT * FROM recurring_schedules WHERE tenant_id = ? ORDER BY created_at DESC').bind(tenantId).all();
+            if (result.results && result.results.length > 0) {
+              const map = new Map<string, any>();
+              for (const s of schedules) map.set(s.id, s);
+              for (const s of result.results) map.set(s.id, s);
+              schedules = Array.from(map.values());
+            }
+          } catch (err) {
+            console.warn('Erro ao ler D1 recurring_schedules:', err);
+          }
+        }
+        return jsonResponse({ schedules });
+      }
+
+      if (request.method === 'POST') {
+        try {
+          const body = await request.json() as any;
+          const clientName = String(body.client_name || '').trim();
+          const clientPhone = normalizePhoneOnlyDigits(body.client_phone);
+          const professionalId = String(body.professional_id || '').trim();
+          const serviceId = String(body.service_id || '').trim();
+          const dayOfWeek = Number(body.day_of_week);
+          const startTime = String(body.start_time || '').trim();
+          const frequency = body.frequency === 'BIWEEKLY' ? 'BIWEEKLY' : 'WEEKLY';
+          const anchorDate = String(body.anchor_date || '').trim() || new Date().toISOString().split('T')[0];
+
+          if (!clientName || !clientPhone || !professionalId || !serviceId || isNaN(dayOfWeek) || !startTime) {
+            return jsonResponse({ error: 'Todos os campos são obrigatórios.' }, 400);
+          }
+
+          const existingSchedules = Array.isArray(current.recurring_schedules) ? current.recurring_schedules : [];
+          const appointments = Array.isArray(current.appointments) ? current.appointments : [];
+          const services = Array.isArray(current.services) ? current.services : [];
+
+          const conflictCheck = hasRecurringConflict(
+            {
+              tenant_id: tenantId,
+              client_phone: clientPhone,
+              client_name: clientName,
+              professional_id: professionalId,
+              service_id: serviceId,
+              day_of_week: dayOfWeek,
+              start_time: startTime,
+              frequency,
+              anchor_date: anchorDate,
+              status: 'ACTIVE',
+            },
+            existingSchedules,
+            appointments,
+            services,
+            body.id
+          );
+
+          if (conflictCheck.hasConflict) {
+            return jsonResponse({ error: conflictCheck.reason || 'Conflito de horário detectado.' }, 409);
+          }
+
+          const newId = body.id || `rec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+          const newSchedule: RecurringSchedule = {
+            id: newId,
+            tenant_id: tenantId,
+            client_phone: clientPhone,
+            client_name: clientName,
+            professional_id: professionalId,
+            service_id: serviceId,
+            day_of_week: dayOfWeek,
+            start_time: startTime,
+            frequency,
+            anchor_date: anchorDate,
+            status: body.status || 'ACTIVE',
+            created_at: new Date().toISOString(),
+          };
+
+          const updatedSchedules = [newSchedule, ...existingSchedules.filter((s: any) => s.id !== newId)];
+          current.recurring_schedules = updatedSchedules;
+
+          if (env.DB) {
+            try {
+              await env.DB.prepare(`
+                INSERT INTO recurring_schedules (
+                  id, tenant_id, client_phone, client_name, professional_id,
+                  service_id, day_of_week, start_time, frequency, anchor_date, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  client_phone = excluded.client_phone,
+                  client_name = excluded.client_name,
+                  professional_id = excluded.professional_id,
+                  service_id = excluded.service_id,
+                  day_of_week = excluded.day_of_week,
+                  start_time = excluded.start_time,
+                  frequency = excluded.frequency,
+                  anchor_date = excluded.anchor_date,
+                  status = excluded.status
+              `).bind(
+                newSchedule.id,
+                newSchedule.tenant_id,
+                newSchedule.client_phone,
+                newSchedule.client_name,
+                newSchedule.professional_id,
+                newSchedule.service_id,
+                newSchedule.day_of_week,
+                newSchedule.start_time,
+                newSchedule.frequency,
+                newSchedule.anchor_date,
+                newSchedule.status,
+                newSchedule.created_at
+              ).run();
+            } catch (err) {
+              console.warn('Erro ao salvar no D1 recurring_schedules:', err);
+            }
+          }
+
+          const clients = dedupeClientRecords(Array.isArray(current.clients) ? current.clients : []);
+          const existingClientIdx = clients.findIndex((c: any) => normalizePhoneOnlyDigits(c.phone) === clientPhone);
+          if (existingClientIdx === -1) {
+            clients.unshift({
+              id: `cli-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              org_id: tenantId,
+              name: clientName,
+              phone: clientPhone,
+              total_visits: 0,
+              total_spent: 0,
+              notes: `Cliente Fixo (${getFrequencyLabel(frequency)})`,
+            });
+            current.clients = clients;
+          }
+
+          await storePayload(env, current, current.org?.slug, String(current.updated_at || ''));
+          return jsonResponse({ success: true, schedule: newSchedule }, 201);
+        } catch (err: any) {
+          return jsonResponse({ error: err?.message || 'Falha ao criar cliente fixo.' }, 500);
+        }
+      }
+
+      if (request.method === 'PUT' || request.method === 'PATCH') {
+        try {
+          const body = await request.json() as any;
+          const id = String(body.id || '').trim();
+          if (!id) return jsonResponse({ error: 'ID do contrato é obrigatório.' }, 400);
+
+          const existingSchedules = Array.isArray(current.recurring_schedules) ? current.recurring_schedules : [];
+          const scheduleIdx = existingSchedules.findIndex((s: any) => s.id === id);
+          if (scheduleIdx === -1) return jsonResponse({ error: 'Contrato não encontrado.' }, 404);
+
+          const currentSchedule = existingSchedules[scheduleIdx];
+          const updatedSchedule = {
+            ...currentSchedule,
+            ...body,
+            id: currentSchedule.id,
+            tenant_id: currentSchedule.tenant_id,
+          };
+
+          existingSchedules[scheduleIdx] = updatedSchedule;
+          current.recurring_schedules = existingSchedules;
+
+          if (env.DB) {
+            try {
+              await env.DB.prepare(`
+                UPDATE recurring_schedules
+                SET client_phone = ?, client_name = ?, professional_id = ?, service_id = ?,
+                    day_of_week = ?, start_time = ?, frequency = ?, anchor_date = ?, status = ?
+                WHERE id = ?
+              `).bind(
+                updatedSchedule.client_phone,
+                updatedSchedule.client_name,
+                updatedSchedule.professional_id,
+                updatedSchedule.service_id,
+                updatedSchedule.day_of_week,
+                updatedSchedule.start_time,
+                updatedSchedule.frequency,
+                updatedSchedule.anchor_date,
+                updatedSchedule.status,
+                id
+              ).run();
+            } catch (err) {
+              console.warn('Erro ao atualizar D1 recurring_schedules:', err);
+            }
+          }
+
+          await storePayload(env, current, current.org?.slug, String(current.updated_at || ''));
+          return jsonResponse({ success: true, schedule: updatedSchedule });
+        } catch (err: any) {
+          return jsonResponse({ error: err?.message || 'Falha ao atualizar cliente fixo.' }, 500);
+        }
+      }
+
+      if (request.method === 'DELETE') {
+        try {
+          const id = url.searchParams.get('id') || ((await request.json().catch(() => ({}))) as any).id;
+          if (!id) return jsonResponse({ error: 'ID do contrato é obrigatório.' }, 400);
+
+          const existingSchedules = Array.isArray(current.recurring_schedules) ? current.recurring_schedules : [];
+          current.recurring_schedules = existingSchedules.filter((s: any) => s.id !== id);
+
+          if (env.DB) {
+            try {
+              await env.DB.prepare('DELETE FROM recurring_schedules WHERE id = ?').bind(id).run();
+            } catch (err) {
+              console.warn('Erro ao deletar D1 recurring_schedules:', err);
+            }
+          }
+
+          await storePayload(env, current, current.org?.slug, String(current.updated_at || ''));
+          return jsonResponse({ success: true });
+        } catch (err: any) {
+          return jsonResponse({ error: err?.message || 'Falha ao remover cliente fixo.' }, 500);
+        }
       }
     }
 

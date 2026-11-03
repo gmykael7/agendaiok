@@ -12,7 +12,8 @@ import {
   Product,
   ProductSale,
   ServiceCommand,
-  WaitlistEntry
+  WaitlistEntry,
+  RecurringSchedule
 } from './types';
 import { Sidebar } from './components/layout/Sidebar';
 import { BottomNav } from './components/layout/BottomNav';
@@ -86,6 +87,7 @@ const STORAGE_KEYS = {
   PRODUCT_SALES: 'agendai_product_sales',
   COMMANDS: 'agendai_commands',
   WAITLIST: 'agendai_waitlist',
+  RECURRING_SCHEDULES: 'agendai_recurring_schedules',
   AUTH_SESSION: 'agendai_session_active',
 };
 
@@ -367,6 +369,10 @@ export default function App() {
     return readStoredArray<WaitlistEntry>(STORAGE_KEYS.WAITLIST);
   });
 
+  const [recurringSchedules, setRecurringSchedules] = useState<RecurringSchedule[]>(() => {
+    return readStoredArray<RecurringSchedule>(STORAGE_KEYS.RECURRING_SCHEDULES);
+  });
+
   const [isClientRoute, setIsClientRoute] = useState<boolean>(() => {
     return isPublicBookingLocation(window.location);
   });
@@ -450,8 +456,8 @@ export default function App() {
   const isCloudHydratedRef = useRef(false);
   const isCloudPullInFlightRef = useRef(false);
   const skipNextCloudSaveRef = useRef(false);
-  const latestPayloadRef = useRef<CloudSyncPayload>({ org, savedOrgs, services, barbers, appointments, clients, notifications, products, productSales, commands, waitlist });
-  latestPayloadRef.current = { org, savedOrgs, services, barbers, appointments, clients, notifications, products, productSales, commands, waitlist };
+  const latestPayloadRef = useRef<CloudSyncPayload>({ org, savedOrgs, services, barbers, appointments, clients, notifications, products, productSales, commands, waitlist, recurring_schedules: recurringSchedules });
+  latestPayloadRef.current = { org, savedOrgs, services, barbers, appointments, clients, notifications, products, productSales, commands, waitlist, recurring_schedules: recurringSchedules };
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   // Refs para acesso livre de stale closures dentro de intervalos de sincronização
@@ -463,6 +469,7 @@ export default function App() {
   const productSalesRef = useRef(productSales);
   const commandsRef = useRef(commands);
   const waitlistRef = useRef(waitlist);
+  const recurringSchedulesRef = useRef(recurringSchedules);
   const orgRef = useRef(org);
   const notificationBaselineRef = useRef<Map<string, Appointment>>(new Map());
   const notificationBaselineInitializedRef = useRef(false);
@@ -475,6 +482,7 @@ export default function App() {
   useEffect(() => { productSalesRef.current = productSales; }, [productSales]);
   useEffect(() => { commandsRef.current = commands; }, [commands]);
   useEffect(() => { waitlistRef.current = waitlist; }, [waitlist]);
+  useEffect(() => { recurringSchedulesRef.current = recurringSchedules; }, [recurringSchedules]);
   useEffect(() => { orgRef.current = org; }, [org]);
 
   // Hidrata o estado React diretamente com o conteúdo autenticado da nuvem.
@@ -496,6 +504,7 @@ export default function App() {
     const nextProductSales = Array.isArray(cloudData.productSales) ? cloudData.productSales : [];
     const nextCommands = Array.isArray(cloudData.commands) ? cloudData.commands : [];
     const nextWaitlist = Array.isArray(cloudData.waitlist) ? cloudData.waitlist : [];
+    const nextRecurringSchedules = Array.isArray(cloudData.recurring_schedules) ? cloudData.recurring_schedules : [];
 
     const normalizedCloudData: CloudSyncPayload = {
       org: cloudData.org,
@@ -509,6 +518,7 @@ export default function App() {
       productSales: nextProductSales,
       commands: nextCommands,
       waitlist: nextWaitlist,
+      recurring_schedules: nextRecurringSchedules,
       current_user: cloudData.current_user,
       updated_at: cloudData.updated_at,
     };
@@ -526,6 +536,7 @@ export default function App() {
     productSalesRef.current = nextProductSales;
     commandsRef.current = nextCommands;
     waitlistRef.current = nextWaitlist;
+    recurringSchedulesRef.current = nextRecurringSchedules;
 
     setOrg(cloudData.org);
     setSavedOrgs(nextSavedOrgs);
@@ -538,6 +549,7 @@ export default function App() {
     setProductSales(nextProductSales);
     setCommands(nextCommands);
     setWaitlist(nextWaitlist);
+    setRecurringSchedules(nextRecurringSchedules);
     if (cloudData.current_user) { setCurrentUser(cloudData.current_user); localStorage.setItem('agendai_current_user', JSON.stringify(cloudData.current_user)); }
 
     if (!notificationBaselineInitializedRef.current) {
@@ -555,6 +567,7 @@ export default function App() {
     safeSetItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(nextProducts));
     safeSetItem(STORAGE_KEYS.PRODUCT_SALES, JSON.stringify(nextProductSales));
     safeSetItem(STORAGE_KEYS.COMMANDS, JSON.stringify(nextCommands));
+    safeSetItem(STORAGE_KEYS.RECURRING_SCHEDULES, JSON.stringify(nextRecurringSchedules));
     safeSetItem(STORAGE_KEYS.WAITLIST, JSON.stringify(nextWaitlist));
   }, []);
 
@@ -768,6 +781,7 @@ export default function App() {
       productSales,
       commands,
       waitlist,
+      recurring_schedules: recurringSchedules,
       updated_at: lastCloudTimestamp.current || undefined,
     };
     const fingerprint = cloudPayloadFingerprint(payload);
@@ -820,6 +834,7 @@ export default function App() {
             broadcastChannelRef.current.postMessage({ type: 'PRODUCT_SALES_SYNC', payload: synced.productSales || [], tenant: tenantKeyForOrg(synced.org) });
             broadcastChannelRef.current.postMessage({ type: 'COMMANDS_SYNC', payload: synced.commands || [], tenant: tenantKeyForOrg(synced.org) });
             broadcastChannelRef.current.postMessage({ type: 'WAITLIST_SYNC', payload: synced.waitlist || [], tenant: tenantKeyForOrg(synced.org) });
+            broadcastChannelRef.current.postMessage({ type: 'RECURRING_SYNC', payload: synced.recurring_schedules || [], tenant: tenantKeyForOrg(synced.org) });
             broadcastChannelRef.current.postMessage({ type: 'ORG_SYNC', payload: synced.org, tenant: tenantKeyForOrg(synced.org) });
           } catch (e) {}
         }
@@ -828,7 +843,7 @@ export default function App() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [services, barbers, appointments, clients, notifications, products, productSales, commands, waitlist, org, savedOrgs, isLoggedIn, isClientRoute, isTvRoute, applyPrivateCloudData, reconcileAfterCloudConflict]);
+  }, [services, barbers, appointments, clients, notifications, products, productSales, commands, waitlist, recurringSchedules, org, savedOrgs, isLoggedIn, isClientRoute, isTvRoute, applyPrivateCloudData, reconcileAfterCloudConflict]);
 
   // 4. SINCRONIZAÇÃO ENTRE APARELHOS: consulta leve e atualização imediata
   // ao abrir, recuperar a conexão ou voltar para o aplicativo.
@@ -945,6 +960,8 @@ export default function App() {
             setCommands(payload);
           } else if (type === 'WAITLIST_SYNC' && Array.isArray(payload)) {
             setWaitlist(payload);
+          } else if (type === 'RECURRING_SYNC' && Array.isArray(payload)) {
+            setRecurringSchedules(payload);
           } else if (type === 'NEW_WAITLIST_ENTRY' && payload) {
             setWaitlist(prev => {
               const exists = prev.some(w => w.id === payload.id);
@@ -1581,6 +1598,7 @@ export default function App() {
           services={isClientRoute ? publicCloudData?.services || [] : services}
           barbers={isClientRoute ? publicCloudData?.barbers || [] : barbers}
           appointments={isClientRoute ? publicCloudData?.appointments || [] : appointments}
+          recurringSchedules={isClientRoute ? publicCloudData?.recurring_schedules || [] : recurringSchedules}
           products={isClientRoute ? publicCloudData?.products || [] : products}
           onProductsChanged={isClientRoute ? items => setPublicCloudData(current => current ? { ...current, products: items } : current) : setProducts}
           onAddAppointment={handleAddAppointment}
@@ -1826,6 +1844,8 @@ export default function App() {
                 setWaitlist={setWaitlist}
                 clients={clients}
                 setClients={setClients}
+                recurringSchedules={recurringSchedules}
+                setRecurringSchedules={setRecurringSchedules}
               />
             )}
 
@@ -1876,6 +1896,10 @@ export default function App() {
                 setAppointments={setAppointments}
                 org={org}
                 setOrg={setOrg as React.Dispatch<React.SetStateAction<Organization>>}
+                barbers={barbers}
+                services={services}
+                recurringSchedules={recurringSchedules}
+                setRecurringSchedules={setRecurringSchedules}
               />
             )}
 

@@ -1,5 +1,6 @@
-import type { Appointment, Barber, Organization, Service } from '../types';
+import type { Appointment, Barber, Organization, RecurringSchedule, Service } from '../types';
 import { generateBusinessSlots, isBookableBusinessDateTime, timeToMinutes } from './scheduling';
+import { isRecurringSlotOccupied } from './recurringSchedules';
 
 export type PublicBookingDateStatus = 'available' | 'unavailable' | 'closed';
 
@@ -10,13 +11,16 @@ export const isPublicTimeSlotOccupied = (
   dateStr: string,
   appointments: Appointment[],
   excludeAppointmentId?: string,
+  recurringSchedules?: RecurringSchedule[],
+  services?: Service[]
 ): boolean => {
   const candidateStart = timeToMinutes(slotTime);
   const candidateEnd = candidateStart + (candidateDurationMinutes || 30);
 
-  return appointments.some((appointment) => {
+  // 1. Verifica ocupação em agendamentos normais ou exceções remarcadas
+  const isOccupiedByAppointment = appointments.some((appointment) => {
     if (excludeAppointmentId && appointment.id === excludeAppointmentId) return false;
-    if (appointment.status === 'canceled' || appointment.status === 'no_show') return false;
+    if (appointment.status === 'canceled' || (appointment.status as string) === 'cancelled' || appointment.status === 'no_show') return false;
     if (appointment.barber_id !== barberId) return false;
     if ((appointment.date || dateStr) !== dateStr) return false;
 
@@ -27,6 +31,17 @@ export const isPublicTimeSlotOccupied = (
     const appointmentEnd = appointmentStart + appointmentDuration;
     return candidateStart < appointmentEnd && appointmentStart < candidateEnd;
   });
+
+  if (isOccupiedByAppointment) return true;
+
+  // 2. Verifica ocupação por contratos de Clientes Fixos (com liberação se cancelou/remarcou)
+  if (recurringSchedules && recurringSchedules.length > 0) {
+    if (isRecurringSlotOccupied(slotTime, candidateDurationMinutes, barberId, dateStr, recurringSchedules, appointments, services)) {
+      return true;
+    }
+  }
+
+  return false;
 };
 
 export const getPublicBookingDateStatus = ({
@@ -36,6 +51,7 @@ export const getPublicBookingDateStatus = ({
   appointments,
   dateStr,
   now = new Date(),
+  recurringSchedules,
 }: {
   org: Organization;
   services: Service[];
@@ -43,6 +59,7 @@ export const getPublicBookingDateStatus = ({
   appointments: Appointment[];
   dateStr: string;
   now?: Date;
+  recurringSchedules?: RecurringSchedule[];
 }): PublicBookingDateStatus => {
   if (org.closed_periods?.some((period) => period?.date === dateStr && period.all_day === true)) return 'closed';
 
@@ -60,7 +77,7 @@ export const getPublicBookingDateStatus = ({
   const hasAvailableSlot = activeBarbers.some((barber) => slots.some((time) => {
     if (dateStr === todayKey && timeToMinutes(time) <= currentMinutes) return false;
     if (!isBookableBusinessDateTime(time, shortestDuration, dateStr, org)) return false;
-    return !isPublicTimeSlotOccupied(time, shortestDuration, barber.id, dateStr, appointments);
+    return !isPublicTimeSlotOccupied(time, shortestDuration, barber.id, dateStr, appointments, undefined, recurringSchedules, services);
   }));
 
   return hasAvailableSlot ? 'available' : 'unavailable';
