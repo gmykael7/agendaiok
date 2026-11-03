@@ -340,7 +340,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
     <div className="mx-4 sm:mx-6 mt-4 space-y-3">
       {/* CARD PRINCIPAL DE IDENTIFICAÇÃO OU BOAS-VINDAS */}
       {!hasActiveContracts && !showIdentityForm && identifiedPhone && (
-        <div className="rounded-2xl border border-slate-800 bg-[#0B1120] p-4 flex items-center justify-between gap-3">
+        <div className="recurring-identified-bar rounded-2xl border border-slate-800 bg-[#0B1120] p-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center shrink-0 text-slate-300">
               <User className="w-5 h-5" />
@@ -366,7 +366,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
 
       {/* FORMULÁRIO DE IDENTIFICAÇÃO (RÁPIDO) */}
       {showIdentityForm && (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/15 p-4 sm:p-5 relative overflow-hidden">
+        <div className="recurring-identify-card rounded-2xl border border-emerald-500/30 bg-emerald-950/15 p-4 sm:p-5 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
           <div className="flex items-start justify-between gap-2">
             <div>
@@ -467,25 +467,25 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
             return (
               <div
                 key={schedule.id}
-                className="rounded-2xl border border-emerald-500/40 bg-gradient-to-br from-[#0B1526] via-[#091D1E] to-[#0B1120] p-4 sm:p-5 shadow-xl shadow-emerald-950/20 relative overflow-hidden"
+                className="recurring-hero-card rounded-2xl border border-emerald-500/40 bg-gradient-to-br from-[#0B1526] via-[#091D1E] to-[#0B1120] p-4 sm:p-5 shadow-xl shadow-emerald-950/20 relative overflow-hidden"
               >
                 {/* Efeito Glow no fundo */}
-                <div className="absolute -top-12 -right-12 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+                <div className="recurring-glow absolute -top-12 -right-12 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
                 {/* Cabeçalho do Card */}
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/20 pb-3">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-400/20 to-emerald-400/20 border border-amber-400/40 text-[11px] font-black text-amber-300 tracking-wide">
+                    <span className="recurring-badge inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-400/20 to-emerald-400/20 border border-amber-400/40 text-[11px] font-black text-amber-300 tracking-wide">
                       ⭐ Cliente Fixo ({freqLabel})
                     </span>
-                    <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">
+                    <span className="recurring-status-text text-[10px] text-slate-400 font-medium hidden sm:inline">
                       Horário reservado
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={handleSwitchIdentity}
-                    className="text-[10px] text-slate-400 hover:text-white underline font-mono"
+                    className="recurring-switch-btn text-[10px] text-slate-400 hover:text-white underline font-mono"
                   >
                     {formatPhoneBR(identifiedPhone)} (Trocar)
                   </button>
@@ -493,37 +493,37 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
 
                 {/* Detalhes da Assinatura / Horário Habitual */}
                 <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div className="rounded-xl bg-slate-900/60 border border-slate-800/80 p-2.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                  <div className="recurring-subcard rounded-xl bg-slate-900/60 border border-slate-800/80 p-2.5">
+                    <p className="recurring-label text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                       Dia habitual
                     </p>
-                    <p className="text-xs sm:text-sm font-black text-white mt-0.5">
+                    <p className="recurring-value text-xs sm:text-sm font-black text-white mt-0.5">
                       Toda {dayLabel}
                     </p>
-                    <p className="text-[11px] font-mono text-emerald-400 font-bold">
+                    <p className="recurring-accent text-[11px] font-mono text-emerald-400 font-bold">
                       às {schedule.start_time}
                     </p>
                   </div>
 
-                  <div className="rounded-xl bg-slate-900/60 border border-slate-800/80 p-2.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                  <div className="recurring-subcard rounded-xl bg-slate-900/60 border border-slate-800/80 p-2.5">
+                    <p className="recurring-label text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                       Profissional
                     </p>
-                    <p className="text-xs sm:text-sm font-black text-white mt-0.5 truncate">
+                    <p className="recurring-value text-xs sm:text-sm font-black text-white mt-0.5 truncate">
                       {schedule.professional_name || 'Barbeiro'}
                     </p>
-                    <p className="text-[11px] text-slate-400 truncate">
+                    <p className="recurring-muted text-[11px] text-slate-400 truncate">
                       {schedule.service_name || 'Serviço'}
                     </p>
                   </div>
 
-                  <div className="col-span-2 sm:col-span-1 rounded-xl bg-slate-900/60 border border-slate-800/80 p-2.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                  <div className="recurring-subcard col-span-2 sm:col-span-1 rounded-xl bg-slate-900/60 border border-slate-800/80 p-2.5">
+                    <p className="recurring-label text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                       Próxima Vaga
                     </p>
                     {nextOcc ? (
                       <div>
-                        <p className="text-xs sm:text-sm font-black text-emerald-300 mt-0.5">
+                        <p className="recurring-accent text-xs sm:text-sm font-black text-emerald-300 mt-0.5">
                           {nextOcc.date.split('-').reverse().join('/')} às {nextOcc.start_time}
                         </p>
                         {isCurrentWeekRescheduled && (
@@ -533,7 +533,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                         )}
                       </div>
                     ) : (
-                      <p className="text-xs font-bold text-slate-400 mt-0.5">
+                      <p className="recurring-muted text-xs font-bold text-slate-400 mt-0.5">
                         Consultando...
                       </p>
                     )}
@@ -542,10 +542,10 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
 
                 {/* Bloco de Ações do Próximo Atendimento */}
                 {nextOcc && (
-                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-2.5">
-                    <p className="text-[11px] text-slate-300 text-center sm:text-left">
+                  <div className="recurring-actions-bar mt-4 pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+                    <p className="recurring-prompt-text text-[11px] text-slate-300 text-center sm:text-left">
                       Precisa alterar o atendimento de{' '}
-                      <strong className="text-white">
+                      <strong className="recurring-prompt-date text-white">
                         {nextOcc.date.split('-').reverse().join('/')}
                       </strong>
                       ?
@@ -554,7 +554,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                       <button
                         type="button"
                         onClick={() => handleOpenReschedule(nextOcc)}
-                        className="rounded-xl border border-cyan-500/40 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 text-xs font-bold px-3 py-2 flex items-center justify-center gap-1.5 transition-colors"
+                        className="recurring-btn-reschedule rounded-xl border border-cyan-500/40 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 text-xs font-bold px-3 py-2 flex items-center justify-center gap-1.5 transition-colors"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
                         <span>Remarcar semana</span>
@@ -567,7 +567,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                           setCancelCustomNote('');
                           setCancelError('');
                         }}
-                        className="rounded-xl border border-rose-500/40 bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 text-xs font-bold px-3 py-2 flex items-center justify-center gap-1.5 transition-colors"
+                        className="recurring-btn-cancel rounded-xl border border-rose-500/40 bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 text-xs font-bold px-3 py-2 flex items-center justify-center gap-1.5 transition-colors"
                       >
                         <XCircle className="w-3.5 h-3.5" />
                         <span>Não poderei ir</span>
@@ -581,7 +581,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
 
           {/* HISTÓRICO / PRÓXIMAS 4 SEMANAS EM LISTA EXPANSÍVEL */}
           {upcomingOccurrences.length > 1 && (
-            <div className="rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
+            <div className="recurring-history-card rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
               <h4 className="text-xs font-black text-white uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-emerald-400" />
                 Próximos atendimentos garantidos
@@ -595,7 +595,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                   return (
                     <div
                       key={`${occ.schedule_id}-${occ.date}-${idx}`}
-                      className={`rounded-xl border p-2.5 flex items-center justify-between gap-2 text-xs transition-colors ${
+                      className={`recurring-history-row rounded-xl border p-2.5 flex items-center justify-between gap-2 text-xs transition-colors ${
                         isCanceled
                           ? 'border-rose-900/40 bg-rose-950/20 text-rose-300'
                           : isRescheduled
@@ -604,13 +604,13 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="font-mono font-bold text-white">
+                        <span className="recurring-history-date font-mono font-bold text-white">
                           {d}/{m}
                         </span>
-                        <span className="text-slate-400 font-mono text-[11px]">
+                        <span className="recurring-history-meta text-slate-400 font-mono text-[11px]">
                           às {occ.start_time}
                         </span>
-                        <span className="text-slate-400 truncate">
+                        <span className="recurring-history-meta text-slate-400 truncate">
                           • {occ.professional_name || 'Barbeiro'}
                         </span>
                       </div>
@@ -643,7 +643,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
       {/* ========================================================================= */}
       {cancelModalOccurrence && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-lg rounded-3xl border border-slate-700 bg-[#0B1120] p-5 sm:p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom-4 duration-200">
+          <div className="recurring-modal-sheet w-full max-w-lg rounded-3xl border border-slate-700 bg-[#0B1120] p-5 sm:p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom-4 duration-200">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
@@ -693,7 +693,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                       key={r}
                       type="button"
                       onClick={() => setCancelReason(r)}
-                      className={`rounded-xl px-3 py-1.5 text-xs font-semibold border transition-all ${
+                      className={`recurring-chip-btn ${isSelected ? 'is-active' : ''} rounded-xl px-3 py-1.5 text-xs font-semibold border transition-all ${
                         isSelected
                           ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
                           : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700'
@@ -763,7 +763,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
       {/* ========================================================================= */}
       {rescheduleModalOccurrence && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-700 bg-[#0B1120] p-5 sm:p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom-4 duration-200">
+          <div className="recurring-modal-sheet w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-700 bg-[#0B1120] p-5 sm:p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom-4 duration-200">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 flex items-center justify-center shrink-0">
@@ -837,7 +837,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                         setRescheduleSelectedDate(d.dateStr);
                         setRescheduleSelectedTime('');
                       }}
-                      className={`min-w-[62px] flex flex-col items-center justify-center p-2 rounded-xl border transition-all ${
+                      className={`recurring-day-btn ${isSelected ? 'is-selected' : ''} min-w-[62px] flex flex-col items-center justify-center p-2 rounded-xl border transition-all ${
                         isSelected
                           ? 'border-cyan-400 bg-cyan-500/25 text-white shadow-md shadow-cyan-500/20'
                           : isOriginal
@@ -878,7 +878,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                           key={time}
                           type="button"
                           onClick={() => setRescheduleSelectedTime(time)}
-                          className={`rounded-xl py-2 px-1 text-center font-mono text-xs font-bold border transition-all ${
+                          className={`recurring-slot-btn ${isSelected ? 'is-selected' : ''} rounded-xl py-2 px-1 text-center font-mono text-xs font-bold border transition-all ${
                             isSelected
                               ? 'border-cyan-400 bg-cyan-400 text-slate-950 font-black shadow-md shadow-cyan-400/20'
                               : 'border-slate-800 bg-slate-900 text-slate-200 hover:border-slate-700'

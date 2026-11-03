@@ -3149,4 +3149,205 @@ html:not([data-app-theme="light"]) .whatsapp-divider {
   border-color: rgba(51, 65, 85, 0.8) !important;
 }
 
+/* ============================================================
+   Adaptação de Tema (Claro / Escuro) para Cards de Clientes Fixos
+   ============================================================ */
+
+/* MODO CLARO */
+html[data-app-theme="light"] .recurring-hero-card {
+  background-color: #ffffff !important;
+  background-image: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%) !important;
+  border-color: #bbf7d0 !important;
+  box-shadow: 0 4px 20px -2px rgba(16, 185, 129, 0.1), 0 2px 6px -1px rgba(0, 0, 0, 0.04) !important;
+}
+
+html[data-app-theme="light"] .recurring-hero-card .recurring-glow {
+  display: none !important;
+}
+
+html[data-app-theme="light"] .recurring-hero-card .recurring-badge {
+  background: #fef3c7 !important;
+  border-color: #fcd34d !important;
+  color: #92400e !important;
+}
+
+html[data-app-theme="light"] .recurring-hero-card .recurring-status-text {
+  color: #64748b !important;
+}
+
+html[data-app-theme="light"] .recurring-hero-card .recurring-switch-btn {
+  color: #047857 !important;
+}
+
+html[data-app-theme="light"] .recurring-hero-card .recurring-subcard {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+html[data-app-theme="light"] .recurring-hero-card .recurring-subcard .recurring-label {
+  color: #64748b !important;
+}
+
+html[data-app-theme="light"] .recurring-hero-card .recurring-subcard .recurring-value {
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .recurring-hero-card .recurring-subcard .recurring-accent {
+  color: #059669 !important;
+}
+
+html[data-app-theme="light"] .recurring-hero-card .recurring-subcard .recurring-muted {
+  color: #64748b !important;
+}
+
+html[data-app-theme="light"] .recurring-hero-card .recurring-actions-bar {
+  border-top-color: #e2e8f0 !important;
+}
+
+html[data-app-theme="light"] .recurring-hero-card .recurring-prompt-text {
+  color: #475569 !important;
+}
+
+html[data-app-theme="light"] .recurring-hero-card .recurring-prompt-date {
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .recurring-btn-reschedule {
+  background-color: #ecfeff !important;
+  border-color: #a5f3fc !important;
+  color: #0e7490 !important;
+}
+
+html[data-app-theme="light"] .recurring-btn-reschedule:hover {
+  background-color: #cffafe !important;
+}
+
+html[data-app-theme="light"] .recurring-btn-cancel {
+  background-color: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+  color: #be123c !important;
+}
+
+html[data-app-theme="light"] .recurring-btn-cancel:hover {
+  background-color: #ffe4e6 !important;
+}
+
+html[data-app-theme="light"] .recurring-history-card {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+html[data-app-theme="light"] .recurring-history-card h4 {
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .recurring-history-row {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+html[data-app-theme="light"] .recurring-history-row .recurring-history-date {
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .recurring-history-row .recurring-history-meta {
+  color: #64748b !important;
+}
+
+html[data-app-theme="light"] .recurring-identify-card {
+  background-color: #ffffff !important;
+  border-color: #bbf7d0 !important;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.06) !important;
+}
+
+html[data-app-theme="light"] .recurring-identify-card h3 {
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .recurring-identify-card p {
+  color: #64748b !important;
+}
+
+html[data-app-theme="light"] .recurring-identify-card label {
+  color: #334155 !important;
+}
+
+html[data-app-theme="light"] .recurring-identify-card input {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .recurring-identified-bar {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+html[data-app-theme="light"] .recurring-identified-bar p.text-white {
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .recurring-modal-sheet {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .recurring-modal-sheet h3 {
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .recurring-modal-sheet p {
+  color: #475569 !important;
+}
+
+html[data-app-theme="light"] .recurring-modal-sheet label {
+  color: #334155 !important;
+}
+
+html[data-app-theme="light"] .recurring-modal-sheet :where(input, textarea) {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .recurring-chip-btn {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+html[data-app-theme="light"] .recurring-chip-btn.is-active {
+  background-color: #ecfdf5 !important;
+  border-color: #34d399 !important;
+  color: #065f46 !important;
+}
+
+html[data-app-theme="light"] .recurring-day-btn {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+html[data-app-theme="light"] .recurring-day-btn.is-selected {
+  background-color: #0891b2 !important;
+  border-color: #0891b2 !important;
+  color: #ffffff !important;
+}
+
+html[data-app-theme="light"] .recurring-slot-btn {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .recurring-slot-btn.is-selected {
+  background-color: #059669 !important;
+  border-color: #059669 !important;
+  color: #ffffff !important;
+}
+
 
