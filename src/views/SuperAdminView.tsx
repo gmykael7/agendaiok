@@ -5,7 +5,7 @@ import {
   Building2, CheckCircle2, Clock3, ExternalLink, Loader2, LockKeyhole, 
   Search, ShieldCheck, Sparkles, UsersRound, Ban, CalendarDays, RefreshCw,
   LayoutDashboard, MessageSquare, Phone, Mail, User, Scissors, Tv,
-  TrendingUp, X, Filter, ChevronRight, Award
+  TrendingUp, X, Filter, ChevronRight, Award, Sun, Moon
 } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { BrandLoader } from '../components/common/AppLoader';
@@ -19,6 +19,7 @@ import {
 } from '../services/superAdmin';
 import { getClientBookingUrl, getTvDisplayUrl } from '../config/urls';
 import { TEAM_PLAN_PRICE_LABEL } from '../utils/tenantPlan';
+import { AppThemeMode, applyAppTheme, readStoredAppThemeMode, APP_THEME_STORAGE_KEY } from '../config/theme';
 
 type SuperAdminTab = 'dashboard' | 'barbearias' | 'mensagens';
 type StatusFilter = 'all' | 'active' | 'trial' | 'suspended';
@@ -54,6 +55,22 @@ export const SuperAdminView: React.FC = () => {
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<SuperAdminTenant | null>(null);
   const [saving, setSaving] = useState(false);
+  const [themeMode, setThemeMode] = useState<AppThemeMode>(() => readStoredAppThemeMode());
+
+  useEffect(() => {
+    applyAppTheme(themeMode);
+  }, [themeMode]);
+
+  const toggleTheme = () => {
+    const nextMode: AppThemeMode = themeMode === 'dark' ? 'light' : 'dark';
+    setThemeMode(nextMode);
+    try {
+      localStorage.setItem(APP_THEME_STORAGE_KEY, nextMode);
+    } catch (err) {
+      console.error('Falha ao salvar tema do SuperAdmin:', err);
+    }
+    applyAppTheme(nextMode);
+  };
 
   const load = async () => {
     setError('');
@@ -184,6 +201,17 @@ export const SuperAdminView: React.FC = () => {
     return (
       <div className="superadmin-view min-h-screen bg-[#070d18] text-white flex items-center justify-center p-4">
         <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-[#0d1728] p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-4 right-4 z-10">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="p-2.5 rounded-xl border border-slate-700/80 bg-slate-900/90 text-xs font-bold text-slate-200 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-all active:scale-95 shadow-sm"
+              title={themeMode === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+              aria-label="Alternar tema"
+            >
+              {themeMode === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-cyan-600" />}
+            </button>
+          </div>
           <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto text-cyan-400">
             <BrandLogo variant="mark" className="w-10 h-10" />
@@ -292,6 +320,15 @@ export const SuperAdminView: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2.5 self-start md:self-auto">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="p-2.5 rounded-xl border border-slate-700/80 bg-slate-900/90 text-xs font-bold text-slate-200 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-all active:scale-95 shadow-sm"
+              title={themeMode === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+              aria-label="Alternar tema"
+            >
+              {themeMode === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-cyan-600" />}
+            </button>
             <button 
               onClick={() => void load()} 
               disabled={loading}
