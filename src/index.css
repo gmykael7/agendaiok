@@ -1671,7 +1671,7 @@ html[data-app-theme="light"] .today-command-center-action--primary {
   border-color: color-mix(in srgb, var(--brand-color) 36%, #cfd8e3) !important;
 }
 
-html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view) :where([class~="bg-[#0B1120]"], [class~="bg-[#0B1120]/90"], [class~="bg-[#0B1120]/60"], [class~="bg-[#0A1324]/70"]),
+html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view) :where([class~="bg-[#0B1120]"], [class~="bg-[#0B1120]/90"], [class~="bg-[#0B1120]/60"], [class~="bg-[#0A1324]/70"], [class~="bg-[#0B1526]"], [class~="bg-[#0B1526]/90"], [class~="bg-[#091D1E]"]),
 html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view) :where([class~="bg-slate-950/30"], [class~="bg-slate-950/40"], [class~="bg-slate-950/45"], [class~="bg-slate-950/50"], [class~="bg-slate-950/60"], [class~="bg-slate-950/70"], [class~="bg-slate-950/80"]),
 html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view) :where([class~="bg-slate-900"], [class~="bg-slate-900/70"], [class~="bg-slate-900/80"]),
 html[data-app-theme="light"] .app-header :where([class~="bg-slate-950/70"], [class~="bg-slate-950/80"], [class~="bg-slate-900/85"]),
@@ -1682,7 +1682,12 @@ html[data-app-theme="light"] .app-bottom-nav :where([class~="bg-slate-900"], [cl
   box-shadow: none !important;
 }
 
-html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view, .app-header, .app-sidebar, .app-bottom-nav) :where([class*="bg-slate-950"], [class*="bg-slate-900"], [class*="bg-slate-800"], [class~="bg-[#08101f]"], [class~="bg-[#07111f]"], [class~="bg-[#061120]"]) {
+html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view) :where([class~="bg-[#070B14]"]) {
+  background-color: #f8fafc !important;
+  border-color: rgb(0 0 0 / 0.12) !important;
+}
+
+html[data-app-theme="light"] :where(.app-view, .auth-view, .booking-view, .app-header, .app-sidebar, .app-bottom-nav) :where([class*="bg-slate-950"], [class*="bg-slate-900"], [class*="bg-slate-800"], [class~="bg-[#08101f]"], [class~="bg-[#07111f]"], [class~="bg-[#061120]"], [class~="bg-[#070B14]"]) {
   background-color: #ffffff !important;
   background-image: none !important;
 }
@@ -1844,8 +1849,14 @@ html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal, .app-view, .b
   [class~="bg-[#0B1120]"],
   [class~="bg-[#0B1424]"],
   [class~="bg-[#0B1426]"],
+  [class~="bg-[#0B1526]"],
+  [class~="bg-[#0b1526]"],
+  [class~="bg-[#070b14]"],
+  [class~="bg-[#091D1E]"],
+  [class~="bg-[#091d1e]"],
   [class~="bg-[#0a211e]"],
   [class~="bg-[#0b111a]"],
+  [class~="bg-[#0b1120]"],
   [class~="bg-[#0b1424]"],
   [class~="bg-[#0b1426]"],
   [class~="bg-[#0b1628]"],
@@ -1855,7 +1866,8 @@ html[data-app-theme="light"] :where(.app-shell, .app-mobile-modal, .app-view, .b
   [class~="bg-[#0d1729]"],
   [class~="bg-[#101923]"],
   [class~="bg-[#10192b]"],
-  [class~="bg-[#121B2E]"]
+  [class~="bg-[#121B2E]"],
+  [class~="bg-[#121b2e]"]
 ):not(.landing-demo-surface):not(.landing-demo-surface *) {
   background-color: #ffffff !important;
   background-image: none !important;
@@ -3683,6 +3695,24 @@ html[data-app-theme="light"] .recurring-slot-btn.is-selected {
   background-color: #059669 !important;
   border-color: #059669 !important;
   color: #ffffff !important;
+}
+
+html[data-app-theme="light"] .recurring-modal-sheet :where(.bg-\[\#070B14\], [class~="bg-[#070B14]"]) {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .recurring-modal-sheet :where(.text-white, .text-slate-100) {
+  color: #0f172a !important;
+}
+
+html[data-app-theme="light"] .recurring-modal-sheet :where(.text-slate-200, .text-slate-300) {
+  color: #334155 !important;
+}
+
+html[data-app-theme="light"] .recurring-modal-sheet :where(.text-slate-400, .text-slate-500) {
+  color: #64748b !important;
 }
 
 /* ========================================================================= */

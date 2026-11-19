@@ -574,31 +574,31 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
       {/* MODAL 1: CANCELAMENTO DA SEMANA COM FEEDBACK OBRIGATÓRIO                    */}
       {/* ========================================================================= */}
       {cancelModalOccurrence && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="recurring-modal-sheet w-full max-w-lg rounded-3xl border border-slate-700 bg-[#0B1120] p-5 sm:p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom-4 duration-200">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-slate-950/60 dark:bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="recurring-modal-sheet w-full max-w-lg rounded-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-[#0B1120] p-5 sm:p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom-4 duration-200">
             {cancelSuccessSummary ? (
               <div className="py-2 space-y-4 animate-in zoom-in-95 duration-200 text-center">
-                <div className="w-14 h-14 mx-auto rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/10">
+                <div className="w-14 h-14 mx-auto rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:bg-emerald-500/20 dark:border-emerald-500/40 dark:text-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/10">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
                 <div>
-                  <h4 className="text-base font-black text-white">Horário liberado com sucesso!</h4>
-                  <p className="text-xs text-slate-300 mt-1">
-                    O profissional <strong className="text-white">{cancelSuccessSummary.professional_name}</strong> já recebeu seu feedback.
+                  <h4 className="text-base font-black text-slate-900 dark:text-white">Horário liberado com sucesso!</h4>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                    O profissional <strong className="text-slate-900 dark:text-white">{cancelSuccessSummary.professional_name}</strong> já recebeu seu feedback.
                   </p>
                 </div>
-                <div className="rounded-2xl border border-slate-800 bg-[#070B14] p-3.5 text-left text-xs space-y-2">
-                  <div className="flex items-center justify-between text-slate-300">
-                    <span className="text-slate-400">Vaga liberada:</span>
-                    <strong className="text-rose-300">{cancelSuccessSummary.original_date} às {cancelSuccessSummary.original_time}</strong>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-[#070B14] p-3.5 text-left text-xs space-y-2">
+                  <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                    <span className="text-slate-500 dark:text-slate-400">Vaga liberada:</span>
+                    <strong className="text-rose-600 dark:text-rose-300">{cancelSuccessSummary.original_date} às {cancelSuccessSummary.original_time}</strong>
                   </div>
                   {cancelSuccessSummary.next_recurring_date && (
-                    <div className="flex items-center justify-between text-slate-300 border-t border-slate-800/80 pt-2">
-                      <span className="text-slate-400">Próximo horário garantido:</span>
-                      <strong className="text-emerald-400">{cancelSuccessSummary.next_recurring_date} às {cancelSuccessSummary.original_time}</strong>
+                    <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 border-t border-slate-200 dark:border-slate-800/80 pt-2">
+                      <span className="text-slate-500 dark:text-slate-400">Próximo horário garantido:</span>
+                      <strong className="text-emerald-600 dark:text-emerald-400">{cancelSuccessSummary.next_recurring_date} às {cancelSuccessSummary.original_time}</strong>
                     </div>
                   )}
-                  <div className="flex items-center gap-2 pt-1 text-[11px] text-emerald-400">
+                  <div className="flex items-center gap-2 pt-1 text-[11px] text-emerald-600 dark:text-emerald-400">
                     <Check className="w-3.5 h-3.5" />
                     <span>Seu plano de Cliente Fixo segue 100% ativo!</span>
                   </div>
@@ -610,7 +610,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                     setCancelSuccessSummary(null);
                     setCancelMessage('');
                   }}
-                  className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs py-2.5 transition-colors shadow-lg shadow-emerald-500/20"
+                  className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs py-2.5 transition-colors shadow-lg shadow-emerald-500/20 active:scale-95"
                 >
                   Entendido, fechar
                 </button>
@@ -619,35 +619,35 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
               <>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:bg-rose-500/15 dark:border-rose-500/30 dark:text-rose-400 flex items-center justify-center shrink-0">
                       <XCircle className="w-6 h-6" />
                     </div>
                     <div>
-                      <h3 className="text-base font-black text-white">
+                      <h3 className="text-base font-black text-slate-900 dark:text-white">
                         Não poderei ir esta semana
                       </h3>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         Data:{' '}
-                        <strong className="text-white">
+                        <strong className="text-slate-900 dark:text-white">
                           {cancelModalOccurrence.date.split('-').reverse().join('/')}
                         </strong>{' '}
-                        às <strong className="text-white">{cancelModalOccurrence.start_time}</strong>
+                        às <strong className="text-slate-900 dark:text-white">{cancelModalOccurrence.start_time}</strong>
                       </p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setCancelModalOccurrence(null)}
-                    className="text-slate-400 hover:text-white text-lg p-1"
+                    className="text-slate-400 hover:text-slate-700 dark:hover:text-white text-lg p-1"
                   >
                     ✕
                   </button>
                 </div>
 
                 {/* Aviso tranquilizador */}
-                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3.5 flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-emerald-200 leading-relaxed">
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20 p-3.5 flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-emerald-900 dark:text-emerald-200 leading-relaxed">
                     Você está liberando <strong>apenas o horário do dia{' '}
                     {cancelModalOccurrence.date.split('-').reverse().join('/')}</strong> para outro cliente da barbearia agendar. Seu horário fixo das próximas semanas continua <strong>100% garantido!</strong>
                   </p>
@@ -655,8 +655,8 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
 
                 {/* Motivo Obrigatório com Chips Rápidos */}
                 <div className="space-y-2">
-                  <label className="block text-xs font-bold text-slate-200">
-                    Qual o motivo do cancelamento? <span className="text-rose-400">*</span>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
+                    Qual o motivo do cancelamento? <span className="text-rose-500">*</span>
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {QUICK_REASONS.map((r) => {
@@ -668,8 +668,8 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                           onClick={() => setCancelReason(r)}
                           className={`recurring-chip-btn ${isSelected ? 'is-active' : ''} rounded-xl px-3 py-1.5 text-xs font-semibold border transition-all ${
                             isSelected
-                              ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
-                              : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700'
+                              ? 'border-emerald-500 bg-emerald-50 text-emerald-950 dark:border-emerald-400 dark:bg-emerald-500/20 dark:text-emerald-200'
+                              : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-700'
                           }`}
                         >
                           {r}
@@ -683,29 +683,29 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                     value={cancelCustomNote}
                     onChange={(e) => setCancelCustomNote(e.target.value)}
                     placeholder="Observação ou mensagem para a barbearia (opcional)..."
-                    className="w-full mt-2 rounded-xl border border-slate-800 bg-[#070B14] p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                    className="w-full mt-2 rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-[#070B14] dark:text-white dark:placeholder-slate-600"
                   />
                 </div>
 
                 {cancelError && (
-                  <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-300 text-xs flex items-center gap-2">
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800/60 dark:text-rose-300 text-xs flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{cancelError}</span>
                   </div>
                 )}
 
                 {cancelMessage && (
-                  <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 text-xs flex items-center gap-2">
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300 text-xs flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span>{cancelMessage}</span>
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-2 pt-2">
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => setCancelModalOccurrence(null)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
                   >
                     Voltar
                   </button>
@@ -737,29 +737,29 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
       {/* MODAL 2: REMARCAÇÃO NA AGENDA ABERTA                                        */}
       {/* ========================================================================= */}
       {rescheduleModalOccurrence && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="recurring-modal-sheet w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-700 bg-[#0B1120] p-5 sm:p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom-4 duration-200">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-slate-950/60 dark:bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="recurring-modal-sheet w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-[#0B1120] p-5 sm:p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom-4 duration-200">
             {rescheduleSuccessSummary ? (
               <div className="py-2 space-y-4 animate-in zoom-in-95 duration-200 text-center">
-                <div className="w-14 h-14 mx-auto rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 flex items-center justify-center shadow-lg shadow-cyan-500/10">
+                <div className="w-14 h-14 mx-auto rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-600 dark:bg-cyan-500/20 dark:border-cyan-500/40 dark:text-cyan-300 flex items-center justify-center shadow-lg shadow-cyan-500/10">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
                 <div>
-                  <h4 className="text-base font-black text-white">Troca de horário confirmada!</h4>
-                  <p className="text-xs text-slate-300 mt-1">
-                    O profissional <strong className="text-white">{rescheduleSuccessSummary.professional_name}</strong> já foi avisado e sua vaga original foi liberada na agenda.
+                  <h4 className="text-base font-black text-slate-900 dark:text-white">Troca de horário confirmada!</h4>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                    O profissional <strong className="text-slate-900 dark:text-white">{rescheduleSuccessSummary.professional_name}</strong> já foi avisado e sua vaga original foi liberada na agenda.
                   </p>
                 </div>
-                <div className="rounded-2xl border border-slate-800 bg-[#070B14] p-3.5 text-left text-xs space-y-2.5">
-                  <div className="flex items-center justify-between text-slate-300">
-                    <span className="text-slate-400">Horário anterior (liberado):</span>
-                    <strong className="text-slate-400 line-through">{rescheduleSuccessSummary.original_date} às {rescheduleSuccessSummary.original_time}</strong>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-[#070B14] p-3.5 text-left text-xs space-y-2.5">
+                  <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                    <span className="text-slate-500 dark:text-slate-400">Horário anterior (liberado):</span>
+                    <strong className="text-slate-500 dark:text-slate-400 line-through">{rescheduleSuccessSummary.original_date} às {rescheduleSuccessSummary.original_time}</strong>
                   </div>
-                  <div className="flex items-center justify-between text-cyan-200 border-t border-slate-800/80 pt-2">
-                    <span className="text-slate-300 font-semibold">Novo horário reservado:</span>
-                    <strong className="text-cyan-300 font-bold">{rescheduleSuccessSummary.new_date} às {rescheduleSuccessSummary.new_time}</strong>
+                  <div className="flex items-center justify-between text-cyan-800 dark:text-cyan-200 border-t border-slate-200 dark:border-slate-800/80 pt-2">
+                    <span className="text-slate-600 dark:text-slate-300 font-semibold">Novo horário reservado:</span>
+                    <strong className="text-cyan-700 dark:text-cyan-300 font-bold">{rescheduleSuccessSummary.new_date} às {rescheduleSuccessSummary.new_time}</strong>
                   </div>
-                  <div className="flex items-center gap-2 pt-1 text-[11px] text-cyan-400">
+                  <div className="flex items-center gap-2 pt-1 text-[11px] text-cyan-700 dark:text-cyan-400">
                     <Check className="w-3.5 h-3.5" />
                     <span>Excepcionalmente nesta semana. Na próxima, seu horário fixo padrão volta ao normal!</span>
                   </div>
@@ -771,7 +771,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                     setRescheduleSuccessSummary(null);
                     setRescheduleSuccessMsg('');
                   }}
-                  className="w-full rounded-xl bg-gradient-to-r from-cyan-400 to-teal-400 hover:from-cyan-300 hover:to-teal-300 text-slate-950 font-black text-xs py-2.5 transition-all shadow-lg shadow-cyan-400/20"
+                  className="w-full rounded-xl bg-gradient-to-r from-cyan-400 to-teal-400 hover:from-cyan-300 hover:to-teal-300 text-slate-950 font-black text-xs py-2.5 transition-all shadow-lg shadow-cyan-400/20 active:scale-95"
                 >
                   Entendido, fechar
                 </button>
@@ -780,43 +780,43 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
               <>
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-600 dark:bg-cyan-500/15 dark:border-cyan-500/30 dark:text-cyan-400 flex items-center justify-center shrink-0">
                   <RefreshCw className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-white">
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
                     Remarcar esta semana
                   </h3>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     Horário original:{' '}
-                    <strong className="text-white">
+                    <strong className="text-slate-900 dark:text-white">
                       {rescheduleModalOccurrence.date.split('-').reverse().join('/')}
                     </strong>{' '}
-                    às <strong className="text-white">{rescheduleModalOccurrence.start_time}</strong>
+                    às <strong className="text-slate-900 dark:text-white">{rescheduleModalOccurrence.start_time}</strong>
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setRescheduleModalOccurrence(null)}
-                className="text-slate-400 hover:text-white text-lg p-1"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-white text-lg p-1"
               >
                 ✕
               </button>
             </div>
 
             {/* Aviso */}
-            <div className="rounded-2xl border border-cyan-500/30 bg-cyan-950/20 p-3 flex items-start gap-2">
-              <Sparkles className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-cyan-200 leading-relaxed">
+            <div className="rounded-2xl border border-cyan-500/30 bg-cyan-50 dark:bg-cyan-950/20 p-3 flex items-start gap-2">
+              <Sparkles className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-cyan-900 dark:text-cyan-200 leading-relaxed">
                 Escolha qualquer dia e horário livre na agenda do profissional. O horário original será liberado para outros clientes e, na semana seguinte, seu horário fixo habitual continua normal.
               </p>
             </div>
 
             {/* Motivo da Troca */}
             <div>
-              <label className="block text-xs font-bold text-slate-200 mb-1">
-                Motivo da remarcação <span className="text-cyan-400">*</span>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
+                Motivo da remarcação <span className="text-cyan-500">*</span>
               </label>
               <input
                 type="text"
@@ -824,16 +824,16 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                 value={rescheduleReason}
                 onChange={(e) => setRescheduleReason(e.target.value)}
                 placeholder="Ex: Reunião de trabalho, compromisso pessoal..."
-                className="w-full rounded-xl border border-slate-800 bg-[#070B14] px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-cyan-500 focus:bg-white dark:border-slate-800 dark:bg-[#070B14] dark:text-white dark:placeholder-slate-600"
               />
             </div>
 
             {/* 1. Escolha do Novo Dia */}
             <div>
-              <label className="block text-xs font-bold text-slate-200 mb-1.5 flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5 flex items-center justify-between">
                 <span>1. Escolha o novo dia:</span>
                 {rescheduleSelectedDate && (
-                  <span className="text-[11px] font-mono text-cyan-300">
+                  <span className="text-[11px] font-mono text-cyan-700 dark:text-cyan-300">
                     {rescheduleSelectedDate.split('-').reverse().join('/')}
                   </span>
                 )}
@@ -853,16 +853,16 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                       }}
                       className={`recurring-day-btn ${isSelected ? 'is-selected' : ''} min-w-[62px] flex flex-col items-center justify-center p-2 rounded-xl border transition-all ${
                         isSelected
-                          ? 'border-cyan-400 bg-cyan-500/25 text-white shadow-md shadow-cyan-500/20'
+                          ? 'border-cyan-500 bg-cyan-50 text-cyan-900 shadow-md shadow-cyan-500/20 dark:border-cyan-400 dark:bg-cyan-500/25 dark:text-white'
                           : isOriginal
-                          ? 'border-slate-800 bg-slate-900/40 text-slate-500'
-                          : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700'
+                          ? 'border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-500'
+                          : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-700'
                       }`}
                     >
                       <span className="text-[10px] font-medium uppercase">{d.weekday}</span>
                       <span className="text-xs font-black mt-0.5">{d.label}</span>
                       {isOriginal && (
-                        <span className="text-[8px] text-slate-500 uppercase">Atual</span>
+                        <span className="text-[8px] text-slate-400 dark:text-slate-500 uppercase">Atual</span>
                       )}
                     </button>
                   );
@@ -873,14 +873,14 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
             {/* 2. Escolha do Novo Horário */}
             {rescheduleSelectedDate && (
               <div>
-                <label className="block text-xs font-bold text-slate-200 mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
                   2. Horários disponíveis com{' '}
-                  <span className="text-cyan-300">
+                  <span className="text-cyan-600 dark:text-cyan-300">
                     {barbers.find(b => b.id === rescheduleModalOccurrence.professional_id)?.full_name || 'o barbeiro'}
                   </span>:
                 </label>
                 {availableRescheduleSlots.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-800 p-4 text-center text-xs text-slate-500">
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500 dark:border-slate-800 dark:bg-transparent">
                     Nenhum horário livre nesta data. Por favor, escolha outro dia acima.
                   </div>
                 ) : (
@@ -894,8 +894,8 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                           onClick={() => setRescheduleSelectedTime(time)}
                           className={`recurring-slot-btn ${isSelected ? 'is-selected' : ''} rounded-xl py-2 px-1 text-center font-mono text-xs font-bold border transition-all ${
                             isSelected
-                              ? 'border-cyan-400 bg-cyan-400 text-slate-950 font-black shadow-md shadow-cyan-400/20'
-                              : 'border-slate-800 bg-slate-900 text-slate-200 hover:border-slate-700'
+                              ? 'border-cyan-500 bg-cyan-500 text-white font-black shadow-md shadow-cyan-500/20 dark:border-cyan-400 dark:bg-cyan-400 dark:text-slate-950'
+                              : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-700'
                           }`}
                         >
                           {time}
@@ -909,40 +909,40 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
 
             {/* Preview da Alteração */}
             {rescheduleSelectedDate && rescheduleSelectedTime && (
-              <div className="rounded-2xl border border-cyan-500/30 bg-cyan-950/30 p-3 text-xs text-cyan-200 flex items-center justify-between">
+              <div className="rounded-2xl border border-cyan-500/30 bg-cyan-50 dark:bg-cyan-950/30 p-3 text-xs text-cyan-900 dark:text-cyan-200 flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] uppercase font-bold text-slate-400">
+                  <p className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">
                     Novo horário escolhido
                   </p>
-                  <p className="font-black text-white text-sm mt-0.5">
+                  <p className="font-black text-slate-900 dark:text-white text-sm mt-0.5">
                     {rescheduleSelectedDate.split('-').reverse().join('/')} às {rescheduleSelectedTime}
                   </p>
                 </div>
-                <div className="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-300">
+                <div className="w-8 h-8 rounded-full bg-cyan-500/10 text-cyan-600 dark:bg-cyan-500/20 dark:text-cyan-300 flex items-center justify-center">
                   <Check className="w-5 h-5" />
                 </div>
               </div>
             )}
 
             {rescheduleError && (
-              <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-300 text-xs flex items-center gap-2">
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800/60 dark:text-rose-300 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{rescheduleError}</span>
               </div>
             )}
 
             {rescheduleSuccessMsg && (
-              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 text-xs flex items-center gap-2">
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300 text-xs flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>{rescheduleSuccessMsg}</span>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2 pt-2">
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setRescheduleModalOccurrence(null)}
-                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors"
+                className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
               >
                 Cancelar
               </button>

@@ -544,19 +544,19 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
       </div>
 
       {/* ABAS PRINCIPAIS: CRM vs CLIENTES FIXOS */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
         <button
           type="button"
           onClick={() => setActiveMainTab('crm')}
           className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
             activeMainTab === 'crm'
-              ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'
+              : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/60'
           }`}
         >
           <Users className="w-4 h-4" />
           <span>Todos os Clientes & CRM</span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 font-mono text-slate-300">
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 font-mono">
             {allClients.length}
           </span>
         </button>
@@ -565,13 +565,13 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
           onClick={() => setActiveMainTab('recurring')}
           className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
             activeMainTab === 'recurring'
-              ? 'bg-purple-500/15 border border-purple-500/30 text-purple-300'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              ? 'bg-purple-500/10 border border-purple-500/30 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300'
+              : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/60'
           }`}
         >
           <CalendarDays className="w-4 h-4" />
           <span>🔁 Clientes Fixos (Recorrência)</span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-mono">
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 font-mono font-bold">
             {recurringSchedules.length}
           </span>
         </button>
