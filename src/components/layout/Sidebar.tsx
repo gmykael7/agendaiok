@@ -67,7 +67,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {isSidebarOpen && <div className="fixed inset-0 bg-black/70 z-40 md:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/70 z-50 backdrop-blur-sm transition-opacity"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
 
       <aside
         id="app-sidebar"
@@ -76,8 +81,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         aria-modal={isSidebarOpen ? true : undefined}
         aria-label="Menu principal"
         tabIndex={-1}
-        className={`app-sidebar fixed md:static inset-y-0 left-0 z-50 w-64 min-h-0 shrink-0 overflow-hidden bg-[#08101f] border-r border-slate-800/80 flex flex-col justify-between transform transition-transform duration-300 ease-in-out ${
-          isSidebarOpen ? 'translate-x-0 visible' : '-translate-x-full invisible md:visible md:translate-x-0'
+        className={`app-sidebar fixed inset-y-0 left-0 z-50 w-72 min-h-0 shrink-0 overflow-hidden bg-[#08101f] border-r border-slate-800/80 flex flex-col justify-between transform transition-transform duration-300 ease-in-out shadow-2xl ${
+          isSidebarOpen ? 'translate-x-0 visible' : '-translate-x-full invisible pointer-events-none'
         }`}
       >
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">

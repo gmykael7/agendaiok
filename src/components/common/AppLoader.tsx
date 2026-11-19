@@ -1,15 +1,12 @@
 import React from 'react';
-import { BrandLogo } from './BrandLogo';
+import { WavyLoader } from '../WavyLoader';
 
 /** Loader compacto da marca: anel em movimento com o logotipo no centro. */
 export function BrandLoader({ size = 64, label }: { size?: number; label?: string }) {
   return (
     <div role="status" aria-live="polite" className="flex flex-col items-center gap-4">
       <div className="app-brand-loader" style={{ width: size, height: size }} aria-hidden="true">
-        <span className="app-brand-loader__ring" />
-        <span className="app-brand-loader__core">
-          <BrandLogo variant="mark" className="h-[70%] w-[70%]" />
-        </span>
+        <WavyLoader size={size} className="text-sky-500 dark:text-sky-400" />
       </div>
       {label && <p className="text-xs font-semibold tracking-wide text-slate-400">{label}</p>}
       <span className="sr-only">{label || 'Carregando'}</span>

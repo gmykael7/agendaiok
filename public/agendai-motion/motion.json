@@ -1,0 +1,14 @@
+{
+  "name": "AgendAi — motion inspirado na referência",
+  "format": "custom-motion-config",
+  "isLottie": false,
+  "timingSource": "aproximação visual da gravação",
+  "colors": {"background":"#e8eee7","surface":"#f9faf5","ink":"#173e34","accent":"#a6dfc3","peach":"#edbc9f"},
+  "enter": {"duration":650,"stagger":75,"translateY":24,"scale":0.97,"blur":6,"easing":"cubic-bezier(.22,1,.36,1)"},
+  "exit": {"duration":180,"translateY":-8},
+  "counter": {"duration":1000},
+  "bar": {"duration":850,"stagger":65},
+  "navigation": {"duration":500},
+  "reveal": {"duration":1050,"origin":"0% 0%","easing":"cubic-bezier(.76,0,.24,1)"},
+  "reducedMotion": true
+}

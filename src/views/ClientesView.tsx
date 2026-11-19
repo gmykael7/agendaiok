@@ -210,13 +210,15 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
 
   useEffect(() => {
     if (!pendingSearchFocusId) return;
-    const element = document.querySelector<HTMLElement>(`[data-client-id="${pendingSearchFocusId}"]`);
-    if (!element) return;
-    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    element.classList.add('agenda-focus-flash');
-    setPendingSearchFocusId(null);
-    const timer = window.setTimeout(() => element.classList.remove('agenda-focus-flash'), 1800);
-    return () => window.clearTimeout(timer);
+    const frame = requestAnimationFrame(() => {
+      const element = document.querySelector<HTMLElement>(`[data-client-id="${pendingSearchFocusId}"]`);
+      if (!element) return;
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      element.classList.add('agenda-focus-flash');
+      setPendingSearchFocusId(null);
+      window.setTimeout(() => element.classList.remove('agenda-focus-flash'), 1800);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [paginatedClients, pendingSearchFocusId]);
 
   const handleAddClient = (e: React.FormEvent) => {
@@ -731,7 +733,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
           />
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 mask-scroll-x">
           {([
             ['all', 'Todos', allClients.length],
             ['active', 'Ativos', activeClients.length],

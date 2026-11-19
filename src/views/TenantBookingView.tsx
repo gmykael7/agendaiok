@@ -3,7 +3,7 @@ import {
   CheckCircle, Clock, Calendar, 
   MapPin, Phone, MessageSquare, ArrowLeft, User, 
   Sparkles, Check, ChevronLeft, ChevronRight, AlertCircle, Share2, Plus, CheckSquare, Square, Lock, ShoppingBag, ShoppingCart, Minus, PackageCheck, Image as ImageIcon,
-  Zap, Gift, Award
+  Zap, Gift, Award, UserCheck, Smartphone, MapPinned, Globe2, Instagram, Facebook, AtSign, Youtube, LogOut
 } from 'lucide-react';
 import { Organization, Service, Barber, Appointment, Product, WaitlistEntry, RecurringSchedule } from '../types';
 import { LoyaltyCardWidget } from '../components/loyalty/LoyaltyCardWidget';
@@ -12,20 +12,17 @@ import { BarberAvatar } from '../components/common/BarberAvatar';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { ActionButton } from '../components/common/ActionButton';
 import { AgencyCredit } from '../components/common/AgencyCredit';
-import { BookingAssistant } from '../components/common/BookingAssistant';
 import { PublicShowcase } from '../components/common/PublicShowcase';
-import { PublicThemeToggle } from '../components/common/PublicThemeToggle';
 import { PageSeo } from '../components/common/PageSeo';
 const PublicWaitlistModal = lazy(() => import('../components/waitlist/PublicWaitlistModal').then(m => ({ default: m.PublicWaitlistModal })));
 import { TurnstileWidget, type TurnstileWidgetHandle } from '../components/common/TurnstileWidget';
-import { assistantSlots } from '../services/bookingAssistant';
-import type { AssistantSlot } from '../services/bookingAssistant';
 import { generateBusinessSlots, getBusinessClosureAtTime, getBusinessClosuresForDate, isBookableBusinessDateTime, isBookableBusinessTime, isBusinessClosedAllDay, overlapsBusinessClosure, timeToMinutes } from '../utils/scheduling';
 import { getPublicBookingDateStatus, isPublicTimeSlotOccupied } from '../utils/publicBookingAvailability';
 import { buildWhatsAppUrl, formatPhoneBR } from '../utils/whatsapp';
 import { filterServiceCatalog } from '../utils/serviceCatalog';
 import { buildGoogleCalendarUrl, downloadIcsFile } from '../utils/calendarLinks';
 import { localDateKey } from '../utils/localDate';
+import { getAppointmentAgendaUrl } from '../config/urls';
 import { gsap, MOTION_ALLOWED_QUERY, useGSAP } from '../utils/motion';
 import type { AppThemeMode } from '../config/theme';
 import { RecurringClientScheduleWidget } from '../components/public/RecurringClientScheduleWidget';
@@ -82,17 +79,28 @@ const addDaysToDate = (date: Date, days: number): Date => {
 const toLocalDateKey = (date: Date): string => localDateKey(date);
 
 const CLIENT_PROFILE_STORAGE_KEY = 'agendai_client_profile';
+const CLIENT_PHONE_STORAGE_KEY = 'agendai_client_phone';
+const CLIENT_NAME_STORAGE_KEY = 'agendai_client_name';
+const clientStorageKey = (key: string): string => {
+  if (typeof window === 'undefined') return key;
+  const scope = window.location.pathname.replace(/[^a-z0-9]+/gi, '_').toLowerCase() || 'public';
+  return `${key}_${scope}`;
+};
 
 const getSavedClientProfile = (): { name: string; phone: string } => {
   if (typeof window === 'undefined') return { name: '', phone: '' };
   try {
-    const raw = localStorage.getItem(CLIENT_PROFILE_STORAGE_KEY);
+    const raw = localStorage.getItem(clientStorageKey(CLIENT_PROFILE_STORAGE_KEY));
     if (raw) {
       const parsed = JSON.parse(raw);
-      return {
-        name: typeof parsed?.name === 'string' ? parsed.name.trim() : '',
-        phone: typeof parsed?.phone === 'string' ? parsed.phone.trim() : '',
-      };
+      const name = typeof parsed?.name === 'string' ? parsed.name.trim() : '';
+      const phone = typeof parsed?.phone === 'string' ? parsed.phone.trim() : '';
+      if (name || phone) return { name, phone };
+    }
+    const phone = localStorage.getItem(clientStorageKey(CLIENT_PHONE_STORAGE_KEY)) || '';
+    const name = localStorage.getItem(clientStorageKey(CLIENT_NAME_STORAGE_KEY)) || '';
+    if (phone || name) {
+      return { name: name.trim(), phone: phone.trim() };
     }
   } catch {}
   return { name: '', phone: '' };
@@ -103,18 +111,30 @@ const saveClientProfile = (name: string, phone: string): void => {
   try {
     const cleanName = name.trim();
     const cleanPhone = phone.trim();
+    const cleanDigits = cleanPhone.replace(/\D/g, '');
     if (cleanName || cleanPhone) {
-      localStorage.setItem(CLIENT_PROFILE_STORAGE_KEY, JSON.stringify({ name: cleanName, phone: cleanPhone }));
+      localStorage.setItem(clientStorageKey(CLIENT_PROFILE_STORAGE_KEY), JSON.stringify({ name: cleanName, phone: cleanPhone }));
+      if (cleanDigits) localStorage.setItem(clientStorageKey(CLIENT_PHONE_STORAGE_KEY), cleanDigits);
+      if (cleanName) localStorage.setItem(clientStorageKey(CLIENT_NAME_STORAGE_KEY), cleanName);
     }
   } catch {}
 };
 
-// Indicador de progresso animado do fluxo de agendamento (5 etapas).
-const BOOKING_STEP_LABELS = ['Data', 'Serviços', 'Profissional', 'Horário', 'Contato'];
+const clearClientProfile = (): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(clientStorageKey(CLIENT_PROFILE_STORAGE_KEY));
+    localStorage.removeItem(clientStorageKey(CLIENT_PHONE_STORAGE_KEY));
+    localStorage.removeItem(clientStorageKey(CLIENT_NAME_STORAGE_KEY));
+  } catch {}
+};
+
+// Fluxo curto, na ordem em que o cliente naturalmente decide.
+const BOOKING_STEP_LABELS = ['Barbeiro', 'Data', 'Horário', 'Serviço', 'Confirmar'];
 
 const BookingProgressStepper: React.FC<{ currentStep: number }> = ({ currentStep }) => {
   return (
-    <div className="mb-1 select-none" aria-hidden="false">
+    <div className="sticky top-0 z-20 -mx-1 mb-1 select-none rounded-2xl border border-slate-800/80 bg-[#121B2E]/95 px-2 py-2 backdrop-blur-md" aria-hidden="false">
       <div className="flex items-center">
         {BOOKING_STEP_LABELS.map((label, idx) => {
           const stepNumber = idx + 1;
@@ -184,8 +204,24 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
   const [serviceCategory, setServiceCategory] = useState('');
   const [stepDirection, setStepDirection] = useState<'forward' | 'backward'>('forward');
   const goToStep = (next: 1 | 2 | 3 | 4 | 5) => {
+    if (!isClientIdentified && next > 1) {
+      setIdentifyError('Por favor, informe seu WhatsApp acima para se conectar e agendar.');
+      const input = document.getElementById('client-phone-input');
+      if (input) {
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        input.focus();
+      }
+      return;
+    }
     setStepDirection(next >= step ? 'forward' : 'backward');
     setStep(next);
+    // Mantém a próxima etapa imediatamente visível, sem exigir rolagem manual.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const panel = bookingRootRef.current?.querySelector<HTMLElement>('[data-booking-panel]');
+        panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
   };
   const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateStr(new Date(), org.timezone));
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
@@ -193,7 +229,15 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
   const [selectedTime, setSelectedTime] = useState<string>('');
   const savedProfile = useMemo(() => getSavedClientProfile(), []);
   const [clientName, setClientName] = useState(() => savedProfile.name);
-  const [clientPhone, setClientPhone] = useState(() => savedProfile.phone);
+  const [clientPhone, setClientPhone] = useState(() => savedProfile.phone ? formatPhoneBR(savedProfile.phone) : '');
+  const [isClientIdentified, setIsClientIdentified] = useState(() => Boolean(savedProfile.phone && savedProfile.phone.replace(/\D/g, '').length >= 10));
+  const [phoneInput, setPhoneInput] = useState(() => savedProfile.phone ? formatPhoneBR(savedProfile.phone) : '');
+  const [nameInput, setNameInput] = useState(() => savedProfile.name);
+  const [isIdentifyingClient, setIsIdentifyingClient] = useState(false);
+  const [askNameForNewClient, setAskNameForNewClient] = useState(false);
+  const [identifyError, setIdentifyError] = useState('');
+  const [identifySuccessMsg, setIdentifySuccessMsg] = useState('');
+  const [showManualEditClient, setShowManualEditClient] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [lastCreatedAppointment, setLastCreatedAppointment] = useState<Appointment | null>(null);
   const [bookingError, setBookingError] = useState<string>('');
@@ -207,7 +251,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
   const [publicMode, setPublicMode] = useState<'services' | 'products'>('services');
   const [productCart, setProductCart] = useState<Record<string, number>>({});
   const [productCustomerName, setProductCustomerName] = useState(() => savedProfile.name);
-  const [productCustomerPhone, setProductCustomerPhone] = useState(() => savedProfile.phone);
+  const [productCustomerPhone, setProductCustomerPhone] = useState(() => savedProfile.phone ? formatPhoneBR(savedProfile.phone) : '');
   const [productOrderError, setProductOrderError] = useState('');
   const [productOrderSuccess, setProductOrderSuccess] = useState(false);
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
@@ -228,24 +272,169 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
     if (token) setProductOrderError((current) => current.includes('verificação de segurança') ? '' : current);
   }, []);
 
-  const chooseAssistantSlot = (slot: AssistantSlot): string | null => {
-    const service = services.find(item => item.id === slot.serviceId && item.active !== false);
-    const barber = barbers.find(item => item.id === slot.barberId && item.active !== false);
-    const available = assistantSlots({ org, services, barbers, appointments }, slot).some(item => item.time === slot.time && item.barberId === slot.barberId);
-    if (!service || !barber || !available) return 'Essa opção não está mais disponível. Consulte novamente ou escolha outro horário.';
-    setSelectedDate(slot.date);
-    setSelectedServices([service]);
-    setSelectedBarber(barber);
-    setSelectedTime(slot.time);
-    setBookingError('');
-    goToStep(5);
-    window.requestAnimationFrame(() => {
-      const form = bookingRootRef.current?.querySelector<HTMLFormElement>('form[data-booking-panel]');
-      form?.scrollIntoView({ behavior: 'auto', block: 'center' });
-      form?.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true });
-    });
-    return null;
+  // Busca automática do nome do cliente na nuvem se apenas o telefone estiver salvo
+  useEffect(() => {
+    if (isClientIdentified && clientPhone && !clientName) {
+      const clean = clientPhone.replace(/\D/g, '');
+      if (clean.length >= 10) {
+        fetch('/api/public/client-identify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenant_id: org.slug || org.id,
+            phone: clean,
+          }),
+        })
+          .then((res) => res.json())
+          .then((data: any) => {
+            if (data?.success && data.client_name) {
+              setClientName(data.client_name);
+              setProductCustomerName(data.client_name);
+              saveClientProfile(data.client_name, clean);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [isClientIdentified, clientPhone, clientName, org.slug, org.id]);
+
+  const handlePhoneIdentify = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIdentifyError('');
+    setIdentifySuccessMsg('');
+    const clean = phoneInput.replace(/\D/g, '');
+    if (clean.length < 10) {
+      setIdentifyError('Informe seu WhatsApp com DDD completo (mínimo 10 dígitos).');
+      return;
+    }
+
+    setIsIdentifyingClient(true);
+    try {
+      const res = await fetch('/api/public/client-identify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: org.slug || org.id,
+          phone: clean,
+          name: nameInput.trim() || undefined,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json() as any;
+        if (data.success) {
+          const foundName = (data.client_name || nameInput).trim();
+          if (foundName) {
+            setClientName(foundName);
+            setClientPhone(formatPhoneBR(clean));
+            setProductCustomerName(foundName);
+            setProductCustomerPhone(formatPhoneBR(clean));
+            saveClientProfile(foundName, clean);
+            setIsClientIdentified(true);
+            setAskNameForNewClient(false);
+            setIdentifySuccessMsg(`Bem-vindo de volta, ${foundName}!`);
+          } else {
+            setAskNameForNewClient(true);
+          }
+        } else {
+          setAskNameForNewClient(true);
+        }
+      } else {
+        setAskNameForNewClient(true);
+      }
+    } catch {
+      setAskNameForNewClient(true);
+    } finally {
+      setIsIdentifyingClient(false);
+    }
   };
+
+  const handleFinishRegistration = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIdentifyError('');
+    const clean = phoneInput.replace(/\D/g, '');
+    const cleanName = nameInput.trim();
+    if (!cleanName) {
+      setIdentifyError('Por favor, informe seu nome completo.');
+      return;
+    }
+    if (clean.length < 10) {
+      setIdentifyError('Informe seu WhatsApp completo com DDD.');
+      return;
+    }
+
+    setIsIdentifyingClient(true);
+    try {
+      await fetch('/api/public/client-identify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: org.slug || org.id,
+          phone: clean,
+          name: cleanName,
+        }),
+      }).catch(() => {});
+    } finally {
+      setIsIdentifyingClient(false);
+      setClientName(cleanName);
+      setClientPhone(formatPhoneBR(clean));
+      setProductCustomerName(cleanName);
+      setProductCustomerPhone(formatPhoneBR(clean));
+      saveClientProfile(cleanName, clean);
+      setIsClientIdentified(true);
+      setAskNameForNewClient(false);
+      setIdentifySuccessMsg(`Cadastro salvo! Bem-vindo(a), ${cleanName}!`);
+    }
+  };
+
+  const handleSwitchClient = () => {
+    clearClientProfile();
+    setClientName('');
+    setClientPhone('');
+    setPhoneInput('');
+    setNameInput('');
+    setIsClientIdentified(false);
+    setAskNameForNewClient(false);
+    setIdentifyError('');
+    setIdentifySuccessMsg('');
+    setShowManualEditClient(false);
+    setSelectedTime('');
+    setStep(1);
+  };
+
+  const socialLinks = useMemo(() => {
+    const raw = (org.social_links || {}) as Record<string, string | undefined>;
+    const links: Array<{ key: string; label: string; url: string; icon: React.ComponentType<{ className?: string }> }> = [];
+
+    const rawInsta = raw.instagram || (org as any).instagram;
+    const instaUrl = rawInsta ? (rawInsta.startsWith('http') ? rawInsta : `https://instagram.com/${rawInsta.replace(/^@/, '')}`) : undefined;
+    if (instaUrl) {
+      links.push({ key: 'instagram', label: 'Instagram', url: instaUrl, icon: Instagram });
+    }
+    if (raw.facebook) {
+      links.push({ key: 'facebook', label: 'Facebook', url: raw.facebook, icon: Facebook });
+    }
+    if (raw.tiktok) {
+      links.push({ key: 'tiktok', label: 'TikTok', url: raw.tiktok, icon: AtSign });
+    }
+    if (raw.youtube) {
+      links.push({ key: 'youtube', label: 'YouTube', url: raw.youtube, icon: Youtube });
+    }
+    if (raw.website) {
+      links.push({ key: 'website', label: 'Site', url: raw.website, icon: Globe2 });
+    }
+
+    return links;
+  }, [org.social_links]);
+
+  const mapsUrl = useMemo(() => {
+    const raw = (org.social_links || {}) as Record<string, string | undefined>;
+    if (raw.maps) return raw.maps;
+    if (org.address) {
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${org.name} ${org.address} ${org.city || ''}`)}`;
+    }
+    return '';
+  }, [org.social_links, org.name, org.address, org.city]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setStatusClock(new Date()), 30_000);
@@ -462,6 +651,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
     }
     if (result.products) onProductsChanged?.(result.products);
     saveClientProfile(productCustomerName, productCustomerPhone);
+    setIsClientIdentified(true);
     setProductOrderSuccess(true);
     setProductCart({});
     try { window.open(waUrl, '_blank'); } catch {}
@@ -537,6 +727,8 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
       `• *Data:* ${formattedSelectedDate}`,
       `• *Horário:* às ${app.start_time}`,
       '',
+      `*Abrir no AgendAI:* ${getAppointmentAgendaUrl(app.id)}`,
+      '',
       `_Agendamento registrado no sistema AgendAI._`
     ];
 
@@ -547,6 +739,12 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
   const handleFinishBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     setBookingError('');
+
+    if (!isClientIdentified) {
+      setBookingError('Você precisa estar conectado com seu WhatsApp para confirmar o agendamento.');
+      goToStep(1);
+      return;
+    }
 
     if (selectedServices.length === 0 || !selectedBarber || !selectedTime || !clientName.trim() || !clientPhone.trim()) {
       return;
@@ -575,7 +773,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
           ? `⚠️ Esse horário entra no período de descanso da barbearia (${org.break_start || '12:00'} às ${org.break_end || '14:00'}). Escolha outro horário.`
           : '⚠️ Esse horário está fora do expediente da barbearia.');
       }
-      goToStep(4);
+      goToStep(3);
       setSelectedTime('');
       return;
     }
@@ -594,7 +792,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
 
     if (isOccupied) {
       setBookingError(`⚠️ O horário das ${selectedTime} já foi reservado ou colide com outro agendamento. Por favor, escolha outro horário livre.`);
-      goToStep(4);
+      goToStep(3);
       setSelectedTime('');
       return;
     }
@@ -649,7 +847,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
           }
         }
         setBookingError(cloudResult.error || 'Este horário acabou de ser reservado por outro cliente. Por favor, escolha outro horário disponível.');
-        goToStep(4);
+        goToStep(3);
       } else {
         setBookingError(cloudResult.error || 'Não foi possível confirmar o agendamento. Tente novamente.');
       }
@@ -666,6 +864,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
     setLastCreatedAppointment(confirmedApp);
     setConfirmed(true);
     saveClientProfile(clientName, clientPhone);
+    setIsClientIdentified(true);
 
     const waUrl = generateWhatsAppUrl(confirmedApp);
     try {
@@ -707,14 +906,9 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
   }), [org, services]);
 
   return (
-    <div ref={bookingRootRef} className={`booking-view w-full ${isStandalone ? 'min-h-screen bg-[#070B14] py-4 sm:py-8 px-2 sm:px-4 flex items-center justify-center' : 'max-w-xl mx-auto py-2 sm:py-4 animate-fadeIn'}`}>
+    <div ref={bookingRootRef} className={`booking-view w-full ${isStandalone ? 'booking-standalone min-h-screen min-h-[100dvh] bg-[#070B14] py-4 sm:py-8 lg:py-12 px-2 sm:px-4 lg:px-8 flex items-start justify-center' : 'max-w-xl mx-auto py-2 sm:py-4 animate-fadeIn'}`}>
       <PageSeo title={`${org.name} | Agendamento online`} description={`Veja serviços, profissionais e horários disponíveis e agende seu atendimento online na ${org.name}.`} path={`/agendar/${org.slug}`} structuredData={bookingStructuredData} noIndex={!isStandalone} />
-      <div className={`w-full ${publicMode === 'products' ? 'max-w-7xl' : 'max-w-2xl'}`}>
-        {isStandalone && onThemeModeChange && (
-          <div className="mb-3 flex justify-end">
-            <PublicThemeToggle mode={appThemeMode} onChange={onThemeModeChange} />
-          </div>
-        )}
+      <div className={`booking-public-content w-full ${publicMode === 'products' ? 'max-w-7xl' : 'max-w-2xl'}`}>
         {/* BOTÃO DE RETORNO AO PAINEL (APENAS PARA O ADMINISTRADOR) */}
         {!isStandalone && onBackToAdmin && (
           <div className="flex justify-between items-center mb-3">
@@ -729,10 +923,10 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
           </div>
         )}
 
-        <div data-booking-shell className="bg-[#121B2E] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+        <div data-booking-shell className="booking-card-shell bg-[#121B2E] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
           {/* VITRINE DO ESTABELECIMENTO */}
-          <div className="border-b border-slate-800 bg-slate-950/30">
-            <div className="relative h-32 sm:h-40 overflow-hidden bg-gradient-to-br from-cyan-500/25 via-slate-950 to-blue-600/25">
+          <div className="booking-showcase-header border-b border-slate-800 bg-slate-950/30">
+            <div className="relative h-28 sm:h-36 lg:h-44 overflow-hidden bg-gradient-to-br from-cyan-500/25 via-slate-950 to-blue-600/25">
               {org.cover_image_url ? (
                 <img
                   src={org.cover_image_url}
@@ -748,9 +942,9 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
               <span className="booking-cover-badge absolute top-3 right-3 rounded-full border border-white/15 bg-black/45 backdrop-blur-md px-3 py-1 text-[10px] font-bold text-white">Agendamento online</span>
             </div>
 
-            <div className="px-5 sm:px-7 pb-5 sm:pb-6 -mt-8 relative z-10">
-              <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                <div className={`organization-avatar w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border-4 border-[#121B2E] flex items-center justify-center shadow-2xl shadow-black/30 shrink-0 ${org.logo_image_url ? 'p-0' : 'p-2'}`}>
+            <div className="px-5 sm:px-7 lg:px-10 pb-5 sm:pb-6 lg:pb-8 -mt-8 lg:-mt-12 relative z-10">
+              <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
+                <div className={`organization-avatar w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 rounded-full bg-white border-4 border-[#121B2E] flex items-center justify-center shadow-2xl shadow-black/30 shrink-0 ${org.logo_image_url ? 'p-0' : 'p-2'}`}>
                   {org.logo_image_url ? (
                     <img
                       src={org.logo_image_url}
@@ -764,33 +958,157 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                   )}
                 </div>
                 <div className="flex-1 min-w-0 pb-1">
-                  <h1 className="booking-cover-title font-display text-2xl sm:text-3xl font-normal text-white tracking-tight">{org.name}</h1>
-                  <p className="text-[11px] sm:text-xs text-cyan-300 font-semibold mt-1">Agende seus serviços ou compre produtos físicos na mesma página.</p>
-                </div>
-              </div>
-
-              <div className="space-y-2 mt-4">
-                {org.address && (
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/45 px-3 py-2.5 flex items-center gap-2 min-w-0">
-                    <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="text-[10px] text-slate-300 truncate">{org.address}</span>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-2">
-                  <a href={`https://wa.me/${String(org.phone || '').replace(/\D/g, '').startsWith('55') ? String(org.phone || '').replace(/\D/g, '') : `55${String(org.phone || '').replace(/\D/g, '')}`}`} target="_blank" rel="noopener noreferrer" className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950/45 px-2.5 sm:px-3 py-2.5 flex items-center gap-2 hover:border-emerald-500/30 transition-colors">
-                    <Phone className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="min-w-0 truncate text-[9px] sm:text-[10px] text-slate-300">{org.phone || 'WhatsApp'}</span>
-                  </a>
-                  <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950/45 px-2.5 sm:px-3 py-2.5 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="min-w-0 whitespace-nowrap text-[9px] sm:text-[10px] text-slate-300">{org.open_hour || '08:00'} às {org.close_hour || '20:00'}</span>
-                  </div>
+                  <h1 className="booking-cover-title font-display text-xl sm:text-3xl font-normal text-white tracking-tight">{org.name}</h1>
+                  <p className="text-[11px] sm:text-xs lg:text-sm text-cyan-300 font-semibold mt-1">Agende seus serviços ou compre produtos físicos na mesma página.</p>
                 </div>
               </div>
             </div>
           </div>
 
-          <PublicShowcase org={org} />
+          <PublicShowcase org={org} hideSocial />
+
+          {/* IDENTIFICAÇÃO / ENTRADA AUTOMÁTICA OU CADASTRO DO CLIENTE */}
+          {publicMode === 'services' && !confirmed && (
+            <div className="mx-4 sm:mx-6 mt-4">
+              {isClientIdentified ? (
+                /* CLIENTE IDENTIFICADO / ENTRADA AUTOMÁTICA */
+                <div className="booking-client-card p-3.5 sm:p-4 rounded-2xl border flex items-center justify-between gap-3 shadow-md">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="booking-client-icon w-10 h-10 rounded-xl border flex items-center justify-center shrink-0">
+                      <UserCheck className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="booking-client-name text-xs sm:text-sm font-bold truncate">
+                          {clientName ? `Olá, ${clientName}!` : 'Cliente identificado!'}
+                        </span>
+                        <span className="booking-client-tag text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full border">
+                          Entrada Automática
+                        </span>
+                      </div>
+                      <p className="booking-client-phone text-[11px] font-mono mt-0.5">
+                        WhatsApp: <strong>{formatPhoneBR(clientPhone)}</strong>
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSwitchClient}
+                    className="booking-client-switch-btn text-[11px] font-semibold px-3 py-1.5 rounded-xl border transition-all shrink-0 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                    title="Entrar com outro telefone"
+                  >
+                    <LogOut className="w-3 h-3 text-slate-400" />
+                    Trocar
+                  </button>
+                </div>
+              ) : (
+                /* ENTRADA OU CADASTRO RÁPIDO PELO TELEFONE */
+                <div id="booking-client-identify-card" className="booking-client-identify-card p-4 sm:p-5 rounded-2xl border relative overflow-hidden shadow-md">
+                  <div className="flex items-start gap-3">
+                    <div className="booking-client-icon w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 mt-0.5">
+                      <Smartphone className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="booking-client-title text-xs sm:text-sm font-black">
+                          Entrar ou Cadastrar pelo WhatsApp
+                        </h3>
+                        <span className="booking-client-tag text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full border">
+                          Obrigatório para agendar
+                        </span>
+                      </div>
+                      <p className="booking-client-subtitle text-[11px] mt-0.5">
+                        Informe seu WhatsApp para se conectar e liberar o agendamento de horários.
+                      </p>
+
+                      <form onSubmit={askNameForNewClient ? handleFinishRegistration : handlePhoneIdentify} className="mt-3 space-y-2.5">
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <div className="flex-1 relative">
+                            <input
+                              id="client-phone-input"
+                              type="tel"
+                              value={phoneInput}
+                              onChange={(e) => {
+                                setPhoneInput(formatPhoneBR(e.target.value));
+                                if (identifyError) setIdentifyError('');
+                              }}
+                              placeholder="(84) 99999-0000"
+                              maxLength={15}
+                              className="booking-client-input w-full rounded-xl border px-3.5 py-2.5 text-xs focus:outline-none font-mono"
+                            />
+                          </div>
+
+                          {!askNameForNewClient && (
+                            <button
+                              type="submit"
+                              disabled={isIdentifyingClient || phoneInput.replace(/\D/g, '').length < 10}
+                              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 shrink-0 cursor-pointer active:scale-95"
+                            >
+                              {isIdentifyingClient ? (
+                                <>
+                                  <Clock className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Buscando...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                  <span>Entrar / Buscar</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+
+                        {askNameForNewClient && (
+                          <div className="space-y-2 pt-1 animate-fadeIn">
+                            <p className="booking-client-prompt text-[11px] font-semibold flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                              Primeiro acesso deste número! Como devemos chamar você?
+                            </p>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <input
+                                type="text"
+                                value={nameInput}
+                                onChange={(e) => {
+                                  setNameInput(e.target.value);
+                                  if (identifyError) setIdentifyError('');
+                                }}
+                                placeholder="Seu nome completo"
+                                autoFocus
+                                required
+                                className="booking-client-input flex-1 rounded-xl border px-3.5 py-2.5 text-xs focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleFinishRegistration}
+                                disabled={!nameInput.trim() || isIdentifyingClient}
+                                className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all disabled:opacity-40 flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 shrink-0 cursor-pointer active:scale-95"
+                              >
+                                {isIdentifyingClient ? 'Salvando...' : 'Salvar e Entrar'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {identifyError && (
+                          <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            {identifyError}
+                          </p>
+                        )}
+                        {identifySuccessMsg && (
+                          <p className="text-[11px] text-emerald-400 font-medium flex items-center gap-1.5">
+                            <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                            {identifySuccessMsg}
+                          </p>
+                        )}
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {publicMode === 'services' && !confirmed && (
             <RecurringClientScheduleWidget
@@ -800,11 +1118,9 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
               appointments={appointments}
               recurringSchedules={recurringSchedules}
               onRefreshData={onRefreshAppointments}
+              clientPhone={clientPhone}
+              clientName={clientName}
             />
-          )}
-
-          {publicMode === 'services' && !confirmed && (
-            <BookingAssistant key={org.slug} org={org} services={services} barbers={barbers} appointments={appointments} onChooseSlot={chooseAssistantSlot} />
           )}
 
           {publicMode === 'services' && currentClosure && (
@@ -1057,8 +1373,10 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                     setSelectedServices([]);
                     setSelectedBarber(null);
                     setSelectedTime('');
-                    setClientName('');
-                    setClientPhone('');
+                    const currentProfile = getSavedClientProfile();
+                    setClientName(currentProfile.name);
+                    setClientPhone(currentProfile.phone ? formatPhoneBR(currentProfile.phone) : '');
+                    setIsClientIdentified(Boolean(currentProfile.phone && currentProfile.phone.replace(/\D/g, '').length >= 10));
                     setBookingError('');
                   }}
                   className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold text-xs transition-colors"
@@ -1071,18 +1389,52 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
             /* PASSO A PASSO (1 a 5) */
             <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 booking-anim">
               <BookingProgressStepper currentStep={step} />
+              {(selectedBarber || selectedDate || selectedTime) && (
+                <div className="flex flex-wrap gap-1.5 text-[10px]" aria-label="Resumo da seleção">
+                  {selectedBarber && <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-300">{selectedBarber.full_name}</span>}
+                  {step > 2 && <span className="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 font-semibold text-slate-300">{new Date(`${selectedDate}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>}
+                  {selectedTime && <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1 font-semibold text-cyan-300">{selectedTime}</span>}
+                </div>
+              )}
 
-              {/* ETAPA 1: DATA */}
-              {step === 1 && (
+              {/* ETAPA 2: DATA */}
+              {step === 2 && (
                 <div key="step-1" data-booking-panel className="space-y-3.5 sm:space-y-4">
                   <div className="flex justify-between items-center">
                     <h2 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 text-xs flex items-center justify-center font-bold">1</span>
+                      <span className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 text-sm flex items-center justify-center font-bold">2</span>
                       Escolha a Data
                     </h2>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-800 bg-[#0A1324]/70 p-2.5 sm:p-3">
+                  <div className="rounded-2xl border border-slate-800 bg-[#0A1324]/70 p-2.5 sm:p-3 relative overflow-hidden">
+                    {!isClientIdentified && (
+                      <div className="booking-locked-overlay absolute inset-0 z-20 flex flex-col items-center justify-center p-4 sm:p-6 text-center animate-fadeIn">
+                        <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 flex items-center justify-center mb-2.5 shadow-lg shadow-emerald-500/15">
+                          <Lock className="w-5 h-5 sm:w-6 sm:h-6" />
+                        </div>
+                        <h3 className="text-xs sm:text-sm font-bold">
+                          Conecte-se para agendar seu horário
+                        </h3>
+                        <p className="text-[11px] sm:text-xs max-w-xs mt-1 mb-3.5 leading-relaxed">
+                          Para escolher a data e o horário do seu atendimento, entre com seu WhatsApp no formulário acima.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const input = document.getElementById('client-phone-input');
+                            if (input) {
+                              input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              input.focus();
+                            }
+                          }}
+                          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md shadow-emerald-500/20 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Smartphone className="w-3.5 h-3.5" />
+                          <span>Informar WhatsApp para Liberar</span>
+                        </button>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between gap-3 mb-2.5">
                       <button
                         type="button"
@@ -1146,9 +1498,18 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                             disabled={disabled}
                             onClick={() => {
                               if (disabled) return;
+                              if (!isClientIdentified) {
+                                setIdentifyError('Por favor, informe seu WhatsApp acima para se conectar e agendar.');
+                                const input = document.getElementById('client-phone-input');
+                                if (input) {
+                                  input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                  input.focus();
+                                }
+                                return;
+                              }
                               setSelectedDate(cell.dateStr);
                               setBookingError('');
-                              goToStep(2);
+                              goToStep(3);
                             }}
                             style={{ animationDelay: `${Math.min(index, 20) * 12}ms` }}
                             className={`stagger-item relative min-h-[52px] sm:min-h-[62px] rounded-xl border px-1 py-1.5 sm:py-2 text-center transition-all duration-200 flex flex-col items-center justify-center ${
@@ -1196,21 +1557,21 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                 </div>
               )}
 
-              {/* ETAPA 2: SERVIÇOS (MÚLTIPLA ESCOLHA) */}
-              {step === 2 && (
+              {/* ETAPA 4: SERVIÇOS (MÚLTIPLA ESCOLHA) */}
+              {step === 4 && (
                 <div key="step-2" data-booking-panel className="space-y-3.5 sm:space-y-4">
                   <div className="flex justify-between items-center">
                     <div>
                       <h2 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 text-xs flex items-center justify-center font-bold">2</span>
+                        <span className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 text-sm flex items-center justify-center font-bold">4</span>
                         Selecione os Serviços
                       </h2>
                       <p className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">
                         Pode marcar mais de um serviço para o mesmo pedido.
                       </p>
                     </div>
-                    <button onClick={() => goToStep(1)} className="text-xs text-emerald-400 hover:underline shrink-0">
-                      Alterar data
+                    <button onClick={() => goToStep(3)} className="text-sm text-emerald-400 hover:underline shrink-0">
+                      Alterar horário
                     </button>
                   </div>
 
@@ -1294,10 +1655,10 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => goToStep(3)}
-                        className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20 active:scale-98"
+                        onClick={() => goToStep(5)}
+                        className="w-full min-h-12 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20 active:scale-98"
                       >
-                        Continuar para o Barbeiro
+                        Revisar agendamento
                         <ChevronRight className="w-4 h-4" />
                       </button>
                     </div>
@@ -1309,17 +1670,14 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                 </div>
               )}
 
-              {/* ETAPA 3: BARBEIRO (ÍCONE DE PERFIL PADRÃO) */}
-              {step === 3 && (
+              {/* ETAPA 1: BARBEIRO */}
+              {step === 1 && (
                 <div key="step-3" data-booking-panel className="space-y-3.5 sm:space-y-4">
                   <div className="flex justify-between items-center">
                     <h2 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 text-xs flex items-center justify-center font-bold">3</span>
-                      Escolha o Profissional
+                      <span className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 text-sm flex items-center justify-center font-bold">1</span>
+                      Escolha seu barbeiro
                     </h2>
-                    <button onClick={() => goToStep(2)} className="text-xs text-emerald-400 hover:underline">
-                      Alterar ({selectedServices.length})
-                    </button>
                   </div>
 
                   <div className="grid grid-cols-1 gap-2.5">
@@ -1330,12 +1688,12 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                         tabIndex={0}
                         onKeyDown={event => {
                           if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault(); setSelectedBarber(barber); goToStep(4);
+                            event.preventDefault(); setSelectedBarber(barber); goToStep(2);
                           }
                         }}
                         onClick={() => {
                           setSelectedBarber(barber);
-                          goToStep(4);
+                          goToStep(2);
                         }}
                         style={{ animationDelay: `${index * 50}ms` }}
                         className="stagger-item booking-card p-3.5 rounded-2xl bg-[#0B1120] border border-slate-800 hover:border-emerald-500/50 cursor-pointer flex items-center gap-3 group"
@@ -1359,22 +1717,22 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                 </div>
               )}
 
-              {/* ETAPA 4: HORÁRIO (BLOQUEIO TOTAL DE HORÁRIOS OCUPADOS) */}
-              {step === 4 && (
+              {/* ETAPA 3: HORÁRIO */}
+              {step === 3 && (
                 <div key="step-4" data-booking-panel className="space-y-3.5 sm:space-y-4">
                   <div className="flex justify-between items-center">
                     <h2 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 text-xs flex items-center justify-center font-bold">4</span>
-                      Horário de Início
+                      <span className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 text-sm flex items-center justify-center font-bold">3</span>
+                      Escolha o horário
                     </h2>
-                    <button onClick={() => goToStep(3)} className="text-xs text-emerald-400 hover:underline">
-                      Alterar barbeiro
+                    <button onClick={() => goToStep(2)} className="text-sm text-emerald-400 hover:underline">
+                      Alterar data
                     </button>
                   </div>
 
                   <div className="bg-[#0B1120] p-2.5 rounded-xl border border-slate-800 text-xs text-slate-300 flex items-center justify-between">
                     <span>Profissional: <strong className="text-white">{selectedBarber?.full_name}</strong></span>
-                    <span className="text-emerald-400 font-medium">Duração: {totalDuration} min</span>
+                    <span className="text-emerald-400 font-medium">Escolha o serviço depois</span>
                   </div>
 
                   {selectedDateClosures.length > 0 && (
@@ -1412,7 +1770,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                       <Lock className="w-7 h-7 text-rose-300 mx-auto" />
                       <p className="text-sm font-black text-white mt-2">Estabelecimento fechado nesta data</p>
                       <p className="text-[11px] text-slate-400 mt-1">Escolha outra data para visualizar os horários disponíveis.</p>
-                      <button type="button" onClick={() => goToStep(1)} className="mt-3 px-4 py-2 rounded-xl bg-slate-800 text-xs font-bold text-white hover:bg-slate-700">Escolher outra data</button>
+                      <button type="button" onClick={() => goToStep(2)} className="mt-3 min-h-11 px-4 py-2 rounded-xl bg-slate-800 text-sm font-bold text-white hover:bg-slate-700">Escolher outra data</button>
                     </div>
                   ) : (
                     <>
@@ -1421,7 +1779,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                         <Clock className="w-7 h-7 text-slate-500 mx-auto" />
                         <p className="text-sm font-black text-white mt-2">Não há mais horários disponíveis hoje</p>
                         <p className="text-[11px] text-slate-400 mt-1">Os horários que já passaram são ocultados automaticamente. Escolha outra data para continuar.</p>
-                        <button type="button" onClick={() => goToStep(1)} className="mt-3 px-4 py-2 rounded-xl bg-slate-800 text-xs font-bold text-white hover:bg-slate-700">Escolher outra data</button>
+                        <button type="button" onClick={() => goToStep(2)} className="mt-3 min-h-11 px-4 py-2 rounded-xl bg-slate-800 text-sm font-bold text-white hover:bg-slate-700">Escolher outra data</button>
                       </div>
                     ) : (
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-60 overflow-y-auto pr-1 booking-scroll">
@@ -1448,10 +1806,10 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                             onClick={() => {
                               setSelectedTime(time);
                               setBookingError('');
-                              goToStep(5);
+                              goToStep(4);
                             }}
                             style={{ animationDelay: `${Math.min(index, 16) * 20}ms` }}
-                            className={`stagger-item py-2.5 px-2 rounded-xl font-mono text-xs font-bold border transition-all duration-150 flex items-center justify-center gap-1 ${
+                            className={`stagger-item min-h-12 py-2.5 px-2 rounded-xl font-mono text-sm font-bold border transition-all duration-150 flex items-center justify-center gap-1 ${
                               isExceptionalClosure
                                 ? 'bg-amber-950/20 text-amber-700 border-amber-900/30 cursor-not-allowed line-through opacity-70 shadow-inner'
                                 : isUnavailable
@@ -1508,7 +1866,7 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                       <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 text-xs flex items-center justify-center font-bold">5</span>
                       Seus Dados de Contato
                     </h2>
-                    <button type="button" onClick={() => goToStep(4)} className="text-xs text-emerald-400 hover:underline">
+                    <button type="button" onClick={() => goToStep(3)} className="text-sm text-emerald-400 hover:underline">
                       Alterar horário
                     </button>
                   </div>
@@ -1548,53 +1906,58 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
                     </div>
                   </div>
 
-                  {Boolean(savedProfile.name && clientName === savedProfile.name) && (
-                    <div className="flex items-center justify-between text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <span className="truncate">Preenchido com base no seu último agendamento</span>
+                  {isClientIdentified ? (
+                    <div className="booking-client-card flex items-center justify-between text-xs p-3.5 rounded-2xl border">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="booking-client-icon w-7 h-7 rounded-lg border flex items-center justify-center shrink-0">
+                          <UserCheck className="w-4 h-4" />
+                        </div>
+                        <span className="booking-client-name truncate">
+                          Agendando como <strong>{clientName || 'Cliente'}</strong> ({clientPhone})
+                        </span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => {
-                          setClientName('');
-                          setClientPhone('');
-                        }}
-                        className="text-[10px] text-slate-400 hover:text-slate-200 underline ml-2 shrink-0 cursor-pointer"
+                        onClick={() => setShowManualEditClient(!showManualEditClient)}
+                        className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 underline shrink-0 cursor-pointer ml-2"
                       >
-                        Limpar
+                        {showManualEditClient ? 'Ocultar campos' : 'Alterar dados'}
                       </button>
                     </div>
+                  ) : null}
+
+                  {(!isClientIdentified || showManualEditClient) && (
+                    <>
+                      <div>
+                        <label htmlFor="tenantbooking-field-1" className="block text-xs font-semibold text-slate-300 mb-1">
+                          Seu Nome Completo *
+                        </label>
+                        <input id="tenantbooking-field-1"
+                          type="text"
+                          required
+                          value={clientName}
+                          onChange={(e) => setClientName(e.target.value)}
+                          placeholder="Ex: Carlos Eduardo"
+                          className="w-full bg-[#0B1120] border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="tenantbooking-field-2" className="block text-xs font-semibold text-slate-300 mb-1">
+                          Seu WhatsApp (com DDD) *
+                        </label>
+                        <input id="tenantbooking-field-2"
+                          type="tel"
+                          required
+                          maxLength={15}
+                          value={clientPhone}
+                          onChange={(e) => setClientPhone(formatPhoneBR(e.target.value))}
+                          placeholder="(84) 99999-0000"
+                          className="w-full bg-[#0B1120] border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                        />
+                      </div>
+                    </>
                   )}
-
-                  <div>
-                    <label htmlFor="tenantbooking-field-1" className="block text-xs font-semibold text-slate-300 mb-1">
-                      Seu Nome Completo *
-                    </label>
-                    <input id="tenantbooking-field-1"
-                      type="text"
-                      required
-                      value={clientName}
-                      onChange={(e) => setClientName(e.target.value)}
-                      placeholder="Ex: Carlos Eduardo"
-                      className="w-full bg-[#0B1120] border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="tenantbooking-field-2" className="block text-xs font-semibold text-slate-300 mb-1">
-                      Seu WhatsApp (com DDD) *
-                    </label>
-                    <input id="tenantbooking-field-2"
-                      type="tel"
-                      required
-                      maxLength={15}
-                      value={clientPhone}
-                      onChange={(e) => setClientPhone(formatPhoneBR(e.target.value))}
-                      placeholder="(84) 99999-0000"
-                      className="w-full bg-[#0B1120] border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
-                    />
-                  </div>
 
                   <TurnstileWidget ref={bookingTurnstileRef} action="public_booking" onTokenChange={handleBookingTurnstileToken} />
 
@@ -1613,9 +1976,114 @@ export const TenantBookingView: React.FC<TenantBookingViewProps> = ({
             </div>
           )}
 
-          <div className="mt-4 rounded-2xl bg-slate-950/30 border border-slate-800/70 px-4 py-4">
-            <AgencyCredit centered />
-          </div>
+          {/* RODAPÉ DO ESTABELECIMENTO COM ENDEREÇO, TELEFONE, HORÁRIOS E REDES SOCIAIS */}
+          <footer className="mt-8 border-t border-slate-800 bg-slate-950/60 p-5 sm:p-7 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center p-2 shrink-0">
+                  {org.logo_image_url ? (
+                    <img src={org.logo_image_url} alt={org.name} className="w-full h-full rounded-xl object-cover" />
+                  ) : (
+                    <BrandLogo variant="mark" className="w-full h-full" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base text-white">{org.name}</h3>
+                  <p className="text-[11px] text-slate-400">Agendamento online e atendimento</p>
+                </div>
+              </div>
+
+              {socialLinks.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {socialLinks.map(({ key, label, url, icon: Icon }) => (
+                    <a
+                      key={key}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                        key === 'instagram'
+                          ? 'bg-gradient-to-r from-pink-500/15 via-purple-500/15 to-amber-500/15 text-pink-300 border-pink-500/30 hover:border-pink-500/60 hover:text-pink-200'
+                          : 'bg-[#0B1120] text-slate-300 border-slate-800 hover:border-emerald-500/40 hover:text-emerald-300'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span>{label}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* CARDS DE INFORMAÇÃO: ENDEREÇO, TELEFONE E HORÁRIOS */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* ENDEREÇO */}
+              <div className="booking-footer-card p-4 rounded-2xl border space-y-2">
+                <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
+                  <MapPin className="w-4 h-4 shrink-0" />
+                  <span>Endereço</span>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {org.address || 'Endereço disponível sob consulta'}
+                  {org.city ? `, ${org.city}` : ''}
+                  {org.state ? ` - ${org.state}` : ''}
+                </p>
+                {mapsUrl && (
+                  <a
+                    href={mapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 hover:underline pt-1"
+                  >
+                    <MapPinned className="w-3.5 h-3.5" />
+                    Ver no Google Maps
+                  </a>
+                )}
+              </div>
+
+              {/* TELEFONE / WHATSAPP */}
+              <div className="booking-footer-card p-4 rounded-2xl border space-y-2">
+                <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
+                  <Phone className="w-4 h-4 shrink-0" />
+                  <span>Telefone & WhatsApp</span>
+                </div>
+                <p className="text-xs text-slate-300 font-mono">
+                  {org.phone ? formatPhoneBR(org.phone) : 'WhatsApp do estabelecimento'}
+                </p>
+                {org.phone && (
+                  <a
+                    href={`https://wa.me/${String(org.phone).replace(/\D/g, '').startsWith('55') ? String(org.phone).replace(/\D/g, '') : `55${String(org.phone).replace(/\D/g, '')}`}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 hover:underline pt-1"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Iniciar conversa no WhatsApp
+                  </a>
+                )}
+              </div>
+
+              {/* HORÁRIOS */}
+              <div className="booking-footer-card p-4 rounded-2xl border space-y-2">
+                <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
+                  <Clock className="w-4 h-4 shrink-0" />
+                  <span>Horário de Funcionamento</span>
+                </div>
+                <p className="text-xs text-slate-300">
+                  {org.open_hour || '08:00'} às {org.close_hour || '20:00'}
+                </p>
+                {org.break_enabled && org.break_start && org.break_end && (
+                  <p className="text-[11px] text-slate-400">
+                    Intervalo: {org.break_start} às {org.break_end}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800/60">
+              <AgencyCredit centered />
+            </div>
+          </footer>
         </div>
       </div>
 

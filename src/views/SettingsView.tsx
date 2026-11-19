@@ -1541,10 +1541,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <div className="flex items-center gap-2"><Smartphone className="w-5 h-5 text-emerald-400" /><h3 className="text-sm font-bold text-white">Celular e Link do Cliente</h3></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <button type="button" onClick={handleCopyMobileLink} className="py-3 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-2xl text-xs font-bold flex items-center justify-center gap-2">
-            {copiedMobileLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}{copiedMobileLink ? 'Link de Login Copiado!' : 'Copiar Link de Login'}
+            <span className="icon-swap">
+              <Check className="w-4 h-4" strokeWidth={2.75} aria-hidden={!copiedMobileLink} />
+              <Copy className="w-4 h-4" strokeWidth={2.75} aria-hidden={copiedMobileLink} />
+            </span>
+            {copiedMobileLink ? 'Link de Login Copiado!' : 'Copiar Link de Login'}
           </button>
           <button type="button" onClick={handleCopyPublicLink} className="py-3 px-4 bg-slate-900 border border-slate-700 text-emerald-400 rounded-2xl text-xs font-bold flex items-center justify-center gap-2">
-            {copiedLink ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}{copiedLink ? 'Link do Cliente Copiado!' : 'Copiar Link do Cliente'}
+            <span className="icon-swap">
+              <Check className="w-4 h-4" strokeWidth={2.75} aria-hidden={!copiedLink} />
+              <Share2 className="w-4 h-4" strokeWidth={2.75} aria-hidden={copiedLink} />
+            </span>
+            {copiedLink ? 'Link do Cliente Copiado!' : 'Copiar Link do Cliente'}
           </button>
         </div>
         <div className="flex items-center gap-2 bg-[#0B1120] p-2 rounded-2xl border border-slate-800">

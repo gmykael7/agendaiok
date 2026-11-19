@@ -19,6 +19,10 @@ export interface ModernPalette {
   badge?: string;
 }
 
+const oklchInterp = (typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('background-image', 'linear-gradient(90deg in oklch, #000, #fff)'))
+  ? ' in oklch'
+  : '';
+
 export const MODERN_PALETTES: ModernPalette[] = [
   {
     id: 'aurora',
@@ -30,7 +34,7 @@ export const MODERN_PALETTES: ModernPalette[] = [
     secondary: '#60A5FA',
     accent: '#A78BFA',
     soft: '#FBCFE8',
-    gradient: 'linear-gradient(135deg, #3B82F6 0%, #60A5FA 33%, #A78BFA 66%, #FBCFE8 100%)',
+    gradient: `linear-gradient(135deg${oklchInterp}, #3B82F6 0%, #60A5FA 33%, #A78BFA 66%, #FBCFE8 100%)`,
     badge: 'Popular',
   },
   {
@@ -43,7 +47,7 @@ export const MODERN_PALETTES: ModernPalette[] = [
     secondary: '#F88F22',
     accent: '#FBB931',
     soft: '#FFE3B3',
-    gradient: 'linear-gradient(135deg, #EA6113 0%, #F88F22 33%, #FBB931 66%, #FFE3B3 100%)',
+    gradient: `linear-gradient(135deg${oklchInterp}, #EA6113 0%, #F88F22 33%, #FBB931 66%, #FFE3B3 100%)`,
     badge: 'Quente',
   },
   {
@@ -56,7 +60,7 @@ export const MODERN_PALETTES: ModernPalette[] = [
     secondary: '#C026D3',
     accent: '#FB923C',
     soft: '#FFE3B3',
-    gradient: 'linear-gradient(135deg, #7C3AED 0%, #C026D3 33%, #FB923C 66%, #FFE3B3 100%)',
+    gradient: `linear-gradient(135deg${oklchInterp}, #7C3AED 0%, #C026D3 33%, #FB923C 66%, #FFE3B3 100%)`,
     badge: 'Elegante',
   },
   {
@@ -69,7 +73,7 @@ export const MODERN_PALETTES: ModernPalette[] = [
     secondary: '#79CE67',
     accent: '#C2DD6C',
     soft: '#FFE3B3',
-    gradient: 'linear-gradient(135deg, #FFE3B3 0%, #C2DD6C 33%, #79CE67 66%, #30B155 100%)',
+    gradient: `linear-gradient(135deg${oklchInterp}, #FFE3B3 0%, #C2DD6C 33%, #79CE67 66%, #30B155 100%)`,
     badge: 'Fresco',
   },
   {
@@ -82,7 +86,7 @@ export const MODERN_PALETTES: ModernPalette[] = [
     secondary: '#34D399',
     accent: '#059669',
     soft: '#6EE7B7',
-    gradient: 'linear-gradient(135deg, #059669 0%, #10B981 33%, #34D399 66%, #6EE7B7 100%)',
+    gradient: `linear-gradient(135deg${oklchInterp}, #059669 0%, #10B981 33%, #34D399 66%, #6EE7B7 100%)`,
     badge: 'Clássico',
   },
 ];
@@ -153,13 +157,13 @@ export const applyAppTheme = (mode: AppThemeMode, primaryColor = '#10B981', pale
   const brandContrast = getReadableTextColor(brandColor);
   const brandGradient = palette
     ? palette.gradient
-    : `linear-gradient(135deg, ${brandColor} 0%, ${brandSecondary} 50%, ${brandAccent} 100%)`;
+    : `linear-gradient(135deg${oklchInterp}, ${brandColor} 0%, ${brandSecondary} 50%, ${brandAccent} 100%)`;
   const brandGradientBtn = palette
-    ? `linear-gradient(135deg, ${brandColor} 0%, ${brandSecondary} 100%)`
-    : `linear-gradient(135deg, ${brandColor} 0%, ${brandColor} 100%)`;
+    ? `linear-gradient(135deg${oklchInterp}, ${brandColor} 0%, ${brandSecondary} 100%)`
+    : `linear-gradient(135deg${oklchInterp}, ${brandColor} 0%, ${brandColor} 100%)`;
   const brandGradientCard = palette
-    ? `linear-gradient(135deg, color-mix(in srgb, ${brandColor} 14%, transparent), color-mix(in srgb, ${brandAccent} 14%, transparent))`
-    : `linear-gradient(135deg, color-mix(in srgb, ${brandColor} 14%, transparent), transparent)`;
+    ? `linear-gradient(135deg${oklchInterp}, color-mix(in srgb, ${brandColor} 14%, transparent), color-mix(in srgb, ${brandAccent} 14%, transparent))`
+    : `linear-gradient(135deg${oklchInterp}, color-mix(in srgb, ${brandColor} 14%, transparent), transparent)`;
 
   root.style.setProperty('--brand-color', brandColor);
   root.style.setProperty('--brand-secondary', brandSecondary);

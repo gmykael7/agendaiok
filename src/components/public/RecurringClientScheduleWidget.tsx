@@ -27,6 +27,8 @@ interface RecurringClientScheduleWidgetProps {
   appointments: Appointment[];
   recurringSchedules?: RecurringSchedule[];
   onRefreshData?: () => Promise<void> | void;
+  clientPhone?: string;
+  clientName?: string;
 }
 
 const STORAGE_KEY_PHONE = 'agendai_client_phone';
@@ -48,15 +50,35 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
   appointments,
   recurringSchedules = [],
   onRefreshData,
+  clientPhone,
+  clientName,
 }) => {
   // Estado do cliente identificado
   const [identifiedPhone, setIdentifiedPhone] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
-    return localStorage.getItem(STORAGE_KEY_PHONE) || '';
+    const phone = localStorage.getItem(STORAGE_KEY_PHONE) || '';
+    if (phone) return phone;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_PROFILE);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return typeof parsed?.phone === 'string' ? parsed.phone.replace(/\D/g, '') : '';
+      }
+    } catch {}
+    return '';
   });
   const [identifiedName, setIdentifiedName] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
-    return localStorage.getItem(STORAGE_KEY_NAME) || '';
+    const name = localStorage.getItem(STORAGE_KEY_NAME) || '';
+    if (name) return name;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_PROFILE);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return typeof parsed?.name === 'string' ? parsed.name : '';
+      }
+    } catch {}
+    return '';
   });
 
   // Modo de formulário de identificação (aberto se não houver telefone salvo)
@@ -356,131 +378,17 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
     }
   };
 
-  // Se o cliente não tiver contratos ativos nem estiver em modo de identificação
+  // Se o cliente não tiver contratos ativos, não exibe nada
+  // (a identificação e cadastro do cliente já são gerenciados pelo card principal da página pública)
   const hasActiveContracts = clientSchedules.length > 0;
+  if (!hasActiveContracts) {
+    return null;
+  }
 
   return (
     <div className="mx-4 sm:mx-6 mt-4 space-y-3">
-      {/* CARD PRINCIPAL DE IDENTIFICAÇÃO OU BOAS-VINDAS */}
-      {!hasActiveContracts && !showIdentityForm && identifiedPhone && (
-        <div className="recurring-identified-bar rounded-2xl border border-slate-800 bg-[#0B1120] p-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center shrink-0 text-slate-300">
-              <User className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-white truncate">
-                {identifiedName ? `Olá, ${identifiedName}` : 'Cliente identificado'}
-              </p>
-              <p className="text-[11px] text-slate-400 font-mono">
-                {formatPhoneBR(identifiedPhone)}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleSwitchIdentity}
-            className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 underline shrink-0"
-          >
-            Alterar
-          </button>
-        </div>
-      )}
-
-      {/* FORMULÁRIO DE IDENTIFICAÇÃO (RÁPIDO) */}
-      {showIdentityForm && (
-        <div className="recurring-identify-card rounded-2xl border border-emerald-500/30 bg-emerald-950/15 p-4 sm:p-5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-400/10 border border-emerald-400/20 text-[10px] font-black text-emerald-300 uppercase tracking-wider mb-2">
-                <Sparkles className="w-3 h-3" /> Meus Horários
-              </span>
-              <h3 className="text-sm font-black text-white">
-                Já é Cliente Fixo ou agendou antes?
-              </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Identifique-se com seu WhatsApp para ver seus horários fixos e próximos atendimentos:
-              </p>
-            </div>
-            {identifiedPhone && (
-              <button
-                type="button"
-                onClick={() => setShowIdentityForm(false)}
-                className="text-xs text-slate-400 hover:text-white"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          <form onSubmit={handleSaveIdentity} className="mt-3.5 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                  Seu Nome
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-500 absolute left-3 top-3 pointer-events-none" />
-                  <input
-                    type="text"
-                    required
-                    value={inputName}
-                    onChange={(e) => setInputName(e.target.value)}
-                    placeholder="Ex: Matheus Lima"
-                    className="w-full rounded-xl border border-slate-800 bg-[#070B14] pl-9 pr-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                  Seu WhatsApp (com DDD)
-                </label>
-                <div className="relative">
-                  <Phone className="w-4 h-4 text-slate-500 absolute left-3 top-3 pointer-events-none" />
-                  <input
-                    type="tel"
-                    required
-                    value={inputPhone}
-                    onChange={(e) => setInputPhone(formatPhoneBR(e.target.value))}
-                    placeholder="(84) 99999-0000"
-                    className="w-full rounded-xl border border-slate-800 bg-[#070B14] pl-9 pr-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {identityError && (
-              <div className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-300 text-[11px] flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{identityError}</span>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={isIdentifying}
-              className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs py-2.5 flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/15 disabled:opacity-50"
-            >
-              {isIdentifying ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Consultando...
-                </>
-              ) : (
-                <>
-                  <span>Consultar meus horários</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </form>
-        </div>
-      )}
-
       {/* CARD DESTAQUE: MEU HORÁRIO FIXO */}
-      {hasActiveContracts && (
-        <div className="space-y-3">
+      <div className="space-y-3">
           {clientSchedules.map((schedule) => {
             const freqLabel = getFrequencyLabel(schedule.frequency);
             const dayLabel = getDayOfWeekLabel(schedule.day_of_week);
@@ -661,7 +569,6 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
             </div>
           )}
         </div>
-      )}
 
       {/* ========================================================================= */}
       {/* MODAL 1: CANCELAMENTO DA SEMANA COM FEEDBACK OBRIGATÓRIO                    */}
@@ -931,7 +838,7 @@ export const RecurringClientScheduleWidget: React.FC<RecurringClientScheduleWidg
                   </span>
                 )}
               </label>
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none mask-scroll-x">
                 {availableRescheduleDays.map((d) => {
                   const isSelected = rescheduleSelectedDate === d.dateStr;
                   const isOriginal = d.dateStr === rescheduleModalOccurrence.date;

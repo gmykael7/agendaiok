@@ -245,6 +245,7 @@ export function NotificationCenterModal({
   const handleMarkAsReadOnly = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     onMarkNotificationRead?.(id);
+    if (unreadCount <= 1) handleClose();
   };
 
   if (!isRendered && !open) {
@@ -364,7 +365,7 @@ export function NotificationCenterModal({
             {unreadCount > 0 && (
               <button
                 type="button"
-                onClick={() => onMarkAllNotificationsRead?.()}
+                onClick={() => { onMarkAllNotificationsRead?.(); handleClose(); }}
                 className="text-[11px] font-bold text-cyan-300 hover:text-white flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl hover:bg-slate-800/80 border border-transparent hover:border-slate-700/60 transition-all shrink-0"
                 title="Marcar todas as notificações como lidas"
               >

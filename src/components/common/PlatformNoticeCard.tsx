@@ -29,11 +29,11 @@ export function PlatformNoticeCard({ notice, children }: { notice: PlatformNotic
         }
         catch { setCopyStatus('Não foi possível copiar. Selecione a chave acima.'); }
         finally { if (timer) clearTimeout(timer); }
-      }} className="mt-2 inline-flex items-center gap-2 text-xs font-bold text-cyan-200 py-2"><Copy className="w-4 h-4" />Copiar chave PIX</button>
+      }} className="mt-2 inline-flex items-center gap-2 text-xs font-bold text-cyan-200 py-2"><Copy className="w-4 h-4" strokeWidth={2.75} />Copiar chave PIX</button>
       {copyStatus && <p role="status" className="text-xs text-cyan-200">{copyStatus}</p>}
     </div>}
     {link && <a href={link} target="_blank" rel="noopener noreferrer" className="mt-3 flex w-fit max-w-full items-center gap-2 rounded-xl border border-cyan-400/30 px-3 py-2.5 text-xs font-bold text-cyan-200">
-      <ExternalLink className="w-4 h-4 shrink-0" /><span className="break-all">{notice.support ? 'Contribuir' : 'Abrir link'} • {new URL(link).hostname}</span>
+      <ExternalLink className="w-4 h-4 shrink-0" strokeWidth={2.75} /><span className="break-all">{notice.support ? 'Contribuir' : 'Abrir link'} • {new URL(link).hostname}</span>
     </a>}
     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
       <time dateTime={notice.created_at}>{new Date(notice.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</time>

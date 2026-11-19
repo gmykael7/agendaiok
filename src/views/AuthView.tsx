@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Building2, LogIn, UserPlus, Lock, Mail, Phone, User, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Building2, LogIn, UserPlus, Lock, Mail, Phone, User, Loader2, AlertCircle, Sparkles } from 'lucide-react';
 import { BrandLogo } from '../components/common/BrandLogo';
 import { AgencyCredit } from '../components/common/AgencyCredit';
 import { Organization } from '../types';
@@ -234,55 +234,17 @@ export const AuthView: React.FC<AuthViewProps> = ({
             <ArrowLeft className="h-4 w-4" />
           </button>
         )}
-        {/* LOGO E CABEÇALHO */}
         <div className="text-center space-y-2">
-          <div className="w-20 h-20 bg-white rounded-full overflow-hidden flex items-center justify-center mx-auto border border-cyan-400/15 shadow-lg shadow-cyan-500/10 p-2">
+          <div className="w-16 h-16 bg-white rounded-full overflow-hidden flex items-center justify-center mx-auto border border-cyan-400/15 shadow-lg shadow-cyan-500/10 p-2">
             <BrandLogo variant="mark" className="w-full h-full" />
           </div>
           <div className="flex justify-center">
-            <BrandLogo variant="full" className="h-10 w-auto max-w-[220px]" />
+            <BrandLogo variant="full" className="h-8 w-auto max-w-[200px]" />
           </div>
-          <p className="text-xs text-slate-400">
-            Acesso Restrito ao Painel da Barbearia
-          </p>
+          <h1 className="pt-1 text-xl font-bold text-white">{mode === 'login' ? 'Acesse seu painel' : 'Crie sua conta'}</h1>
+          <p className="text-sm text-slate-400">{mode === 'login' ? 'Entre para organizar sua operação.' : 'Comece grátis com 1 barbeiro.'}</p>
         </div>
 
-        {/* ABAS: ENTRAR / CADASTRAR */}
-        <div className="flex bg-[#0B1120] p-1 rounded-2xl border border-slate-800">
-          <button
-            type="button"
-            onClick={() => {
-              setMode('login');
-              setLoginError('');
-            }}
-            className={`w-1/2 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-              mode === 'login'
-                ? 'bg-[#FFC400] text-[#07111F] border border-[#FFE071]/70 shadow-[0_8px_22px_rgba(255,196,0,0.18)]'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <LogIn className="w-3.5 h-3.5" />
-            Entrar
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setMode('register');
-              setRegisterError('');
-            }}
-            className={`w-1/2 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-              mode === 'register'
-                ? 'bg-[#FFC400] text-[#07111F] border border-[#FFE071]/70 shadow-[0_8px_22px_rgba(255,196,0,0.18)]'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            Cadastrar Novo
-          </button>
-        </div>
-
-        {/* 1. FORMULÁRIO DE LOGIN (BLOQUEADO SEM CADASTRO E SENHA) */}
         {mode === 'login' ? (
           <form onSubmit={handleLoginSubmit} className="space-y-4 animate-fadeIn">
             <div>
@@ -292,6 +254,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
               <input id="auth-field-1"
                 type="email"
                 required
+                name="email"
+                autoComplete="email"
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
                 placeholder="seu-email@exemplo.com"
@@ -306,6 +270,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
               <input id="auth-field-2"
                 type="password"
                 required
+                name="password"
+                autoComplete="current-password"
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
                 placeholder="••••••••"
@@ -314,7 +280,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
             </div>
 
             {loginError && (
-              <div className="p-3 bg-rose-950/40 border border-rose-800/60 rounded-xl text-rose-300 text-xs flex items-start gap-2 animate-fadeIn">
+              <div role="alert" className="p-3 bg-rose-950/40 border border-rose-800/60 rounded-xl text-rose-300 text-xs flex items-start gap-2 animate-fadeIn">
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                 <span>{loginError}</span>
               </div>
@@ -337,9 +303,30 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 </>
               )}
             </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = '/?demo=1';
+              }}
+              className="w-full py-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow-sm"
+              title="Acessa o painel completo já logado com dados de teste"
+            >
+              <Sparkles className="w-4 h-4 text-emerald-400" />
+              <span>Acessar Modo Teste / Demonstração (Já Logado)</span>
+            </button>
+            <div className="border-t border-slate-800 pt-4 text-center">
+              <p className="text-sm text-slate-400">Ainda não tem conta?</p>
+              <button
+                type="button"
+                onClick={() => setMode('register')}
+                className="mt-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold text-[#FFD84A] transition hover:bg-[#FFC400]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC400]/45"
+              >
+                <UserPlus className="h-4 w-4" /> Criar conta grátis
+              </button>
+            </div>
           </form>
         ) : (
-          /* 2. FORMULÁRIO DE CADASTRO NOVO */
           <form onSubmit={handleRegisterSubmit} className="space-y-3.5 animate-fadeIn">
             <p className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-xs leading-relaxed text-emerald-200">Grátis para 1 barbeiro, sem prazo de teste. Com 2 ou mais profissionais, plano Equipe por {TEAM_PLAN_PRICE_LABEL} para toda a equipe.</p>
             <div>
@@ -349,6 +336,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
               <input id="auth-field-3"
                 type="text"
                 required
+                name="organization"
+                autoComplete="organization"
                 value={salonName}
                 onChange={handleNameChange}
                 placeholder="Ex: Barbearia Dom Pedro"
@@ -363,6 +352,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
               <input id="auth-field-4"
                 type="text"
                 required
+                name="name"
+                autoComplete="name"
                 value={ownerName}
                 onChange={(e) => setOwnerName(e.target.value)}
                 placeholder="Ex: Felipe Mateus"
@@ -377,6 +368,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
               <input id="auth-field-5"
                 type="tel"
                 required
+                name="tel"
+                autoComplete="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="(84) 99999-0000"
@@ -391,6 +384,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
               <input id="auth-field-6"
                 type="email"
                 required
+                name="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="seuemail@exemplo.com"
@@ -406,6 +401,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 <input id="auth-field-7"
                   type="password"
                   required
+                  name="new-password"
+                  autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Mínimo 6 caracteres"
@@ -420,6 +417,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 <input id="auth-field-8"
                   type="password"
                   required
+                  name="confirm-password"
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Repita a senha"
@@ -445,7 +444,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
             </div>
 
             {registerError && (
-              <div className="p-3 bg-rose-950/40 border border-rose-800/60 rounded-xl text-rose-300 text-xs flex items-start gap-2 animate-fadeIn">
+              <div role="alert" className="p-3 bg-rose-950/40 border border-rose-800/60 rounded-xl text-rose-300 text-xs flex items-start gap-2 animate-fadeIn">
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                 <span>{registerError}</span>
               </div>
@@ -465,6 +464,16 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 <span>Criar Conta e Entrar</span>
               )}
             </button>
+            <div className="border-t border-slate-800 pt-4 text-center">
+              <p className="text-sm text-slate-400">Já possui uma conta?</p>
+              <button
+                type="button"
+                onClick={() => setMode('login')}
+                className="mt-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold text-[#FFD84A] transition hover:bg-[#FFC400]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC400]/45"
+              >
+                <LogIn className="h-4 w-4" /> Entrar no painel
+              </button>
+            </div>
           </form>
         )}
 

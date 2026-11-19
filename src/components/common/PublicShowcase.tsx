@@ -12,11 +12,12 @@ import {
 import type { Organization, OrganizationSocialLinks } from '../../types';
 import { sanitizePublicGallery, sanitizeSocialLinks, type SocialLinkKey } from '../../utils/publicShowcase';
 
-interface PublicShowcaseProps {
+export interface PublicShowcaseProps {
   org: Organization;
+  hideSocial?: boolean;
 }
 
-const socialMetadata: Array<{
+export const socialMetadata: Array<{
   key: SocialLinkKey;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -32,7 +33,7 @@ const socialMetadata: Array<{
 const prefersReducedMotion = (): boolean =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-export const PublicShowcase: React.FC<PublicShowcaseProps> = ({ org }) => {
+export const PublicShowcase: React.FC<PublicShowcaseProps> = ({ org, hideSocial = false }) => {
   const gallery = useMemo(() => sanitizePublicGallery(org.public_gallery), [org.public_gallery]);
   const gallerySignature = gallery.map((item) => `${item.id}:${item.image_url}`).join('|');
   const links = useMemo(() => sanitizeSocialLinks(org.social_links), [org.social_links]);
@@ -66,7 +67,7 @@ export const PublicShowcase: React.FC<PublicShowcaseProps> = ({ org }) => {
   const showNext = () => setActiveIndex((current) => (current + 1) % visibleGallery.length);
   const activeImage = visibleGallery[activeIndex];
 
-  if (!activeImage && socialItems.length === 0) return null;
+  if (!activeImage && (hideSocial || socialItems.length === 0)) return null;
 
   return (
     <section aria-label="Galeria e redes sociais" className="border-b border-slate-800 bg-slate-950/20 px-4 py-4 sm:px-6 sm:py-5 space-y-3">
@@ -135,7 +136,7 @@ export const PublicShowcase: React.FC<PublicShowcaseProps> = ({ org }) => {
         </div>
       )}
 
-      {socialItems.length > 0 && (
+      {!hideSocial && socialItems.length > 0 && (
         <nav aria-label={`Redes sociais de ${org.name}`} className="flex flex-wrap justify-center gap-2">
           {socialItems.map(({ key, label, icon: Icon }) => (
             <a

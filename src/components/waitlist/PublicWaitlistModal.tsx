@@ -124,7 +124,7 @@ export const PublicWaitlistModal: React.FC<PublicWaitlistModalProps> = ({
         className="public-waitlist-modal-dialog w-full max-w-md rounded-[28px] border border-amber-500/30 bg-[#0B1426] shadow-2xl shadow-black/80 overflow-hidden"
       >
         {/* HEADER */}
-        <div className="public-waitlist-modal-header p-4 sm:p-5 border-b border-slate-800 bg-gradient-to-r from-amber-500/15 to-amber-500/5 flex items-start justify-between gap-3">
+        <div className="public-waitlist-modal-header p-4 sm:p-5 border-b border-white/10 bg-gradient-to-r from-amber-500/15 to-amber-500/5 flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="waitlist-modal-icon w-10 h-10 rounded-2xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-300 shadow-md shadow-amber-500/10 shrink-0">
               <Zap className="w-5 h-5 fill-amber-400 text-amber-400" />

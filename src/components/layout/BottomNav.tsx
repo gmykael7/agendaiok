@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useMemo } from 'react';
 import {
   IconlyHome,
   IconlyClipboard,
-  IconlyWallet,
   IconlyCalendar,
   IconlyUsers,
   IconlySetting,
@@ -22,7 +21,6 @@ interface BottomNavProps {
 const menuItems: { id: TabType; label: string; icon: React.FC<IconlyProps> }[] = [
   { id: 'dashboard', label: 'Início', icon: IconlyHome },
   { id: 'atendimentos', label: 'Atender', icon: IconlyClipboard },
-  { id: 'caixa', label: 'Caixa', icon: IconlyWallet },
   { id: 'agenda', label: 'Agenda', icon: IconlyCalendar },
   { id: 'clientes', label: 'Clientes', icon: IconlyUsers },
   { id: 'ajustes', label: 'Ajustes', icon: IconlySetting },
@@ -225,7 +223,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 <Icon
                   active={isActive}
                   className={`h-5 w-5 transition-colors duration-200 ${
-                    isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'
+                    isActive ? 'text-[var(--brand-color,#34d399)]' : 'text-slate-400 group-hover:text-slate-200'
                   }`}
                 />
                 {showBadge && (
@@ -237,7 +235,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               <span
                 className={`max-w-full truncate text-[10px] tracking-tight leading-none mt-0.5 transition-all duration-200 ${
                   isActive
-                    ? 'font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]'
+                    ? 'font-bold text-[var(--brand-color,#34d399)]'
                     : 'font-medium text-slate-400 dark:text-slate-400'
                 }`}
               >

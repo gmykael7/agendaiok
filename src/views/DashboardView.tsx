@@ -291,22 +291,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {!tourCompleted && <div className="agendai-feature-card relative overflow-hidden rounded-3xl border border-[#FFC400]/25 bg-gradient-to-br from-[#17243A] via-[#0D1A2C] to-[#091321] p-5 shadow-xl shadow-[#FFC400]/[0.06] sm:p-6">
-        <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-[#FFC400]/10 blur-3xl" />
-        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+      {!tourCompleted && <div className="agendai-feature-card border-y border-slate-800 py-4 sm:py-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="max-w-xl">
-            <span className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-[#FFC400]"><Sparkles className="h-3.5 w-3.5" /> AgendAI em ação</span>
-            <h3 className="mt-2 text-xl font-black tracking-tight text-white sm:text-2xl">Veja como sua operação fica mais simples.</h3>
-            <p className="mt-2 text-xs leading-relaxed text-slate-300 sm:text-sm">Um tour rápido mostra sua agenda, equipe, serviços, atendimentos e resultados usando os dados desta conta.</p>
+            <span className="inline-flex items-center gap-2 text-xs font-semibold text-amber-300"><Sparkles className="h-3.5 w-3.5" /> Tour do painel</span>
+            <h3 className="mt-1 text-base font-bold text-white sm:text-lg">Conheça sua operação em poucos passos</h3>
+            <p className="mt-1 text-sm leading-relaxed text-slate-400">Agenda, equipe, serviços, atendimentos e resultados.</p>
           </div>
-          <button type="button" onClick={() => setShowTour(true)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl border border-[#FFE071]/70 bg-[#FFC400] px-5 py-3 text-xs font-black text-[#07111F] shadow-lg shadow-[#FFC400]/15 transition hover:bg-[#FFD333] active:scale-95">Abrir tour <ArrowRight className="h-4 w-4" /></button>
+          <button type="button" onClick={() => setShowTour(true)} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-700 px-4 text-sm font-semibold text-white transition-colors hover:bg-slate-800">Abrir tour <ArrowRight className="h-4 w-4" /></button>
         </div>
       </div>}
 
       {/* CARDS DE MÉTRICAS PRINCIPAIS (RESPONSIVOS NO CELULAR) */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 xl:gap-5">
         {/* TOTAL EM CAIXA (HOJE) */}
-        <div className="stagger-item booking-card bg-[#121B2E] rounded-2xl p-4 sm:p-5 xl:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.12)] min-w-0 transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.18)] hover:-translate-y-0.5">
+        <div className="dashboard-metric-card stagger-item min-w-0 rounded-xl border border-slate-800 bg-[#0d1728] p-4 sm:p-5 xl:p-6">
           <p className="text-[10px] sm:text-xs font-medium tracking-wider uppercase text-slate-400 truncate">
             FATURAMENTO HOJE
           </p>
@@ -319,7 +318,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* TICKET MÉDIO HOJE (AO LADO DE FATURAMENTO HOJE) */}
-        <div className="stagger-item booking-card bg-[#121B2E] rounded-2xl p-4 sm:p-5 xl:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.12)] min-w-0 transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.18)] hover:-translate-y-0.5" style={{ animationDelay: '30ms' }}>
+        <div className="dashboard-metric-card stagger-item min-w-0 rounded-xl border border-slate-800 bg-[#0d1728] p-4 sm:p-5 xl:p-6" style={{ animationDelay: '30ms' }}>
           <p className="text-[10px] sm:text-xs font-medium tracking-wider uppercase text-slate-400 truncate flex items-center justify-between">
             <span>TICKET MÉDIO</span>
             <TrendingUp className="w-3.5 h-3.5 text-cyan-400 shrink-0 hidden sm:inline" />
@@ -333,7 +332,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* ATENDIMENTOS DO DIA */}
-        <div className="stagger-item booking-card bg-[#121B2E] rounded-2xl p-4 sm:p-5 xl:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.12)] min-w-0 transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.18)] hover:-translate-y-0.5" style={{ animationDelay: '60ms' }}>
+        <div className="dashboard-metric-card stagger-item min-w-0 rounded-xl border border-slate-800 bg-[#0d1728] p-4 sm:p-5 xl:p-6" style={{ animationDelay: '60ms' }}>
           <p className="text-[10px] sm:text-xs font-medium tracking-wider uppercase text-slate-400 truncate">
             <span className="sm:hidden">ATENDIMENTOS</span>
             <span className="hidden sm:inline">ATENDIMENTOS DO DIA</span>
@@ -347,7 +346,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* TOTAL AGENDAMENTOS PENDENTES */}
-        <div className="stagger-item booking-card bg-[#121B2E] rounded-2xl p-4 sm:p-5 xl:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.12)] min-w-0 transition-all hover:shadow-[0_12px_36px_rgba(0,0,0,0.18)] hover:-translate-y-0.5" style={{ animationDelay: '90ms' }}>
+        <div className="dashboard-metric-card stagger-item min-w-0 rounded-xl border border-slate-800 bg-[#0d1728] p-4 sm:p-5 xl:p-6" style={{ animationDelay: '90ms' }}>
           <p className="text-[10px] sm:text-xs font-medium tracking-wider uppercase text-slate-400 truncate">
             EM ABERTO
           </p>
@@ -360,7 +359,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* SEÇÃO: ATENDIMENTOS DA BARBEARIA */}
       <div className="space-y-3.5 pt-1">
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800/70 bg-slate-950/30 p-2 pl-3 sm:bg-transparent sm:border-0 sm:p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-3">
           <div>
             <h3 className="text-base sm:text-xl font-bold text-white tracking-tight">
               Atendimentos Recentes

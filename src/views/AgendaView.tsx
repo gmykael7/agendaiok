@@ -135,14 +135,16 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
   // Depois que a data muda, rola até o card e destaca por um instante.
   useEffect(() => {
     if (!pendingScrollId) return;
-    const el = document.querySelector<HTMLElement>(`[data-appointment-id="${pendingScrollId}"]`);
-    consumeAgendaFocus();
-    setPendingScrollId(null);
-    if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.classList.add('agenda-focus-flash');
-    const timer = window.setTimeout(() => el.classList.remove('agenda-focus-flash'), 1800);
-    return () => window.clearTimeout(timer);
+    const frame = requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(`[data-appointment-id="${pendingScrollId}"]`);
+      if (!el) return;
+      consumeAgendaFocus();
+      setPendingScrollId(null);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('agenda-focus-flash');
+      window.setTimeout(() => el.classList.remove('agenda-focus-flash'), 1800);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [pendingScrollId, selectedDate, appointments]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -1346,29 +1348,29 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 
                           {/* LINHA INFERIOR: BOTÕES DE AÇÃO COM WRAP COMPLETO (NUNCA SOBRESSAEM) */}
                           {isOpenAppointmentStatus(app.status) && isOriginalStart && (
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-2 border-t border-slate-800/80 w-full">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-slate-800/80 w-full">
                               {app.status === 'scheduled' && (
                                 <button
                                   onClick={() => confirmAppointment(app)}
-                                  className="w-full min-h-9 px-2 bg-sky-500/15 border border-sky-500/25 text-sky-300 rounded-lg text-[11px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap active:scale-95"
+                                  className="w-full min-h-11 px-3 bg-sky-500/15 border border-sky-500/25 text-sky-300 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 whitespace-nowrap active:scale-95 transition-colors"
                                 ><CheckCheck className="w-3.5 h-3.5 shrink-0" /> <span>Confirmar</span></button>
                               )}
                               {(app.status === 'scheduled' || app.status === 'confirmed') && (
                                 <button
                                   onClick={() => setAppointments(prev => prev.map(a => a.id === app.id ? { ...a, status: 'arrived' } : a))}
-                                  className="w-full min-h-9 px-2 bg-cyan-500/15 border border-cyan-500/25 text-cyan-300 rounded-lg text-[11px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap active:scale-95"
+                                  className="w-full min-h-11 px-3 bg-cyan-500/15 border border-cyan-500/25 text-cyan-300 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 whitespace-nowrap active:scale-95 transition-colors"
                                 ><UserRoundCheck className="w-3.5 h-3.5 shrink-0" /> <span>Chegou</span></button>
                               )}
                               {app.status === 'arrived' && (
                                 <button
                                   onClick={() => setAppointments(prev => prev.map(a => a.id === app.id ? { ...a, status: 'in_progress' } : a))}
-                                  className="w-full min-h-9 px-2 bg-blue-500/15 border border-blue-500/25 text-blue-300 rounded-lg text-[11px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap active:scale-95"
+                                  className="w-full min-h-11 px-3 bg-blue-500/15 border border-blue-500/25 text-blue-300 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 whitespace-nowrap active:scale-95 transition-colors"
                                 ><Play className="w-3.5 h-3.5 shrink-0" /> <span>Iniciar</span></button>
                               )}
                               {app.status === 'in_progress' && (
                                 <button
                                   onClick={() => setCompletingApp(app)}
-                                  className="w-full min-h-9 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold transition-colors inline-flex items-center justify-center gap-1 whitespace-nowrap active:scale-95 shadow-sm"
+                                  className="w-full min-h-11 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-colors inline-flex items-center justify-center gap-1.5 whitespace-nowrap active:scale-95 shadow-sm"
                                 ><CheckCircle className="w-3.5 h-3.5 shrink-0" /> <span>Finalizar</span></button>
                               )}
                               {(app.status === 'scheduled' || app.status === 'confirmed') && (
@@ -1378,12 +1380,12 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                                       setAppointments(prev => prev.map(a => a.id === app.id ? { ...a, status: 'no_show' } : a));
                                     }
                                   }}
-                                  className="w-full min-h-9 px-2 bg-orange-500/10 border border-orange-500/20 text-orange-300 rounded-lg text-[11px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap active:scale-95"
+                                  className="w-full min-h-11 px-3 bg-orange-500/10 border border-orange-500/20 text-orange-300 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 whitespace-nowrap active:scale-95 transition-colors"
                                 ><UserX className="w-3.5 h-3.5 shrink-0" /> <span>Faltou</span></button>
                               )}
                               <button
                                 onClick={() => handleCancelAppointment(app)}
-                                className="col-span-2 xl:col-span-1 w-full min-h-9 px-2 bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-300 rounded-lg text-[11px] font-bold transition-colors inline-flex items-center justify-center whitespace-nowrap active:scale-95"
+                                className="col-span-2 sm:col-span-4 w-full min-h-10 px-3 bg-transparent hover:bg-rose-500/10 hover:text-rose-400 text-slate-400 rounded-xl text-xs font-bold transition-colors inline-flex items-center justify-center whitespace-nowrap active:scale-95"
                               ><span>Cancelar</span></button>
                             </div>
                           )}

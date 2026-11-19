@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AgendAi · Motion</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <strong>AgendAi<span> / estudo de movimento</span></strong>
+    <div>
+      <label class="upload" title="Selecione um arquivo motion.json">
+        Importar JSON
+        <input type="file" accept="application/json,.json" id="config">
+      </label>
+      <button id="replay">Repetir abertura ↗</button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav aria-label="Navegação">
+      <b class="brand">a.</b>
+      <div id="indicator"></div>
+      <button data-page="agenda" aria-label="Agenda" title="Agenda" aria-current="page">▦</button>
+      <button data-page="clientes" aria-label="Clientes" title="Clientes">♙</button>
+      <button data-page="servicos" aria-label="Serviços" title="Serviços">✂</button>
+      <small>AI</small>
+    </nav>
+    <main id="screen"></main>
+    <div class="reveal" aria-hidden="true">
+      <b>AgendAi<span>Seu tempo, organizado.</span></b>
+    </div>
+  </div>
+
+  <footer>
+    <span>Dados ilustrativos · identidade provisória</span>
+    <span id="status" role="status">Movimentos inspirados na referência</span>
+  </footer>
+
+<script src="motion.js?preview=1"></script>
+</body>
+</html>

@@ -16,8 +16,10 @@ import {
   RecurringSchedule
 } from './types';
 import { Sidebar } from './components/layout/Sidebar';
+import { DesktopCapsuleNav } from './components/layout/DesktopCapsuleNav';
 import { BottomNav } from './components/layout/BottomNav';
 import { Header } from './components/layout/Header';
+import { MotionTabContent } from './components/common/MotionTabContent';
 import { PlatformNotices } from './components/common/PlatformNotices';
 import { LoadingState } from './components/common/LoadingState';
 import { readStoredArray, safeSetItem } from './utils/storage';
@@ -215,6 +217,7 @@ const getAdminTabFromUrl = (): TabType => {
 };
 
 export default function App() {
+  const loaderDemo = new URLSearchParams(window.location.search).get('loaderDemo') === '1';
   const [ownerAssistantOpen, setOwnerAssistantOpen] = useState(false);
   const isSuperAdminRoute = window.location.pathname.toLowerCase().startsWith('/superadmin');
   const tvSlug = getTvSlugFromUrl();
@@ -385,7 +388,7 @@ export default function App() {
   const publicOrgData = publicCloudData?.org || null;
 
   const [currentTab, setCurrentTab] = useState<TabType>(getAdminTabFromUrl);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<'team' | 'services' | 'general'>('team');
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'team' | 'services' | 'general'>('general');
   const [authEntry, setAuthEntry] = useState<'landing' | 'login' | 'register'>(() => {
     const hash = window.location.hash.toLowerCase();
     if (hash.includes('cadastro') || hash.includes('register')) return 'register';
@@ -637,8 +640,22 @@ export default function App() {
     // Landing e diretório são experiências da plataforma, com tema único para clientes.
     // Apenas a página de uma barbearia pode usar sua cor principal nos destaques.
     const themedOrg = isClientRoute ? publicOrgData : (isDirectoryRoute || !isLoggedIn ? null : org);
-    applyAppTheme(appThemeMode, themedOrg?.primary_color || '#10B981', themedOrg?.theme_palette);
-  }, [appThemeMode, org, publicOrgData, isClientRoute, isDirectoryRoute]);
+    // A página pública respeita sempre a preferência de claro/escuro do aparelho.
+    const mode = (isClientRoute || !isLoggedIn) ? resolveSystemThemeMode() : appThemeMode;
+    applyAppTheme(mode, themedOrg?.primary_color || '#10B981', themedOrg?.theme_palette);
+  }, [appThemeMode, org, publicOrgData, isClientRoute, isDirectoryRoute, isLoggedIn]);
+
+  useEffect(() => {
+    if (!isClientRoute || typeof window === 'undefined') return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const update = () => applyAppTheme(
+      media.matches ? 'dark' : 'light',
+      publicOrgData?.primary_color || '#10B981',
+      publicOrgData?.theme_palette,
+    );
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [isClientRoute, publicOrgData]);
 
   // No modo automático, acompanha a preferência do sistema inclusive quando ela
   // muda enquanto o aplicativo está aberto.
@@ -737,6 +754,15 @@ export default function App() {
       setIsSessionValidated(true);
     }
   }, []);
+
+  // Link recebido no WhatsApp: abre a Agenda já focada no atendimento informado.
+  useEffect(() => {
+    if (isClientRoute || isDirectoryRoute || isTvRoute) return;
+    const appointmentId = new URLSearchParams(window.location.search).get('appointment');
+    if (!appointmentId) return;
+    setAgendaFocus(appointmentId);
+    setCurrentTab('agenda');
+  }, [isClientRoute, isDirectoryRoute, isTvRoute]);
 
   // Monitorar alterações na URL
   useEffect(() => {
@@ -1412,7 +1438,9 @@ export default function App() {
     applyPrivateCloudData(cloudData);
     setIsSessionValidated(true);
     setIsLoggedIn(true);
-    setCurrentTab('dashboard');
+    const appointmentId = new URLSearchParams(window.location.search).get('appointment');
+    if (appointmentId) setAgendaFocus(appointmentId);
+    setCurrentTab(appointmentId ? 'agenda' : 'dashboard');
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
   };
 
@@ -1537,6 +1565,14 @@ export default function App() {
     return <PrivacyPolicyView />;
   }
 
+  if (loaderDemo) {
+    return (
+      <div className="min-h-screen bg-[#171717] flex items-center justify-center">
+        <BrandLoader size={150} />
+      </div>
+    );
+  }
+
   if (isTermsRoute) {
     return <TermsOfServiceView />;
   }
@@ -1592,7 +1628,7 @@ export default function App() {
     }
 
     return (
-      <main className="booking-public-shell min-h-screen safe-screen bg-[#070B14] text-slate-100 font-sans p-3 sm:p-6 flex items-center justify-center">
+      <main className="booking-public-shell min-h-screen min-h-[100dvh] safe-screen bg-[#070B14] text-slate-100 font-sans p-3 sm:p-6 lg:p-8 flex items-start justify-center">
         <TenantBookingView 
           org={currentPublicOrg}
           services={isClientRoute ? publicCloudData?.services || [] : services}
@@ -1717,7 +1753,18 @@ export default function App() {
         </div>
       )}
 
-      {/* SIDEBAR PARA DESKTOP */}
+      {/* CÁPSULA NA ESQUERDA (DESKTOP) */}
+      <DesktopCapsuleNav
+        currentTab={currentTab}
+        setCurrentTab={navigateToTab}
+        org={org}
+        onOpenFullSidebar={() => setIsSidebarOpen(true)}
+        onLogout={handleLogout}
+        permissions={currentUser?.permissions}
+        pendingCount={pendingAppointmentsCount}
+      />
+
+      {/* SIDEBAR PARA DESKTOP E MOBILE (GAVETA EXPANSÍVEL) */}
       <Sidebar
         currentTab={currentTab}
         setCurrentTab={navigateToTab}
@@ -1791,6 +1838,7 @@ export default function App() {
           {/* CONTEÚDO DA ABA ATIVA */}
           <div className="app-content p-3 sm:p-6 md:p-8 xl:p-10 max-w-[1600px] w-full mx-auto">
             <Suspense fallback={<LoadingState />}>
+              <MotionTabContent tabKey={currentTab}>
             {org && currentUser?.role !== 'barber' && <PlatformNotices key={`${org.id}:${getAuthToken() || ''}`} />}
             {currentTab === 'dashboard' && currentUser?.permissions?.dashboard !== false && showOnboarding && org && (
               <div className="mb-6">
@@ -1926,6 +1974,7 @@ export default function App() {
                 currentUser={currentUser}
               />
             )}
+              </MotionTabContent>
             </Suspense>
           </div>
 
@@ -1968,7 +2017,7 @@ export default function App() {
                 Sua barbearia está sincronizada com a nuvem: <strong className="text-emerald-400">{org?.name}</strong> (<span className="font-mono">{org?.slug}</span>).
               </p>
 
-              <div className="bg-[#0B1120] p-3.5 rounded-2xl border border-slate-800 space-y-2">
+              <div className="bg-[#0B1120] p-3.5 rounded-lg border border-slate-800 space-y-2">
                 <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block">
                   Como acessar em qualquer celular:
                 </span>
@@ -1985,7 +2034,10 @@ export default function App() {
                   onClick={handleCopySyncLink}
                   className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-2xl text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/20 active:scale-98"
                 >
-                  {copiedSyncLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  <span className="icon-swap">
+                    <Check className="w-4 h-4" strokeWidth={2.75} aria-hidden={!copiedSyncLink} />
+                    <Copy className="w-4 h-4" strokeWidth={2.75} aria-hidden={copiedSyncLink} />
+                  </span>
                   {copiedSyncLink ? 'Link Copiado! Cole no WhatsApp e abra no celular' : 'Copiar Link Seguro de Login'}
                 </button>
                 {copySyncError && <p role="status">{copySyncError}</p>}

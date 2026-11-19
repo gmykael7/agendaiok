@@ -45,7 +45,7 @@ interface AjustesViewProps {
 }
 
 export const AjustesView: React.FC<AjustesViewProps> = ({
-  initialTab = 'team',
+  initialTab = 'general',
   org,
   setOrg,
   services,
@@ -103,13 +103,13 @@ export const AjustesView: React.FC<AjustesViewProps> = ({
       </div>
 
       {/* NAVEGAÇÃO POR SUB-ABAS MOBILE */}
-      <div className="grid grid-cols-2 gap-2 sm:hidden">
+      <div className="grid grid-cols-2 gap-2 lg:hidden">
         {[
+          { id: 'general', label: 'Perfil e horários', detail: 'Configurações gerais', icon: Building2, visible: true },
           { id: 'team', label: 'Equipe', detail: `${barbers.length} ${barbers.length === 1 ? 'profissional' : 'profissionais'}`, icon: Users, visible: true },
           { id: 'services', label: 'Serviços', detail: `${services.length} cadastrados`, icon: Scissors, visible: true },
           { id: 'products', label: 'Produtos', detail: `${products.length} ${products.length === 1 ? 'item' : 'itens'} em estoque`, icon: Boxes, visible: currentUser?.permissions?.products !== false },
           { id: 'users', label: 'Usuários', detail: 'Permissões', icon: ShieldCheck, visible: currentUser?.permissions?.usuarios !== false },
-          { id: 'general', label: 'Perfil e horários', detail: 'Configurações gerais', icon: Building2, visible: true },
           { id: 'appearance', label: 'Aparência', detail: 'Temas, cores e estilo', icon: Palette, visible: true },
           { id: 'whatsapp', label: 'WhatsApp', detail: 'Conectar número', icon: MessageSquare, visible: true },
         ].filter((item) => item.visible).map((item) => {
@@ -139,50 +139,66 @@ export const AjustesView: React.FC<AjustesViewProps> = ({
         })}
       </div>
 
+      <div className="settings-workspace lg:flex lg:items-start lg:gap-6">
       {/* NAVEGAÇÃO POR SUB-ABAS DESKTOP */}
-      <div className="hidden sm:grid sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-7 gap-2 bg-[#121B2E] p-1.5 rounded-2xl border border-slate-800 shadow-sm">
+      <aside className="hidden lg:flex lg:w-64 xl:w-72 shrink-0 flex-col gap-1.5 rounded-3xl border border-slate-800 bg-[#121B2E] p-3 shadow-sm lg:sticky lg:top-4" aria-label="Seções de ajustes">
+        <div className="px-2 pt-1 pb-2">
+          <p className="text-xs font-black text-white">Ajustes</p>
+          <p className="mt-0.5 text-[11px] text-slate-400">Escolha uma seção para configurar.</p>
+        </div>
+        <button
+          onClick={() => navigateToSubTab('general')}
+          className={`flex min-h-11 items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all active:scale-95 ${
+            subTab === 'general'
+              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          Perfil do Salão & Horários
+        </button>
         <button
           onClick={() => navigateToSubTab('team')}
-          className={`flex min-h-11 items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-center text-xs font-bold transition-all active:scale-95 ${
+          className={`flex min-h-11 items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all active:scale-95 ${
             subTab === 'team'
               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
               : 'text-slate-400 hover:text-white'
           }`}
         >
           <Users className="w-4 h-4" />
-          Barbeiros & Comissões ({barbers.length})
+          <span>Barbeiros & Comissões</span><span className="ml-auto text-[10px] opacity-70">{barbers.length}</span>
         </button>
 
         <button
           onClick={() => navigateToSubTab('services')}
-          className={`flex min-h-11 items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-center text-xs font-bold transition-all active:scale-95 ${
+          className={`flex min-h-11 items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all active:scale-95 ${
             subTab === 'services'
               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
               : 'text-slate-400 hover:text-white'
           }`}
         >
           <Scissors className="w-4 h-4" />
-          Catálogo de Serviços ({services.length})
+          <span>Catálogo de Serviços</span><span className="ml-auto text-[10px] opacity-70">{services.length}</span>
         </button>
 
         {currentUser?.permissions?.products !== false && (
           <button
             onClick={() => navigateToSubTab('products')}
-            className={`flex min-h-11 items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-center text-xs font-bold transition-all active:scale-95 ${
+            className={`flex min-h-11 items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all active:scale-95 ${
               subTab === 'products'
                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <Boxes className="w-4 h-4" />
-            Produtos & Estoque ({products.length})
+            <span>Produtos & Estoque</span><span className="ml-auto text-[10px] opacity-70">{products.length}</span>
           </button>
         )}
 
         {currentUser?.permissions?.usuarios !== false && (
           <button
             onClick={() => navigateToSubTab('users')}
-            className={`flex min-h-11 items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-center text-xs font-bold transition-all active:scale-95 ${
+            className={`flex min-h-11 items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all active:scale-95 ${
               subTab === 'users' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -192,20 +208,8 @@ export const AjustesView: React.FC<AjustesViewProps> = ({
         )}
 
         <button
-          onClick={() => navigateToSubTab('general')}
-          className={`flex min-h-11 items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-center text-xs font-bold transition-all active:scale-95 ${
-            subTab === 'general'
-              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          Perfil do Salão & Horários
-        </button>
-
-        <button
           onClick={() => navigateToSubTab('appearance')}
-          className={`flex min-h-11 items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-center text-xs font-bold transition-all active:scale-95 ${
+          className={`flex min-h-11 items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all active:scale-95 ${
             subTab === 'appearance'
               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
               : 'text-slate-400 hover:text-white'
@@ -217,7 +221,7 @@ export const AjustesView: React.FC<AjustesViewProps> = ({
 
         <button
           onClick={() => navigateToSubTab('whatsapp')}
-          className={`flex min-h-11 items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-center text-xs font-bold transition-all active:scale-95 ${
+          className={`flex min-h-11 items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all active:scale-95 ${
             subTab === 'whatsapp'
               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
               : 'text-slate-400 hover:text-white'
@@ -226,10 +230,10 @@ export const AjustesView: React.FC<AjustesViewProps> = ({
           <MessageSquare className="w-4 h-4" />
           WhatsApp Oficial
         </button>
-      </div>
+      </aside>
 
       {/* CONTEÚDO DA SUB-ABA */}
-      <div ref={contentRef} className="pt-2">
+      <div ref={contentRef} className="min-w-0 flex-1 pt-2 lg:pt-0">
         <Suspense fallback={<LoadingState />}>
           {subTab === 'team' && (
             <TeamView
@@ -293,6 +297,7 @@ export const AjustesView: React.FC<AjustesViewProps> = ({
             <WhatsAppSettingsSection org={org} setOrg={setOrg} />
           )}
         </Suspense>
+      </div>
       </div>
     </div>
   );

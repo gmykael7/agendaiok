@@ -2005,6 +2005,7 @@ export default {
         const barbers = Array.isArray(current.barbers) ? current.barbers : [];
         const services = Array.isArray(current.services) ? current.services : [];
         const appointments = Array.isArray(current.appointments) ? current.appointments : [];
+        const clientsList = Array.isArray(current.clients) ? current.clients : [];
 
         const enrichedSchedules = allSchedules.map((s: any) => {
           const barber = barbers.find((b: any) => b.id === s.professional_id);
@@ -2017,6 +2018,40 @@ export default {
             duration_minutes: service?.duration_minutes || 30,
           };
         });
+
+        // Localiza cliente no CRM ou em agendamentos passados
+        const existingClient = clientsList.find((c: any) => {
+          const cPhone = normalizePhoneOnlyDigits(c.phone);
+          return cPhone === cleanPhone || (cPhone.length >= 8 && cleanPhone.endsWith(cPhone.slice(-8)));
+        });
+
+        const lastApp = appointments
+          .filter((a: any) => {
+            const aPhone = normalizePhoneOnlyDigits(a.client_phone);
+            return aPhone === cleanPhone || (aPhone.length >= 8 && cleanPhone.endsWith(aPhone.slice(-8)));
+          })
+          .sort((a: any, b: any) => (b.date || '').localeCompare(a.date || ''))[0];
+
+        const resolvedClientName = clientName || existingClient?.name || lastApp?.client_name || enrichedSchedules[0]?.client_name || '';
+        const isRegistered = Boolean(existingClient || lastApp || enrichedSchedules.length > 0);
+
+        if (clientName && !existingClient) {
+          try {
+            const newClientRecord = {
+              id: `cli-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              org_id: current.org?.id || tenantParam,
+              name: clientName,
+              phone: cleanPhone,
+              total_visits: lastApp ? 1 : 0,
+              total_spent: 0,
+              created_at: new Date().toISOString(),
+            };
+            current.clients = dedupeClientRecords([newClientRecord, ...clientsList]);
+            await storePayload(env, current, normalizeSlug(current.org?.slug));
+          } catch (e) {
+            console.warn('Erro ao registrar novo cliente no CRM:', e);
+          }
+        }
 
         const allUpcoming: any[] = [];
         for (const schedule of enrichedSchedules) {
@@ -2037,8 +2072,9 @@ export default {
 
         return jsonResponse({
           success: true,
-          client_name: clientName || enrichedSchedules[0]?.client_name || '',
+          client_name: resolvedClientName,
           client_phone: cleanPhone,
+          is_registered: isRegistered,
           schedules: enrichedSchedules,
           upcoming: allUpcoming,
         });

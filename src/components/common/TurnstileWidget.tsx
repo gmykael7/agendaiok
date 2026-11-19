@@ -106,7 +106,7 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidget
           sitekey: TURNSTILE_SITE_KEY,
           action,
           language: 'pt-br',
-          theme: 'dark',
+          theme: 'auto',
           size: 'compact',
           appearance: 'interaction-only',
           callback: (token) => {
@@ -144,8 +144,8 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidget
     }, [action]);
 
     return (
-      <div className="rounded-xl border border-slate-800 bg-[#0B1120]/80 px-3 py-2.5" aria-live="polite">
-        <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-400">
+      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-800 dark:bg-[#0B1120]/80" aria-live="polite">
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400">
           {status === 'ready' ? (
             <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
           ) : status === 'error' ? (

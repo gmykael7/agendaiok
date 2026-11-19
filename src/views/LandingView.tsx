@@ -27,7 +27,6 @@ import { BrandLogo } from '../components/common/BrandLogo';
 import { AgencyCredit } from '../components/common/AgencyCredit';
 import { LandingProductPreview } from '../components/common/LandingProductPreview';
 import { LandingPromoVideo } from '../components/common/LandingPromoVideo';
-import { PublicThemeToggle } from '../components/common/PublicThemeToggle';
 import { PageSeo } from '../components/common/PageSeo';
 import type { AppThemeMode } from '../config/theme';
 import { TEAM_UPGRADE_URL } from '../config/urls';
@@ -110,7 +109,7 @@ const steps = [
 ];
 
 export const LandingView: React.FC<LandingViewProps> = ({ onLogin, onRegister, appThemeMode, onThemeModeChange }) => (
-  <div className="landing-view public-platform-view min-h-screen overflow-x-hidden bg-[var(--public-page-bg)] text-[var(--public-text)] font-sans selection:bg-[var(--brand-color)] selection:text-[var(--brand-contrast-color)]">
+  <div className="landing-view public-platform-view min-h-screen min-h-[100svh] overflow-x-hidden bg-[var(--public-page-bg)] text-[var(--public-text)] font-sans selection:bg-[var(--brand-color)] selection:text-[var(--brand-contrast-color)]">
     <PageSeo
       title="AgendAI | Gestão e agendamento para barbearias"
       description="Organize agenda, clientes, atendimentos, caixa, comandas, equipe e painel de TV da sua barbearia em uma única plataforma."
@@ -153,7 +152,14 @@ export const LandingView: React.FC<LandingViewProps> = ({ onLogin, onRegister, a
         </nav>
 
         <div className="flex items-center gap-2">
-          <PublicThemeToggle mode={appThemeMode} onChange={onThemeModeChange} />
+          <a
+            href="/?demo=1"
+            className="hidden min-h-10 items-center justify-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-bold text-emerald-400 transition hover:bg-emerald-500/20 sm:inline-flex sm:px-4"
+            title="Acessar o painel completo já logado para testes"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+            <span>Painel Demo</span>
+          </a>
           <button
             type="button"
             onClick={onLogin}
@@ -166,7 +172,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onLogin, onRegister, a
           <button
             type="button"
             onClick={onRegister}
-            className="inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-[#FFE071]/70 bg-[#FFC400] px-3 text-xs font-black text-[#07111F] shadow-[0_10px_28px_rgba(255,196,0,0.18)] transition hover:bg-[#FFD333] sm:px-5"
+            className="hidden min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-[#FFE071]/70 bg-[#FFC400] px-3 text-xs font-black text-[#07111F] shadow-[0_10px_28px_rgba(255,196,0,0.18)] transition hover:bg-[#FFD333] sm:inline-flex sm:px-5"
           >
             <UserPlus className="h-4 w-4" />
             Criar conta

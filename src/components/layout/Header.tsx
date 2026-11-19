@@ -65,13 +65,6 @@ export const Header: React.FC<HeaderProps> = ({
 
   const normalizedQuery = query.trim().toLowerCase();
   const establishmentName = org?.name?.trim() || 'AgendAI';
-  const establishmentNameSize =
-    establishmentName.length > 32
-      ? 'text-[clamp(0.85rem,3vw,1rem)]'
-      : establishmentName.length > 20
-      ? 'text-[clamp(0.95rem,3.4vw,1.1rem)]'
-      : 'text-[clamp(1rem,4vw,1.25rem)]';
-
   useEffect(() => {
     if (isSearchExpanded) {
       searchInputRef.current?.focus();
@@ -140,23 +133,23 @@ export const Header: React.FC<HeaderProps> = ({
   const unreadCount = unreadNotificationCount(notifications);
 
   return (
-    <header className="app-header sticky top-0 z-40 shrink-0 safe-header bg-[#08101f]/80 backdrop-blur-2xl border-b border-slate-800/40 px-5 sm:px-6 lg:px-8 py-2.5 shadow-[0_4px_24px_rgba(0,0,0,0.12)] transition-all">
-      <div className="flex items-center justify-between max-w-[1600px] mx-auto min-w-0 gap-3">
+    <header className="app-header safe-header sticky top-0 z-40 shrink-0 border-b border-slate-800 px-3 py-2.5 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-[1600px] min-w-0 items-center justify-between gap-2 sm:gap-3">
         {/* LADO ESQUERDO: MENU + IDENTIFICAÇÃO */}
-        <div className={`flex items-center gap-3 min-w-0 transition-all ${isSearchExpanded ? 'hidden sm:flex sm:shrink-0' : 'flex-1'}`}>
+        <div className={`min-w-0 items-center gap-2.5 sm:gap-3 ${isSearchExpanded ? 'hidden sm:flex sm:shrink-0' : 'flex flex-1'}`}>
           {onOpenSidebar && (
             <button
               type="button"
               onClick={onOpenSidebar}
               aria-label="Abrir menu principal"
               aria-controls="app-sidebar"
-              className="md:hidden shrink-0 flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900/60 hover:bg-slate-800 text-slate-300 transition-colors min-w-[44px] min-h-[44px]"
+              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl text-slate-300 transition-colors hover:bg-slate-800 md:hidden"
             >
               <Menu className="h-5 w-5" />
             </button>
           )}
 
-          <div className={`organization-avatar relative w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white/95 flex items-center justify-center shadow-md shadow-emerald-500/10 shrink-0 ring-1 ring-slate-200/80 ${org?.logo_image_url ? 'p-0' : 'p-1'}`}>
+          <div className={`organization-avatar relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/95 ring-1 ring-slate-200/80 sm:h-11 sm:w-11 ${org?.logo_image_url ? 'p-0' : 'p-1'}`}>
             {org?.logo_image_url ? (
               <>
                 <BrandLogo variant="mark" className="w-full h-full p-1" alt="" />
@@ -169,12 +162,12 @@ export const Header: React.FC<HeaderProps> = ({
 
           <div className="min-w-0 flex-1">
             <h1
-              className={`font-bold ${establishmentNameSize} text-white tracking-tight leading-tight truncate`}
+              className="truncate text-sm font-bold leading-tight tracking-tight text-white sm:text-lg"
               title={establishmentName}
             >
               {establishmentName}
             </h1>
-            <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium flex items-center gap-1.5 min-w-0 mt-0.5">
+            <p className="mt-0.5 hidden min-w-0 items-center gap-1.5 text-[11px] font-medium text-slate-400 sm:flex">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
               <span className="truncate">Painel online</span>
             </p>
@@ -239,7 +232,7 @@ export const Header: React.FC<HeaderProps> = ({
         ) : null}
 
         {/* LADO DIREITO: AÇÕES ESSENCIAIS */}
-        <div className="header-action-cluster flex items-center gap-1 rounded-2xl border border-slate-800/70 bg-slate-950/45 p-1 shrink-0">
+        <div className="header-action-cluster flex shrink-0 items-center gap-0.5 sm:gap-1 sm:rounded-xl sm:border sm:border-slate-800 sm:bg-slate-950/40 sm:p-1">
           {!isSearchExpanded && (() => {
             const tones = {
               ok: { dot: 'bg-slate-400', text: 'text-slate-400', label: 'Sincronizado' },
@@ -264,7 +257,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => setIsSearchExpanded(true)}
-              className="w-10 h-10 rounded-2xl bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center transition-all active:scale-95 min-w-[44px] min-h-[44px]"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
               title="Pesquisar..."
               aria-label="Abrir pesquisa"
             >
@@ -276,7 +269,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={onAssistantToggle}
-              className={`group h-11 min-w-11 rounded-xl px-1.5 sm:px-2.5 flex items-center justify-center gap-2 transition-all active:scale-95 ${assistantOpen ? 'bg-emerald-500/15 text-emerald-200' : 'text-slate-300 hover:bg-slate-800/90 hover:text-white'}`}
+              className={`group hidden h-11 min-w-11 items-center justify-center gap-2 rounded-xl px-2.5 transition-colors sm:flex ${assistantOpen ? 'bg-emerald-500/15 text-emerald-200' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
               title="Como posso ajudar?"
               aria-label="Abrir assistente: Como posso ajudar?"
               aria-expanded={assistantOpen}
@@ -287,22 +280,18 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => setNotificationsOpen((prev) => !prev)}
-            className={`relative h-11 w-11 rounded-xl flex items-center justify-center transition-all duration-200 active:scale-95 ${
-              notificationsOpen
-                ? 'bg-emerald-500/20 text-emerald-300 shadow-sm'
-                : unreadCount > 0
-                ? 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15'
-                : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-            title="Central de notificações"
-            aria-label={`Central de notificações${unreadCount ? `, ${unreadCount} não lidas` : ''}`}
-            aria-expanded={notificationsOpen}
-          >
-            <NotificationBell key={org?.id || 'no-org'} notifications={notifications} open={notificationsOpen} />
-          </button>
+          {unreadCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setNotificationsOpen((prev) => !prev)}
+              className="relative h-11 w-11 rounded-xl flex items-center justify-center transition-all duration-200 active:scale-95 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15"
+              title="Central de notificações"
+              aria-label={`Central de notificações, ${unreadCount} não lidas`}
+              aria-expanded={notificationsOpen}
+            >
+              <NotificationBell key={org?.id || 'no-org'} notifications={notifications} open={notificationsOpen} />
+            </button>
+          )}
         </div>
       </div>
 

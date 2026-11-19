@@ -30,3 +30,11 @@ export const getAdminAppUrl = (pathname = '/'): string => {
   const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
   return `${getPublicAppOrigin()}${normalizedPath}`;
 };
+
+export const getAppointmentAgendaUrl = (appointmentId: string): string => {
+  const url = new URL(getAdminAppUrl('/'));
+  url.searchParams.set('tab', 'agenda');
+  url.searchParams.set('appointment', appointmentId);
+  url.hash = 'login';
+  return url.toString();
+};

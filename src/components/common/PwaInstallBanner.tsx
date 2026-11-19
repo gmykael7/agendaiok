@@ -1,5 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Smartphone, Download, X, Share, PlusSquare } from 'lucide-react';
+
+const INSTALL_PROMPT_SEEN_KEY = 'agendai_pwa_prompt_seen';
+const LEGACY_DISMISSED_KEY = 'agendai_pwa_dismissed';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -11,7 +14,11 @@ export const PwaInstallBanner: React.FC = () => {
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIos, setIsIos] = useState(false);
   const [showIosGuide, setShowIosGuide] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(INSTALL_PROMPT_SEEN_KEY) === '1' || Boolean(localStorage.getItem(LEGACY_DISMISSED_KEY));
+  });
+  const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
     // Verifica se já está rodando como app instalado (standalone)
@@ -28,32 +35,35 @@ export const PwaInstallBanner: React.FC = () => {
       (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
     setIsIos(isAppleDevice);
 
-    // Verifica se o usuário já dispensou nas últimas 24h
-    const lastDismissed = localStorage.getItem('agendai_pwa_dismissed');
-    if (lastDismissed) {
-      const dismissedTime = parseInt(lastDismissed, 10);
-      if (Date.now() - dismissedTime < 24 * 60 * 60 * 1000) {
-        setDismissed(true);
-      }
+    const wasSeen = localStorage.getItem(INSTALL_PROMPT_SEEN_KEY) === '1' || Boolean(localStorage.getItem(LEGACY_DISMISSED_KEY));
+    if (isAppleDevice && !wasSeen) {
+      localStorage.setItem(INSTALL_PROMPT_SEEN_KEY, '1');
     }
 
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      const prompt = e as BeforeInstallPromptEvent;
+      deferredPromptRef.current = prompt;
+      setDeferredPrompt(prompt);
+      if (!wasSeen) localStorage.setItem(INSTALL_PROMPT_SEEN_KEY, '1');
+    };
+
+    const handleAppInstalled = () => {
+      setIsStandalone(true);
+      deferredPromptRef.current = null;
+      setDeferredPrompt(null);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-
-    window.addEventListener('appinstalled', () => {
-      setIsStandalone(true);
-      setDeferredPrompt(null);
-    });
+    window.addEventListener('appinstalled', handleAppInstalled);
 
     const handleRequestInstall = async () => {
-      if (deferredPrompt) {
-        await deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
+      const prompt = deferredPromptRef.current;
+      if (prompt) {
+        await prompt.prompt();
+        const { outcome } = await prompt.userChoice;
         if (outcome === 'accepted') setIsStandalone(true);
+        deferredPromptRef.current = null;
         setDeferredPrompt(null);
       } else if (isAppleDevice) {
         setShowIosGuide(true);
@@ -66,6 +76,7 @@ export const PwaInstallBanner: React.FC = () => {
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
       window.removeEventListener('agendai-request-install', handleRequestInstall);
     };
   }, []);
@@ -81,13 +92,14 @@ export const PwaInstallBanner: React.FC = () => {
     if (outcome === 'accepted') {
       setIsStandalone(true);
     }
+    deferredPromptRef.current = null;
     setDeferredPrompt(null);
   };
 
   const handleDismiss = () => {
     setDismissed(true);
     setShowIosGuide(false);
-    localStorage.setItem('agendai_pwa_dismissed', Date.now().toString());
+    localStorage.setItem(INSTALL_PROMPT_SEEN_KEY, '1');
   };
 
   if (isStandalone || dismissed) {
@@ -103,14 +115,14 @@ export const PwaInstallBanner: React.FC = () => {
     <>
       {/* Banner Principal de Instalação */}
       <div className="pwa-install-banner fixed bottom-20 left-4 right-4 sm:bottom-6 sm:left-auto sm:right-6 sm:max-w-md z-50 animate-fadeIn">
-        <div className="bg-[#0f172a] border border-emerald-500/40 rounded-2xl p-4 shadow-2xl flex items-center justify-between gap-3 text-white backdrop-blur-md">
+        <div className="pwa-install-card flex items-center justify-between gap-3 rounded-2xl border border-slate-700 bg-[#0f172a] p-4 text-white shadow-xl">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-500 text-slate-950 flex items-center justify-center font-black shrink-0 shadow-md">
+            <div className="pwa-install-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-400/15 text-emerald-300">
               <Smartphone className="w-6 h-6" />
             </div>
             <div className="min-w-0">
-              <h4 className="text-xs sm:text-sm font-bold text-white truncate">Instalar o App AgendAI</h4>
-              <p className="text-[11px] text-slate-300 truncate">
+              <h4 className="pwa-install-title truncate text-xs font-bold text-white sm:text-sm">Instalar o App AgendAI</h4>
+              <p className="pwa-install-description truncate text-[11px] text-slate-300">
                 {isIos ? 'Adicione à tela de início do seu iPhone' : 'Acesse mais rápido direto na tela inicial!'}
               </p>
             </div>
@@ -120,7 +132,7 @@ export const PwaInstallBanner: React.FC = () => {
             <button
               type="button"
               onClick={handleInstallClick}
-              className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 active:scale-95 transition-all shadow-md"
+              className="pwa-install-action flex min-h-11 items-center gap-1.5 rounded-xl bg-emerald-500 px-3 text-xs font-bold text-slate-950 transition-colors hover:bg-emerald-400"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Instalar</span>
@@ -129,7 +141,7 @@ export const PwaInstallBanner: React.FC = () => {
               type="button"
               onClick={handleDismiss}
               aria-label="Dispensar aviso de instalação"
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+              className="pwa-install-dismiss inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
             >
               <X className="w-4 h-4" />
             </button>
@@ -140,7 +152,7 @@ export const PwaInstallBanner: React.FC = () => {
       {/* Guia Popup Exclusivo para iPhone (Safari iOS) */}
       {showIosGuide && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center p-4 animate-fadeIn" onClick={() => setShowIosGuide(false)}>
-          <div className="bg-[#0f172a] border border-slate-800 rounded-3xl max-w-sm w-full p-5 sm:p-6 space-y-4 shadow-2xl text-white" onClick={e => e.stopPropagation()}>
+          <div className="pwa-install-guide w-full max-w-sm space-y-4 rounded-3xl border border-slate-800 bg-[#0f172a] p-5 text-white shadow-2xl sm:p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black">

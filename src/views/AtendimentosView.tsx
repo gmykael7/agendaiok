@@ -355,7 +355,7 @@ export const AtendimentosView: React.FC<AtendimentosViewProps> = ({
             <button
               key={st.id}
               onClick={() => setFilter(st.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 active:scale-95 ${
+              className={`px-3 py-1.5 rounded-[10px] text-xs font-bold transition-all shrink-0 active:scale-95 ${
                 filter === st.id
                   ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-white'
