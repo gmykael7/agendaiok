@@ -114,20 +114,35 @@ const accountStatus = (payload: StoredPayload | null | undefined): 'active' | 't
 
 const MAX_BOOKING_RETRIES = 3;
 
+/** Compara telefones brasileiros antigos e atuais (com/sem o nono dígito). */
+const sameClientPhone = (left: unknown, right: unknown): boolean => {
+  const a = normalizeClientPhone(left);
+  const b = normalizeClientPhone(right);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  // Números móveis antigos podem estar salvos com 10 dígitos; o WhatsApp
+  // entrega o mesmo número com o nono dígito após o DDD.
+  const legacyLocal = (value: string): string => value.length === 11 && value[2] === '9'
+    ? value.slice(0, 2) + value.slice(3)
+    : value;
+  return a.length >= 10 && b.length >= 10 && legacyLocal(a) === legacyLocal(b);
+};
+
 /** Consulta agendamentos futuros e ativos do cliente por telefone */
 export function findCustomerAppointments(payload: StoredPayload, clientPhone: string, now = new Date()): any[] {
-  const phoneKey = normalizeClientPhone(clientPhone);
-  if (!phoneKey) return [];
+  if (!normalizeClientPhone(clientPhone)) return [];
   const today = localDateKey(now);
   const appointments = Array.isArray(payload.appointments) ? payload.appointments : [];
   return appointments
     .filter((a: any) => {
-      if (normalizeClientPhone(a.client_phone) !== phoneKey) return false;
-      if (a.status === 'canceled' || a.status === 'no_show') return false;
-      return String(a.date || '') >= today;
+      const appointmentPhone = a.client_phone ?? a.clientPhone ?? a.phone ?? a.customer_phone;
+      if (!sameClientPhone(appointmentPhone, clientPhone)) return false;
+      const status = String(a.status || 'scheduled').toLowerCase();
+      if (status === 'canceled' || status === 'cancelled' || status === 'no_show') return false;
+      return String(a.date || a.appointment_date || '') >= today;
     })
     .sort((a: any, b: any) => {
-      const dateDiff = String(a.date || '').localeCompare(String(b.date || ''));
+      const dateDiff = String(a.date || a.appointment_date || '').localeCompare(String(b.date || b.appointment_date || ''));
       if (dateDiff !== 0) return dateDiff;
       return String(a.start_time || '').localeCompare(String(b.start_time || ''));
     });
