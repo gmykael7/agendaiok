@@ -105,14 +105,14 @@ export const findModernPalette = (idOrColor?: string): ModernPalette | undefined
 
 const THEME_TOKENS: Record<AppThemeMode, Record<string, string>> = {
   dark: {
-    '--brand-color': '#10B981',
-    '--brand-contrast-color': '#07111F',
-    '--brand-accent': '#34D399',
-    '--brand-accent-soft': '#6EE7B7',
-    '--app-bg-color': '#070B14',
-    '--app-surface-color': '#121B2E',
-    '--app-surface-dark': '#0B1120',
-    '--app-surface-elevated': '#1E293B',
+    '--brand-color': '#2F6BFF',
+    '--brand-contrast-color': '#E8E8EC',
+    '--brand-accent': '#2F6BFF',
+    '--brand-accent-soft': '#8D939C',
+    '--app-bg-color': '#14161A',
+    '--app-surface-color': '#1B1E23',
+    '--app-surface-dark': '#14161A',
+    '--app-surface-elevated': '#24282F',
   },
   light: {
     '--brand-color': '#0F766E',
@@ -143,7 +143,7 @@ export const readStoredAppThemeMode = (): AppThemeMode => {
   return preference === 'system' ? resolveSystemThemeMode() : preference;
 };
 
-export const applyAppTheme = (mode: AppThemeMode, primaryColor = '#10B981', paletteId?: string): void => {
+export const applyAppTheme = (mode: AppThemeMode, primaryColor = '#2F6BFF', paletteId?: string): void => {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
   Object.entries(THEME_TOKENS[mode]).forEach(([name, value]) => root.style.setProperty(name, value));
@@ -176,5 +176,5 @@ export const applyAppTheme = (mode: AppThemeMode, primaryColor = '#10B981', pale
   root.style.setProperty('--brand-gradient-card', brandGradientCard);
   root.dataset.appTheme = mode;
   root.dataset.brandPalette = palette?.id || 'custom';
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', mode === 'light' ? '#F7F9FA' : '#070B14');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', mode === 'light' ? '#F7F9FA' : '#14161A');
 };

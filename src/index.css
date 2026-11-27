@@ -3,15 +3,18 @@
 @tailwind utilities;
 
 :root {
-  --brand-color: #18d4c8;
-  --brand-contrast-color: #07111f;
-  --brand-color-strong: #0fb5c8;
-  --brand-accent: #2f7cf6;
-  --brand-accent-soft: #76a9ff;
-  --app-bg-color: #080e1a;
-  --app-surface-color: #121c2e;
-  --app-surface-dark: #18243b;
-  --app-surface-elevated: #1e2d48;
+  /* UI Dark — Regra 60-30-10 */
+  --brand-color: #2f6bff;
+  --brand-contrast-color: #e8e8ec;
+  --brand-color-strong: #2f6bff;
+  --brand-accent: #2f6bff;
+  --brand-accent-soft: #8d939c;
+  --app-bg-color: #14161a;
+  --app-surface-color: #1b1e23;
+  --app-surface-dark: #14161a;
+  --app-surface-elevated: #24282f;
+  --ui-title: #e8e8ec;
+  --ui-muted: #8d939c;
 }
 
 html,
@@ -50,9 +53,23 @@ textarea {
 
 @layer base {
   body {
-    @apply text-slate-100 antialiased;
+    color: var(--ui-title);
+    @apply antialiased;
   }
 }
+
+/* Mantém a hierarquia 60-30-10 no tema escuro, inclusive nas classes legadas. */
+html[data-app-theme="dark"] .text-white { color: var(--ui-title) !important; }
+html[data-app-theme="dark"] .text-slate-100,
+html[data-app-theme="dark"] .text-slate-200,
+html[data-app-theme="dark"] .text-slate-300,
+html[data-app-theme="dark"] .text-slate-400 { color: var(--ui-muted) !important; }
+html[data-app-theme="dark"] .text-slate-100.font-black,
+html[data-app-theme="dark"] .text-slate-100.font-bold,
+html[data-app-theme="dark"] .text-slate-200.font-black,
+html[data-app-theme="dark"] .text-slate-200.font-bold,
+html[data-app-theme="dark"] .text-slate-300.font-black,
+html[data-app-theme="dark"] .text-slate-300.font-bold { color: var(--ui-title) !important; }
 
 /* Safe areas para iPhone/Android com notch, barra de status e modo PWA. */
 .safe-header {
@@ -694,13 +711,13 @@ html[data-app-theme="light"] .desktop-capsule-nav {
    ============================================================ */
 
 :root {
-  --app-bg-color: #050d19;
-  --app-surface-color: #0d1a2d;
-  --app-surface-dark: #081221;
-  --app-surface-elevated: #13233a;
+  --app-bg-color: #14161A;
+  --app-surface-color: #1B1E23;
+  --app-surface-dark: #14161A;
+  --app-surface-elevated: #24282F;
   --app-border: rgba(105, 130, 164, 0.2);
   --app-border-strong: rgba(121, 151, 190, 0.3);
-  --app-text-muted: #93a4bc;
+  --app-text-muted: #8D939C;
   --app-shadow-sm: 0 1px 2px rgba(1, 7, 18, 0.22);
   --app-shadow-md: 0 8px 24px rgba(1, 7, 18, 0.24);
   --app-shadow-lg: 0 18px 48px rgba(1, 7, 18, 0.34);
@@ -709,7 +726,7 @@ html[data-app-theme="light"] .desktop-capsule-nav {
 
 body {
   background: var(--app-bg-color);
-  color: #f3f7fb;
+  color: #E8E8EC;
 }
 
 button,

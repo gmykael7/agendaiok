@@ -268,13 +268,13 @@ export default function App() {
     const doc = document as Document & { startViewTransition?: (cb: () => Promise<void> | void) => { ready: Promise<void> } };
     if (!doc.startViewTransition || !motionAllowed()) {
       commitThemeMode(next);
-      applyAppTheme(next, document.documentElement.style.getPropertyValue('--brand-color') || '#10B981');
+      applyAppTheme(next, document.documentElement.style.getPropertyValue('--brand-color') || '#2F6BFF');
       return;
     }
     const o = lastOriginRef.current;
     const transition = doc.startViewTransition(() => {
       // Cores aplicadas direto no documento: custo mínimo, o novo tema aparece já no snapshot.
-      applyAppTheme(next, document.documentElement.style.getPropertyValue('--brand-color') || '#10B981');
+      applyAppTheme(next, document.documentElement.style.getPropertyValue('--brand-color') || '#2F6BFF');
       commitThemeMode(next);
     });
     transition.ready.then(() => {
@@ -642,7 +642,7 @@ export default function App() {
     const themedOrg = isClientRoute ? publicOrgData : (isDirectoryRoute || !isLoggedIn ? null : org);
     // A página pública respeita sempre a preferência de claro/escuro do aparelho.
     const mode = (isClientRoute || !isLoggedIn) ? resolveSystemThemeMode() : appThemeMode;
-    applyAppTheme(mode, themedOrg?.primary_color || '#10B981', themedOrg?.theme_palette);
+    applyAppTheme(mode, themedOrg?.primary_color || '#2F6BFF', themedOrg?.theme_palette);
   }, [appThemeMode, org, publicOrgData, isClientRoute, isDirectoryRoute, isLoggedIn]);
 
   useEffect(() => {
@@ -650,7 +650,7 @@ export default function App() {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const update = () => applyAppTheme(
       media.matches ? 'dark' : 'light',
-      publicOrgData?.primary_color || '#10B981',
+      publicOrgData?.primary_color || '#2F6BFF',
       publicOrgData?.theme_palette,
     );
     media.addEventListener('change', update);
